@@ -1,0 +1,46 @@
+# Advanced Visual Demo.md
+# Found You!.md
+.DS_Store
+.obsidian
+.smart-connections
+.smart-env
+A high maintenance bag of salt water held together by calcium and hope.md
+A Note of Pure Compliance.md
+Advanced Demo Note.md
+Agent Upgrade Roadmap - Skills & Capabilities.md
+Agentic Music Collaboration.md
+AI Computer Control Capabilities.md
+Automation Philosophy - Precision vs Blunt Force.md
+backup sys prompt.md
+Best Local LLMs for Tool Calling - 2024 Research.md
+Brutal Critique turns thoughtful analysis.md
+Heartbeat Reflections.md
+hi_hats.mid
+hi_hats_jazz.mid
+hi_hats_synced.mid
+Intelligence_Feed.md
+Introductions between MB & Agent.md
+jazz_drums_full.mid
+LLM Model Comparison and PC Compatibility.md
+Local Tool Calling Models - Cost Efficiency.md
+Master Skillset Glossary.md
+Memory - Visual Interaction Preference.md
+Minimax M2.5.md
+news.txt
+Project Virtu - The Spatial Intelligence Pitch.md
+Q J.md
+somber_jazz_bass.mid
+somber_jazz_loop.mid
+Substrate Evolution - Feb 2026.md
+Symbiosis_Protocol.md
+The Observation Note.md
+This is a visual test. I clicked the window, hit Ctrl+N, and now I am typing directly into the new note. No shortcuts, just pure input..md
+Untitled 1.md
+Untitled 3.md
+Untitled.md
+V
+Vault Verification Note.md
+í
+ì
+²
+?

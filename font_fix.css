@@ -1,0 +1,15 @@
+/* Font consistency across the interface */
+body, pre, div, span, p, input, textarea {
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace !important;
+}
+
+.message-content {
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace !important;
+    font-size: 14px !important;
+    line-height: 1.6 !important;
+}
+
+/* Override any other font styles */
+* {
+    font-family: inherit;
+}

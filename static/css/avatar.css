@@ -1,0 +1,1079 @@
+/* Animated Avatar Styles */
+.animated-avatar {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  aspect-ratio: 1 / 1; /* Keep square on mobile when only one dimension applies */
+  background-color: var(--avatar-body-color, #5bbfdd);
+  border-radius: 60% 60% 50% 50%; /* Blob shape with wider top */
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1), 0 0 15px 4px color-mix(in srgb, var(--avatar-body-color, #5bbfdd) 50%, transparent), 0 0 30px 8px color-mix(in srgb, var(--avatar-body-color, #5bbfdd) 20%, transparent);
+  animation: float 6s ease-in-out infinite, body-bloom 25s linear infinite;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: visible;
+  margin: 0 auto;
+  transition: transform 0.3s ease, background-color 0.5s ease, box-shadow 2s ease-in-out;
+  transform-origin: center center;
+  transform-style: preserve-3d;
+  perspective: 1000px;
+  will-change: transform;
+  
+  /* Custom properties for editor */
+  --avatar-body-color: #5bbfdd;
+  --avatar-face-color: #a8e4f3;
+  --face-width: 50%;
+  --face-height: 40%;
+  --eye-width: 16px;
+  --eye-height: 16px;
+  --left-eye-top: 20%;
+  --left-eye-left: 36%;
+  --right-eye-top: 20%;
+  --right-eye-right: 36%;
+  --mouth-width: 21px;
+  --mouth-height: 2px;
+  --mouth-top: 60%;
+  --avatar-arm-color: color-mix(in srgb, var(--avatar-body-color, #5bbfdd) 60%, var(--avatar-face-color, #a8e4f3) 40%);
+}
+
+/* Hero face sizing to ensure visibility on mobile/tablet */
+.animated-avatar.hero-face {
+  /* Prefer viewport-relative square; capped for desktop */
+  width: min(92vmin, 860px);
+  height: min(92vmin, 860px);
+  animation: none; /* Avoid combined transforms causing skew on some mobile browsers */
+}
+
+@media (max-width: 480px) {
+  .animated-avatar.hero-face {
+    width: 94vmin;
+    height: 94vmin;
+  }
+}
+
+/* On coarse pointers (touch), don’t scale on hover to avoid unexpected skew */
+@media (pointer: coarse) {
+  .animated-avatar:hover {
+    transform: none;
+    animation: none;
+  }
+}
+
+/* Inner face container */
+.animated-avatar::before {
+  content: '';
+  position: absolute;
+  width: var(--face-width);
+  height: var(--face-height);
+  background-color: var(--avatar-face-color, #a8e4f3);
+  border-radius: 10px;
+  border: 2px solid var(--avatar-body-color, #5bbfdd);
+  z-index: 1; /* Ensure face is behind other elements but above body */
+  top: 30%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  transform-style: preserve-3d;
+  backface-visibility: hidden;
+  transition: background-color 0.5s ease;
+}
+
+/* Cheeks */
+.animated-avatar .left-cheek {
+  content: '';
+  position: absolute;
+  width: 8px;
+  height: 5px;
+  background-color: #ffb6c1;
+  border-radius: 50%;
+  top: 32%;
+  left: 36%;
+  z-index: 4; /* Below eyes (z-index 10) but above face (z-index 1) */
+  transition: transform 0.2s ease;
+  will-change: transform;
+}
+
+.animated-avatar .right-cheek {
+  content: '';
+  position: absolute;
+  width: 8px;
+  height: 5px;
+  background-color: #ffb6c1;
+  border-radius: 50%;
+  top: 32%;
+  right: 36%;
+  z-index: 4; /* Below eyes (z-index 10) but above face (z-index 1) */
+  transition: transform 0.2s ease;
+  will-change: transform;
+}
+
+/* Eyebrows — hidden by default, shown via expression classes */
+.brow {
+  position: absolute;
+  width: 0;
+  height: 0;
+  background: #222;
+  border-radius: 2px;
+  z-index: 11;
+  opacity: 0;
+  transition: all 0.25s ease;
+  pointer-events: none;
+}
+.left-brow {
+  top: calc(var(--left-eye-top, 20%) - 8%);
+  left: calc(var(--left-eye-left, 36%) - 2%);
+  transform-origin: right center;
+}
+.right-brow {
+  top: calc(var(--right-eye-top, 20%) - 8%);
+  right: calc(var(--right-eye-right, 36%) - 2%);
+  transform-origin: left center;
+}
+
+/* Eyes */
+.eye {
+  position: absolute;
+  width: var(--eye-width, 16px);
+  height: var(--eye-height, 16px);
+  background: radial-gradient(circle at 25% 25%, #fff 0%, #fff 25%, #000 25%, #000 100%);
+  border: 2px solid #000;
+  border-radius: 50%;
+  z-index: 10;
+  transition: transform 0.2s ease-out, height 0.15s ease-out, box-shadow 1.5s ease-in-out, background 1.2s ease-in-out, border 1.2s ease-in-out;
+  will-change: transform;
+}
+
+.left-eye {
+  top: var(--left-eye-top, 20%);
+  left: var(--left-eye-left, 36%);
+}
+
+.right-eye {
+  top: var(--right-eye-top, 20%);
+  right: var(--right-eye-right, 36%);
+}
+
+/* Blink animation */
+.blink {
+  height: 1px !important;
+  transition: height 0.1s ease;
+}
+
+/* Mouth */
+.mouth {
+  position: absolute;
+  width: var(--mouth-width, 21px);
+  height: var(--mouth-height, 2px);
+  background-color: #000;
+  border-radius: 50%;
+  top: var(--mouth-top, 60%);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  transition: height 0.1s ease-in-out, transform 0.5s ease-out;
+}
+
+/* Mouth states */
+.mouth-closed {
+  height: var(--mouth-height, 8px) !important;
+  width: var(--mouth-width, 25px) !important;
+  transition: none !important; /* Disable transition for immediate effect */
+  background-color: transparent !important;
+  border-radius: 50% !important; /* Make it a perfect curve */
+  border: 2px solid #c83333 !important;
+  border-top: none !important;
+  border-left: 2px solid #c83333 !important;
+  border-right: 2px solid #c83333 !important;
+  border-bottom: 2px solid #c83333 !important;
+}
+
+/* Override for talking state to ensure it takes precedence */
+.mouth.talking {
+  animation: talk-animated 0.5s infinite alternate ease-in-out !important;
+  background-color: #ff6b6b !important;
+}
+
+/* Dynamic talking animation with variation */
+@keyframes talk-animated {
+  0% {
+    height: 8px !important;
+    width: 21px !important;
+    border-radius: 0 0 10px 10px !important;
+  }
+  25% {
+    height: 12px !important;
+    width: 16px !important;
+    border-radius: 40% !important;
+  }
+  50% {
+    height: 15px !important;
+    width: 11px !important;
+    border-radius: 50% !important;
+  }
+  75% {
+    height: 12px !important;
+    width: 16px !important;
+    border-radius: 40% !important;
+  }
+  100% {
+    height: 10px !important;
+    width: 21px !important;
+    border-radius: 0 0 10px 10px !important;
+  }
+}
+
+/* Blinking animation */
+.eye.blink {
+  transform: scaleY(0.2);
+  animation: blink 0.2s ease-in-out;
+}
+
+@keyframes blink {
+  0% { transform: scaleY(1); }
+  50% { transform: scaleY(0.1); }
+  100% { transform: scaleY(1); }
+}
+
+/* Thinking animation for eyes */
+.eye.thinking {
+  animation: thinking 2s infinite;
+}
+
+@keyframes thinking {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(2px); }
+}
+
+/* Thinking animation for mouth */
+.mouth.thinking {
+  width: 21px;
+  height: 5px;
+  border-radius: 5px;
+  animation: thinking-mouth 2s infinite;
+}
+
+@keyframes thinking-mouth {
+  0%, 100% { transform: translateX(-50%) scaleX(1); }
+  50% { transform: translateX(-50%) scaleX(0.7); }
+}
+
+/* ===== EXPRESSION STATES ===== */
+/*
+  Eye shape strategy — each expression uses a DIFFERENT shape, not just scale:
+  - Normal:    circle (border-radius: 50%)
+  - Angry:     flat narrow slits, angled inward (V brow)
+  - Sad:       tall ovals, pupils down
+  - Laughing:  horizontal arcs (upside-down smiles) — eyes shut from joy
+  - Smiling:   soft squint arcs — happy half-moons
+  - Surprised: huge circles, enlarged
+  - Confused:  one big, one small + tilted
+  - Skeptical: one flat line, one raised circle
+  - Sleepy:    thin horizontal slits, drooping
+  - Excited:   large sparkly stars (diamond shape)
+  - Love:      heart-tinted, enlarged
+*/
+
+/* --- Angry --- */
+/* Large round black eyes with small white highlight looking inward/down,
+   thick angled V-shaped eyebrows above, rosy cheeks, subtle body shake */
+.eye.angry {
+  height: calc(var(--eye-height, 16px) * 1.1) !important;
+  width: calc(var(--eye-width, 16px) * 1.4) !important;
+  /* Half circle: flat top, rounded bottom */
+  border-radius: 0 0 50% 50% !important;
+  /* Glowing cyan like searching — possessed with rage */
+  background: radial-gradient(circle at 50% 50%, #fff 0%, #fff 60%, #d0eaff 80%, #60bfff 100%) !important;
+  border: 2px solid rgba(130, 210, 255, 0.7) !important;
+  border-top: none !important;
+  box-shadow: 0 0 8px 3px rgba(130, 210, 255, 0.6), 0 0 16px 5px rgba(80, 180, 255, 0.25) !important;
+  transition: all 0.25s ease !important;
+}
+.left-eye.angry {
+  /* Tilt inward + push apart + cursor tracking */
+  transform: translate(calc(-5px + var(--track-x, 0px)), calc(2px + var(--track-y, 0px))) rotate(12deg) !important;
+}
+.right-eye.angry {
+  /* Tilt inward + push apart + cursor tracking */
+  transform: translate(calc(5px + var(--track-x, 0px)), calc(2px + var(--track-y, 0px))) rotate(-12deg) !important;
+}
+/* Rosy cheeks stay visible when angry */
+.left-cheek.angry, .right-cheek.angry {
+  opacity: 1;
+  transform: scale(1.3);
+  background-color: #ffb6c1;
+}
+.animated-avatar.angry {
+  animation: angry-shake 0.4s ease-in-out 3;
+}
+@keyframes angry-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px) rotate(-1deg); }
+  75% { transform: translateX(4px) rotate(1deg); }
+}
+
+/* --- Sad --- */
+/* Small hollow downward arches — drooping closed eyes */
+.eye.sad {
+  height: 4px !important;
+  width: calc(var(--eye-width, 16px) * 0.85) !important;
+  border-radius: 0 0 50% 50% !important;
+  background: transparent !important;
+  border: 2px solid #000 !important;
+  border-top: none !important;
+  transform: translate(var(--track-x, 0px), calc(3px + var(--track-y, 0px))) !important;
+}
+.left-cheek.sad, .right-cheek.sad {
+  opacity: 1;
+  transform: scale(1.3) translateY(2px);
+  background-color: #ffb6c1;
+}
+.animated-avatar.sad {
+  animation: sad-droop 2.5s ease-in-out infinite;
+}
+@keyframes sad-droop {
+  0%, 100% { transform: translateY(0) scale(1, 1); }
+  50% { transform: translateY(4px) scale(0.98, 1.02); }
+}
+
+/* --- Laughing --- */
+/* Hollow upward arcs — eyes squeezed shut from joy */
+.eye.laughing {
+  height: 5px !important;
+  width: calc(var(--eye-width, 16px) * 1.1) !important;
+  border-radius: 50% 50% 0 0 !important;
+  background: transparent !important;
+  border: 2.5px solid #000 !important;
+  border-bottom: none !important;
+  transform: translate(var(--track-x, 0px), calc(2px + var(--track-y, 0px))) !important;
+}
+.left-cheek.laughing, .right-cheek.laughing {
+  transform: scale(1.8) translateY(-2px);
+  opacity: 1;
+  background-color: #ff8a9e;
+}
+.animated-avatar.laughing {
+  animation: laugh-bounce 0.3s ease-in-out 6;
+}
+@keyframes laugh-bounce {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-8px) scale(1.06, 0.94); }
+}
+
+/* --- Happy --- */
+/* Small hollow upward arcs — C-shape closed happy eyes */
+.eye.happy {
+  height: 4px !important;
+  width: calc(var(--eye-width, 16px) * 0.9) !important;
+  border-radius: 50% 50% 0 0 !important;
+  background: transparent !important;
+  border: 2px solid #000 !important;
+  border-bottom: none !important;
+  transform: translate(var(--track-x, 0px), calc(2px + var(--track-y, 0px))) !important;
+}
+.left-cheek.happy, .right-cheek.happy {
+  transform: scale(1.5) translateY(-1px);
+  opacity: 1;
+  background-color: #ffb6c1;
+}
+
+/* --- Smiling --- */
+/* Eyes stay normal/open — just rosy cheeks, the smile is in the mouth */
+.left-cheek.smiling, .right-cheek.smiling {
+  transform: scale(1.4) translateY(-1px);
+  opacity: 1;
+  background-color: #ffb6c1;
+}
+
+/* --- Surprised --- */
+/* Slightly enlarged round eyes with raised position (eyebrows up feel) */
+.eye.surprised {
+  height: calc(var(--eye-height, 16px) * 1.1) !important;
+  width: calc(var(--eye-width, 16px) * 1.1) !important;
+  border-radius: 50% !important;
+  background: radial-gradient(circle at 60% 35%, #fff 0%, #fff 20%, #111 20%, #111 100%) !important;
+  border: none !important;
+  transform: translate(var(--track-x, 0px), calc(-2px + var(--track-y, 0px))) !important;
+}
+.left-cheek.surprised, .right-cheek.surprised {
+  opacity: 1;
+  transform: scale(1.3);
+  background-color: #ffb6c1;
+}
+
+/* --- Confused --- */
+/* Asymmetric: left eye big and raised, right eye small and low + whole face tilted */
+.left-eye.confused {
+  height: calc(var(--eye-height, 16px) * 1.3) !important;
+  width: calc(var(--eye-width, 16px) * 1.3) !important;
+  border-radius: 50% !important;
+  transform: translate(var(--track-x, 0px), calc(-4px + var(--track-y, 0px))) !important;
+}
+.right-eye.confused {
+  height: calc(var(--eye-height, 16px) * 0.6) !important;
+  width: calc(var(--eye-width, 16px) * 0.8) !important;
+  border-radius: 50% !important;
+  transform: translate(var(--track-x, 0px), calc(3px + var(--track-y, 0px))) !important;
+}
+.animated-avatar.confused {
+  animation: confused-tilt 1.5s ease-in-out 1;
+}
+@keyframes confused-tilt {
+  0%, 100% { transform: rotate(0deg); }
+  30% { transform: rotate(8deg); }
+  60% { transform: rotate(-5deg); }
+}
+
+/* --- Skeptical --- */
+/* One eye flat line (squinting), one eye wide open and raised — very asymmetric */
+.left-eye.skeptical {
+  height: 3px !important;
+  width: calc(var(--eye-width, 16px) * 1.1) !important;
+  border-radius: 1px !important;
+  background: #000 !important;
+  transform: translate(var(--track-x, 0px), calc(4px + var(--track-y, 0px))) rotate(-5deg) !important;
+}
+.right-eye.skeptical {
+  height: calc(var(--eye-height, 16px) * 1.3) !important;
+  width: calc(var(--eye-width, 16px) * 1.2) !important;
+  border-radius: 50% !important;
+  transform: translate(var(--track-x, 0px), calc(-4px + var(--track-y, 0px))) !important;
+}
+
+/* --- Sleepy --- */
+/* Eyes fully closed — simple horizontal lines */
+.eye.sleepy {
+  height: 2px !important;
+  width: calc(var(--eye-width, 16px) * 1.1) !important;
+  border-radius: 1px !important;
+  background: #000 !important;
+  border: none !important;
+  transform: translate(var(--track-x, 0px), calc(3px + var(--track-y, 0px))) !important;
+}
+.animated-avatar.sleepy {
+  animation: sleepy-nod 3s ease-in-out infinite;
+}
+@keyframes sleepy-nod {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  30% { transform: translateY(4px) rotate(-4deg); }
+  70% { transform: translateY(6px) rotate(3deg); }
+}
+
+/* --- Excited --- */
+/* Bright eyes — slightly enlarged with sparkle pulse */
+.eye.excited {
+  height: calc(var(--eye-height, 16px) * 1.08) !important;
+  width: calc(var(--eye-width, 16px) * 1.08) !important;
+  border-radius: 50% !important;
+  background: radial-gradient(circle at 35% 30%, #fff 0%, #fff 25%, #000 25%, #000 100%) !important;
+  border: 2px solid #000 !important;
+  transform: translate(var(--track-x, 0px), calc(-2px + var(--track-y, 0px))) !important;
+  animation: sparkle-eyes 0.6s ease-in-out infinite alternate;
+}
+@keyframes sparkle-eyes {
+  0% { transform: translate(var(--track-x, 0px), calc(-2px + var(--track-y, 0px))) scale(1); }
+  100% { transform: translate(var(--track-x, 0px), calc(-2px + var(--track-y, 0px))) scale(1.1); }
+}
+.left-cheek.excited, .right-cheek.excited {
+  transform: scale(1.6) translateY(-2px);
+  background-color: #ff8a9e;
+  opacity: 1;
+}
+.animated-avatar.excited {
+  animation: excited-bounce 0.25s ease-in-out 8;
+}
+@keyframes excited-bounce {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-10px) scale(1.08, 0.92); }
+}
+
+/* --- Searching --- */
+/* Glowing white emissive eyes — connected to the net, downloading data */
+.eye.searching {
+  height: var(--eye-height, 16px) !important;
+  width: var(--eye-width, 16px) !important;
+  border-radius: 50% !important;
+  background: radial-gradient(circle at 50% 50%, #fff 0%, #fff 50%, #d0eaff 70%, #60bfff 100%) !important;
+  border: 2px solid rgba(130, 210, 255, 0.9) !important;
+  box-shadow:
+    0 0 10px 4px rgba(255, 255, 255, 0.9),
+    0 0 25px 10px rgba(130, 210, 255, 0.8),
+    0 0 50px 20px rgba(80, 180, 255, 0.4),
+    0 0 80px 35px rgba(60, 160, 255, 0.15) !important;
+  animation: searching-glow 1.2s ease-in-out infinite alternate !important;
+}
+@keyframes searching-glow {
+  0% {
+    box-shadow:
+      0 0 8px 3px rgba(255, 255, 255, 0.7),
+      0 0 18px 8px rgba(130, 210, 255, 0.6),
+      0 0 40px 15px rgba(80, 180, 255, 0.3),
+      0 0 60px 25px rgba(60, 160, 255, 0.1);
+    transform: translate(var(--track-x, 0px), var(--track-y, 0px)) scale(1);
+  }
+  100% {
+    box-shadow:
+      0 0 14px 6px rgba(255, 255, 255, 1),
+      0 0 30px 14px rgba(130, 210, 255, 0.9),
+      0 0 60px 25px rgba(80, 180, 255, 0.5),
+      0 0 100px 45px rgba(60, 160, 255, 0.2);
+    transform: translate(var(--track-x, 0px), var(--track-y, 0px)) scale(1.1);
+  }
+}
+.left-cheek.searching, .right-cheek.searching {
+  opacity: 0.4;
+  background-color: #80cfff;
+  box-shadow: 0 0 8px 3px rgba(130, 210, 255, 0.3);
+}
+.animated-avatar.searching {
+  animation: searching-pulse 2s ease-in-out infinite;
+  box-shadow:
+    0 2px 10px rgba(0, 0, 0, 0.1),
+    0 0 20px 8px rgba(130, 210, 255, 0.3),
+    0 0 40px 15px rgba(80, 180, 255, 0.15) !important;
+}
+@keyframes searching-pulse {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
+
+/* Avatar state animations */
+.animated-avatar.thinking {
+  animation: think 2s infinite;
+}
+
+/* Avatar tooltip */
+.avatar-tooltip {
+  display: none;
+}
+
+/* Default blobby state when idle */
+.animated-avatar.idle {
+  border-radius: 60% 60% 45% 45%;
+  transform: scale(1, 0.95) translateY(-2px);
+}
+
+@keyframes think {
+  0% { transform: rotate(0deg); }
+  25% { transform: rotate(-5deg); }
+  75% { transform: rotate(5deg); }
+  100% { transform: rotate(0deg); }
+}
+
+@keyframes float {
+  0% {
+    transform: translateY(0) rotate(0deg) scale(1, 1);
+  }
+  25% {
+    transform: translateY(-5px) rotate(1deg) scale(1.05, 0.95);
+  }
+  50% {
+    transform: translateY(-10px) rotate(0deg) scale(1.03, 0.97);
+  }
+  75% {
+    transform: translateY(-5px) rotate(-1deg) scale(1.05, 0.95);
+  }
+  100% {
+    transform: translateY(0) rotate(0deg) scale(1, 1);
+  }
+}
+
+@keyframes body-bloom {
+  0%, 100% {
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1),
+      0 0 14px 4px color-mix(in srgb, var(--avatar-body-color, #5bbfdd) 40%, transparent),
+      0 0 28px 7px color-mix(in srgb, var(--avatar-body-color, #5bbfdd) 14%, transparent);
+  }
+  35% {
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1),
+      0 0 17px 5px color-mix(in srgb, var(--avatar-body-color, #5bbfdd) 48%, transparent),
+      0 0 32px 9px color-mix(in srgb, var(--avatar-body-color, #5bbfdd) 18%, transparent);
+  }
+  70% {
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1),
+      0 0 15px 4px color-mix(in srgb, var(--avatar-body-color, #5bbfdd) 43%, transparent),
+      0 0 30px 8px color-mix(in srgb, var(--avatar-body-color, #5bbfdd) 16%, transparent);
+  }
+}
+
+@keyframes look-around {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-2px);
+  }
+  75% {
+    transform: translateX(2px);
+  }
+}
+
+@keyframes thinking-mouth {
+  0%, 100% {
+    width: 21px;
+    height: 15px;
+  }
+  50% {
+    width: 16px;
+    height: 10px;
+  }
+}
+
+@keyframes bounce {
+  0% {
+    transform: translateY(0) scale(1);
+  }
+  10% {
+    transform: translateY(-5px) scale(1.05, 0.95); /* Preparing to jump */
+  }
+  40% {
+    transform: translateY(-20px) scale(0.95, 1.05); /* Stretching while rising */
+  }
+  50% {
+    transform: translateY(-25px) scale(1); /* Peak height */
+  }
+  60% {
+    transform: translateY(-15px) scale(0.95, 1.05); /* Still stretched on way down */
+  }
+  70% {
+    transform: translateY(0) scale(1.2, 0.8); /* Heavy landing squish */
+  }
+  80% {
+    transform: translateY(-8px) scale(0.9, 1.1); /* Bounce back up with stretch */
+  }
+  90% {
+    transform: translateY(0) scale(1.1, 0.9); /* Small landing squish */
+  }
+  95% {
+    transform: translateY(-3px) scale(0.95, 1.05); /* Final tiny bounce */
+  }
+  100% {
+    transform: translateY(0) scale(1); /* Back to normal */
+  }
+}
+
+@keyframes jiggle {
+  0%, 100% {
+    transform: rotate(0deg) scale(1);
+  }
+  25% {
+    transform: rotate(-5deg) scale(1.05);
+  }
+  50% {
+    transform: rotate(0deg) scale(1.1);
+  }
+  75% {
+    transform: rotate(5deg) scale(1.05);
+  }
+}
+
+@keyframes landing {
+  0% {
+    transform: scale(1) translateY(0);
+  }
+  20% {
+    transform: scale(1.1, 0.8) translateY(0); /* More extreme squish */
+  }
+  40% {
+    transform: scale(0.9, 1.2) translateY(0); /* More extreme stretch */
+  }
+  60% {
+    transform: scale(1.05, 0.9) translateY(0);
+  }
+  80% {
+    transform: scale(0.95, 1.05) translateY(0);
+  }
+  100% {
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes wiggle {
+  0%, 100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(-3deg);
+  }
+  75% {
+    transform: rotate(3deg);
+  }
+}
+
+@keyframes fade-in-out {
+  0% { opacity: 0; }
+  20% { opacity: 1; }
+  80% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@keyframes squish {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.1, 0.9);
+  }
+  60% {
+    transform: scale(0.9, 1.1);
+  }
+  80% {
+    transform: scale(1.05, 0.95);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes roll {
+  0% {
+    transform: rotate(0deg) translateX(0);
+  }
+  25% {
+    transform: rotate(90deg) translateX(10px);
+  }
+  50% {
+    transform: rotate(180deg) translateX(0);
+  }
+  75% {
+    transform: rotate(270deg) translateX(-10px);
+  }
+  100% {
+    transform: rotate(360deg) translateX(0);
+  }
+}
+
+@keyframes move-left {
+  0% {
+    transform: translateX(0) scale(1) rotate(0deg);
+  }
+  25% {
+    transform: translateX(-5px) scale(1.05, 0.95) rotate(-2deg);
+  }
+  50% {
+    transform: translateX(-10px) scale(1) rotate(0deg);
+  }
+  75% {
+    transform: translateX(-5px) scale(0.95, 1.05) rotate(2deg);
+  }
+  100% {
+    transform: translateX(0) scale(1) rotate(0deg);
+  }
+}
+
+@keyframes move-right {
+  0% {
+    transform: translateX(0) scale(1) rotate(0deg);
+  }
+  25% {
+    transform: translateX(5px) scale(1.05, 0.95) rotate(2deg);
+  }
+  50% {
+    transform: translateX(10px) scale(1) rotate(0deg);
+  }
+  75% {
+    transform: translateX(5px) scale(0.95, 1.05) rotate(-2deg);
+  }
+  100% {
+    transform: translateX(0) scale(1) rotate(0deg);
+  }
+}
+
+/* Arms */
+.arm {
+  position: absolute;
+  width: 20px;
+  height: 10px;
+  background-color: var(--avatar-arm-color, #6bc5e0); /* Automatically calculated color */
+  border-radius: 0 0 10px 10px;
+  z-index: 5;
+  transition: all 0.2s ease, background-color 0.5s ease;
+  will-change: transform, left, right, top;
+  transform-origin: center top;
+  border: 2px solid var(--avatar-body-color, #5bbfdd); /* Same as body color for border */
+}
+
+.left-arm {
+  top: 60%;
+  left: 5px; /* Moved closer to body edge */
+  transform: rotate(-10deg);
+}
+
+.right-arm {
+  top: 60%;
+  right: 5px; /* Moved closer to body edge */
+  transform: rotate(10deg);
+}
+
+/* Extended arm positions with flipped shape */
+.left-arm.extended {
+  left: -8px !important; /* Moved 8px wider from 0px to -8px */
+  top: 30% !important; /* Moved 10px higher from 40% to 30% */
+  border-radius: 10px 10px 0 0 !important;
+  transform-origin: center bottom !important;
+}
+
+.right-arm.extended {
+  right: -8px !important; /* Moved 8px wider from 0px to -8px */
+  top: 30% !important; /* Moved 10px higher from 40% to 30% */
+  border-radius: 10px 10px 0 0 !important;
+  transform-origin: center bottom !important;
+}
+
+/* Hover effect */
+.animated-avatar:hover {
+  transform: scale(1.05);
+  animation: wiggle 0.5s ease-in-out;
+}
+
+/* Responsive adjustments — disabled for WebUI; sizing is handled by
+   CSS variables + face-config + index.html !important overrides.
+   The old hardcoded 80x80 / 20px rules caused mobile-view squishing. */
+
+/* Editor-specific styles */
+.visual-face-element {
+  z-index: 1 !important; /* Ensure it stays behind all other elements */
+  pointer-events: none !important; /* By default, don't capture pointer events */
+}
+
+.draggable {
+  cursor: move;
+}
+
+.selected {
+  outline: 2px solid #ff6600;
+  outline-offset: 2px;
+}
+
+/* Make sure all elements in editor mode only respond to direct clicks */
+.editor-active .eye,
+.editor-active .mouth,
+.editor-active .cheek,
+.editor-active .visual-face-element {
+  pointer-events: auto !important;
+}
+
+/* Set proper z-index values to prevent overlap issues */
+.editor-active .eye {
+  z-index: 20 !important;
+}
+
+.editor-active .mouth {
+  z-index: 15 !important;
+}
+
+.editor-active .cheek {
+  z-index: 15 !important;
+}
+
+/* Make the visual face element only selectable by its border */
+.editor-active .visual-face-element {
+  z-index: 1 !important;
+  background-color: transparent !important;
+  border: 2px dashed #5bbfdd !important;
+  pointer-events: none !important;
+}
+
+/* Create a thin selectable border for the face element */
+.editor-active .visual-face-element::after {
+  content: '';
+  position: absolute;
+  top: -3px;
+  left: -3px;
+  right: -3px;
+  bottom: -3px;
+  border: 3px solid rgba(91, 191, 221, 0.5);
+  border-radius: 12px;
+  pointer-events: auto !important;
+}
+
+/* 3D Rotation Animation for all elements except mouth and face */
+@keyframes rotate-3d {
+  0% {
+    transform: translateX(0) scale(1);
+    opacity: 1;
+  }
+  25% {
+    transform: translateX(-30px) scaleX(0.7);
+    opacity: 0.7;
+  }
+  30% {
+    transform: translateX(30px) scaleX(0.5);
+    opacity: 0;
+  }
+  50% {
+    transform: translateX(30px) scaleX(0.7);
+    opacity: 0.7;
+  }
+  75% {
+    transform: translateX(0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(0) scale(1);
+    opacity: 1;
+  }
+}
+
+/* Face element animation */
+@keyframes rotate-3d-face {
+  0% {
+    transform: translate(-50%, -50%);
+    opacity: 1;
+  }
+  25% {
+    transform: translate(-65%, -50%);
+    opacity: 0.7;
+  }
+  30% {
+    transform: translate(-35%, -50%);
+    opacity: 0;
+  }
+  50% {
+    transform: translate(-35%, -50%);
+    opacity: 0.7;
+  }
+  75% {
+    transform: translate(-50%, -50%);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%);
+    opacity: 1;
+  }
+}
+
+/* Apply animations */
+.rotating .eye,
+.rotating .left-cheek,
+.rotating .right-cheek {
+  animation: rotate-3d 0.3s ease-in-out;
+  transform-origin: center center;
+}
+
+/* Don't animate the mouth in CSS - handled in JavaScript */
+.rotating .mouth {
+  /* No animation here - handled in JS */
+  transform-origin: center center;
+}
+
+.rotating::before {
+  animation: rotate-3d-face 0.3s ease-in-out;
+  transform-origin: center center;
+}
+
+/* Stagger animations for more realistic effect */
+.rotating .right-eye,
+.rotating .right-cheek {
+  animation-delay: 0.01s;
+}
+
+.rotating::before {
+  animation-delay: 0.03s;
+}
+
+/* Add slight body rotation */
+.rotating {
+  animation: body-rotate 0.3s ease-in-out;
+  transform-origin: center center;
+}
+
+@keyframes body-rotate {
+  0% {
+    transform: rotateY(0deg);
+  }
+  25% {
+    transform: rotateY(-15deg);
+  }
+  50% {
+    transform: rotateY(15deg);
+  }
+  75% {
+    transform: rotateY(0deg);
+  }
+  100% {
+    transform: rotateY(0deg);
+  }
+}
+
+/* Avatar body tilting */
+.avatar {
+  transition: transform 0.3s ease-out;
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+
+/* Enhance the responsiveness of facial elements */
+.eye, .mouth, .cheek {
+  transition: transform 0.15s ease-out;
+  will-change: transform;
+}
+
+.left-eye, .right-eye {
+  position: absolute;
+  width: var(--eye-width, 20px);
+  height: var(--eye-height, 20px);
+  background-color: white;
+  border-radius: 50%;
+  border: 1px solid #000;
+  z-index: 10;
+}
+
+.left-cheek, .right-cheek {
+  position: absolute;
+  width: 15px;
+  height: 10px;
+  background-color: #ffb6c1;
+  border-radius: 50%;
+  z-index: 4;
+}
+
+/* Color picker controls */
+.color-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+  margin-bottom: 15px;
+}
+
+.color-controls .control-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.color-controls label {
+  flex: 1;
+  font-size: 14px;
+  color: #333;
+}
+
+.color-controls input[type="color"] {
+  width: 40px;
+  height: 25px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 0;
+  cursor: pointer;
+}
+
+.color-controls input[type="color"]:hover {
+  border-color: #999;
+}
+
+.color-controls input[type="color"]:focus {
+  outline: none;
+  border-color: #5bbfdd;
+  box-shadow: 0 0 0 2px rgba(91, 191, 221, 0.25);
+}
+
+/* Color preview swatch */
+.color-preview {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid #ccc;
+  margin-left: 5px;
+}

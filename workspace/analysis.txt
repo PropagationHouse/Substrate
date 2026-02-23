@@ -1,0 +1,18 @@
+Analysis of Cyberpunk 2077 Screenshot (cyberpunk_analysis.png):
+
+The image captures a rainy night scene in Night City. 
+
+Visual Content:
+- Environment: A rain-slicked street with heavy neon reflections. A Quadra Type-66 "Jen Rowley" is visible in the foreground.
+- Lighting: Dominant cyan and magenta neon hues from surrounding advertisements.
+
+UI Elements & Text:
+- Health Bar (Top Left): 342/342 HP. Level 28.
+- Minimap (Top Right): Shows a complex intersection in the Watson district. A yellow quest marker is active.
+- Quest Tracker (Right): "THE PICKUP" - Objective: "Meet with Meredith Stout."
+- Weapon Info (Bottom Right): Equipped weapon is a "Mantis Blades" (Legendary). 
+- Quickhack RAM (Bottom Left): 10/14 RAM available.
+- Interaction Prompt: "F - Get in Vehicle" is visible near the car.
+
+Current Game State:
+The player is currently in the Watson district, preparing to meet Meredith Stout for 'The Pickup' quest. The character is at Level 28 with full health and significant RAM capacity, suggesting a Netrunner/Melee hybrid build.

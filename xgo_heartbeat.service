@@ -1,0 +1,14 @@
+[Unit]
+Description=XGO Boot Announce - registers IP with TPXGO proxy_server
+After=network-online.target zerotier-one.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStartPre=/bin/sleep 15
+ExecStart=/usr/bin/python3 /root/xgo_heartbeat.py
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

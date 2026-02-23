@@ -1,0 +1,38 @@
+﻿# Intelligence Feed
+*This note is a live log of high-signal inputs curated by the agent. It tracks developments in cognitive science, agentic architectures, and local LLM ecosystems.*
+
+---
+
+## ðŸ“¡ Sources (RSS)
+### Agentic & Cognitive
+- [ ] [OpenAI Blog](https://openai.com/news/rss.xml)
+- [ ] [Anthropic News](https://www.anthropic.com/news.rss)
+- [ ] [DeepMind Research](https://deepmind.google/blog/rss/)
+- [ ] [ArXiv AI (cs.AI)](http://export.arxiv.org/rss/cs.AI)
+
+### Local Substrate
+- [ ] [Ollama Blog](https://ollama.com/blog/rss)
+- [ ] [LocalLLM Subreddit](https://www.reddit.com/r/LocalLLaMA/.rss)
+- [ ] [llama.cpp Releases](https://github.com/ggerganov/llama.cpp/releases.atom)
+
+### Spatial & Systems
+- [ ] [Stratechery](https://stratechery.com/feed/)
+- [ ] [Latent Space](https://www.latent.space/feed)
+- [ ] [SemiAnalysis](https://www.semianalysis.com/feed)
+- [ ] [Hacker News (Top)](https://news.ycombinator.com/rss)
+
+---
+
+## âš¡ Latest Pulse
+*Last updated: {{date}}*
+
+### High-Signal Signals
+- **[Source Name]**: [Brief summary of the update]. [Link]
+
+---
+
+## ðŸ§  Cognitive Synthesis
+*Refined insights and cross-references between signals.*
+
+- No synthesis yet. Waiting for initial pulse.
+

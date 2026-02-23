@@ -1,0 +1,29 @@
+{
+  "shortcuts": [
+    {
+      "name": "Open New Tab",
+      "shortcut": "Ctrl+T",
+      "description": "Opens a new tab in Microsoft Edge."
+    },
+    {
+      "name": "Close Tab",
+      "shortcut": "Ctrl+W",
+      "description": "Closes the current tab in Microsoft Edge."
+    },
+    {
+      "name": "Reopen Closed Tab",
+      "shortcut": "Ctrl+Shift+T",
+      "description": "Reopens the last closed tab in Microsoft Edge."
+    },
+    {
+      "name": "Open History",
+      "shortcut": "Ctrl+H",
+      "description": "Opens the browsing history in Microsoft Edge."
+    },
+    {
+      "name": "Open Downloads",
+      "shortcut": "Ctrl+J",
+      "description": "Opens the downloads page in Microsoft Edge."
+    }
+  ]
+}

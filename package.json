@@ -1,0 +1,119 @@
+{
+  "name": "substrate",
+  "version": "1.2.0",
+  "description": "Substrate - Autonomous Agent Interface",
+  "productName": "Substrate",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win",
+    "build:dir": "electron-builder --win --dir"
+  },
+  "build": {
+    "appId": "com.substrate.agent",
+    "productName": "Substrate",
+    "artifactName": "Substrate-Setup-${version}.${ext}",
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icons/icon.ico",
+      "signingHashAlgorithms": null,
+      "sign": null
+    },
+    "forceCodeSigning": false,
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "assets/icons/icon.ico",
+      "uninstallerIcon": "assets/icons/icon.ico",
+      "installerHeaderIcon": "assets/icons/icon.ico",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Substrate",
+      "include": "installer/nsis-hooks.nsh"
+    },
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "index.html",
+      "package.json",
+      "proxy_server.py",
+      "main_app_integration.py",
+      "voice_handler.py",
+      "image_processor.py",
+      "context_assistant_updater.py",
+      "gateway.py",
+      "main.py",
+      "find_python.py",
+      "qrcode.min.js",
+      "radial_config_new.js",
+      "radial_config.css",
+      "radial_panel_fix.css",
+      "font_fix.css",
+      "auto_save_config.js",
+      "debug_renderer.js",
+      "direct_chat_renderer.js",
+      "direct_config_loader.js",
+      "simple_text_renderer.js",
+      "raw_text_renderer.js",
+      "element_inspector.js",
+      "default-avatar.png",
+      "xgo_heartbeat.py",
+      "xgo_vision_client_reference.py",
+      "get_json.py",
+      "get_news.py",
+      "parse_hacker_news.py",
+      "requirements.txt",
+      "TOOL_PROMPT.md",
+      "README.md",
+      "SUBSTRATE.md",
+      "CIRCUITS.md",
+      "PRIME.md",
+      "src/**/*",
+      "webui/**/*",
+      "static/**/*",
+      "assets/**/*",
+      "config/**/*",
+      "profiles/default/**/*",
+      "knowledge/**/*",
+      "skills/**/*",
+      "docs/**/*",
+      "certs/**/*",
+      "third_party/**/*",
+      "speech_components/**/*",
+      "!**/__pycache__/**",
+      "!**/*.pyc",
+      "!**/node_modules/electron-builder/**",
+      "!**/node_modules/electron/**",
+      "!**/node_modules/7zip-bin/**",
+      "!**/node_modules/dmg-builder/**",
+      "!**/node_modules/app-builder-lib/**",
+      "!**/node_modules/builder-util*/**"
+    ],
+    "extraFiles": [
+      {
+        "from": "installer/first_run.py",
+        "to": "first_run.py"
+      }
+    ],
+    "asar": false
+  },
+  "devDependencies": {
+    "electron": "28.1.0",
+    "electron-builder": "^24.13.3"
+  },
+  "dependencies": {
+    "@electron/remote": "2.0.11",
+    "croner": "^10.0.1",
+    "node-fetch": "^2.7.0"
+  }
+}

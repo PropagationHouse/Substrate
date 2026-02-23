@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#5bbfdd" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Substrate" />
+  <link rel="manifest" href="/manifest.json" />
+  <title>Substrate WebUI</title>
+  <style>
+    :root {
+      --avatar-body-color: #5bbfdd;
+      --avatar-face-color: #a8e4f3;
+      --accent: #ffffff; /* neutral white */
+      --accent-2: #ffffff; /* neutral white */
+      --haze: rgba(255, 255, 255, 0.12);
+      --glow-strong: rgba(255, 255, 255, 0.80); /* neutral white */
+      --glow-soft: rgba(255, 255, 255, 0.35); /* neutral white */
+      /* Neutralize yellow warmth for a cooler, desaturated haze */
+      --glow-warm: rgba(255, 255, 255, 0.18);
+      --card-bg: color-mix(in srgb, var(--avatar-body-color) 92%, black 8%);
+      --bubble-user: color-mix(in srgb, var(--avatar-body-color) 92%, #1a1a1a 8%);
+      --bubble-assistant: color-mix(in srgb, var(--avatar-body-color) 85%, #1a1a1a 15%);
+      --border: rgba(0,0,0,0.08);
+      --text: #ffffff;
+      --text-glow: rgba(255,255,255,0.35);
+    }
+    html, body { height:100%; }
+    body {
+      font-family: Arial, sans-serif;
+      background: radial-gradient(120% 120% at 10% 0%, rgba(255,255,255,0.16), transparent 40%),
+                  radial-gradient(120% 120% at 90% 100%, rgba(255,255,255,0.12), transparent 45%),
+                  var(--avatar-body-color);
+      color: var(--text);
+      margin:0;
+      transition: background-color 400ms ease, color 300ms ease;
+      text-shadow: 0 0 8px var(--text-glow);
+    }
+
+    /* Futuristic emissive hero panel */
+    .hero {
+      position:relative; width:100%; max-width: 980px; margin: 18px auto 6px auto; aspect-ratio: 1 / 1;
+      border-radius: 18px; overflow:hidden; border:1px solid rgba(255,255,255,0.18);
+      background: radial-gradient(120% 120% at 50% 15%, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.06) 28%, rgba(0,0,0,0.06) 80%), var(--avatar-body-color);
+      box-shadow:
+        0 10px 24px rgba(0,0,0,0.25),
+        0 0 36px 8px rgba(255,255,255,0.24),
+        inset 0 0 0 1px rgba(255,255,255,0.08);
+      transition: background-color 400ms ease, border-color 300ms ease, box-shadow 300ms ease, filter 300ms ease;
+      backdrop-filter: saturate(1.3) blur(10px);
+      -webkit-backdrop-filter: saturate(1.3) blur(10px);
+      isolation: isolate; /* allow stacking contexts for haze */
+    }
+    /* Outer bloom haze */
+    .hero::before {
+      content:""; position:absolute; inset:-6%; border-radius:24px; z-index:0;
+      background: radial-gradient(60% 60% at 50% 40%, var(--glow-soft), transparent 60%),
+                  radial-gradient(80% 80% at 50% 50%, var(--glow-warm), transparent 70%);
+      filter: blur(18px);
+      opacity: .35;
+      pointer-events:none;
+      animation: glowPulse 6s ease-in-out infinite;
+    }
+    /* Inner neon rim */
+    .hero::after {
+      content:""; position:absolute; inset:0; border-radius:18px; z-index:1; pointer-events:none;
+      box-shadow:
+        inset 0 0 22px 2px color-mix(in srgb, var(--accent) 60%, transparent),
+        inset 0 0 2px 1px rgba(255,255,255,0.25);
+      background:
+        linear-gradient(120deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.10) 22%, rgba(255,255,255,0.0) 40%),
+        radial-gradient(120% 120% at 20% 0%, rgba(255,255,255,0.12), transparent 40%),
+        radial-gradient(120% 120% at 80% 100%, rgba(255,255,255,0.10), transparent 45%);
+      mix-blend-mode: screen;
+      opacity: .70;
+    }
+    /* subtle glass grain */
+    .hero .grain, .chatdock .grain, .charbar .grain { position:absolute; inset:0; pointer-events:none; z-index:1; opacity:.08; background:
+      repeating-linear-gradient(0deg, rgba(255,255,255,0.55) 0, rgba(255,255,255,0.55) 0.5px, transparent 0.5px, transparent 2px),
+      repeating-linear-gradient(90deg, rgba(255,255,255,0.45) 0, rgba(255,255,255,0.45) 0.5px, transparent 0.5px, transparent 2px);
+      filter: blur(0.3px);
+    }
+    #avatarContainer { position:absolute; inset:0; z-index:2; display:flex; align-items:center; justify-content:center; overflow:hidden; filter: drop-shadow(0 6px 18px rgba(0,0,0,0.25)) drop-shadow(0 0 24px var(--glow-soft)); perspective: 900px; }
+    /* Scale avatar to fill hero and center */
+    #avatarContainer .animated-avatar {
+      position: relative; /* relative keeps flex centering AND acts as containing block for ::before face plate */
+      /* Use viewport-min to scale uniformly and avoid off-center transforms */
+      width: min(92vmin, 860px) !important;
+      height: min(92vmin, 860px) !important;
+      z-index: 3;
+      animation: none; /* steady */
+      background: transparent;
+      box-shadow: none;
+      border-radius: 16px;
+      margin: 0 auto; /* double ensure center in flex */
+      /* lock inner face panel size to match main proportions */
+      --face-width: 82%;
+      --face-height: 55%;
+      left: auto !important;
+      top: auto !important;
+      right: auto !important;
+      bottom: auto !important;
+      transform-style: preserve-3d;
+      will-change: transform;
+    }
+
+    /* Hero face — all sizing comes from face-config / face editor. No defaults here. */
+    /* Hide arms in hero; keep cheeks as defined by avatar.css so they scale with the group */
+    #avatarContainer .arm { display: none !important; }
+    /* Tweak inner face panel (::before) to fill square nicely */
+    #avatarContainer .animated-avatar::before {
+      width: var(--face-width);
+      height: var(--face-height);
+      top: 30% !important;
+      left: 50% !important;
+      transform: translate(-50%, -50%) !important;
+      border-radius: 16px; border-width: 2px;
+      background-color: var(--avatar-face-color, #a8e4f3) !important; /* force visible */
+      box-shadow:
+        0 0 22px 6px rgba(255,255,255,0.45),
+        0 0 44px 10px rgba(255,255,255,0.35),
+        inset 0 0 0 1px rgba(255,255,255,0.35);
+    }
+    /* Subtle avatar aura layer */
+    #avatarContainer .animated-avatar::after {
+      content:""; position:absolute; inset:0; border-radius:16px; z-index:-1; pointer-events:none;
+      background: radial-gradient(45% 45% at 50% 55%, var(--glow-strong), transparent 70%);
+      filter: blur(18px) saturate(1.05);
+      opacity: .40;
+      mix-blend-mode: screen;
+      animation: glowPulse 8s ease-in-out infinite;
+    }
+
+    /* Background square suggesting body */
+    #bodyBg { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; z-index:1; }
+    #bodyBg .bgSquare { width: 92%; height: 92%; background: var(--avatar-body-color, #5bbfdd); border-radius: 16px; box-shadow: inset 0 0 0 2px rgba(0,0,0,0.08); transition: background-color 400ms ease; }
+
+    /* Camera video layer — sits behind avatar face, inside hero */
+    #cameraVideo {
+      position: absolute; inset: 0; z-index: 1; /* behind avatarContainer (z:2) */
+      width: 100%; height: 100%; object-fit: cover; border-radius: 18px;
+      opacity: 0; transition: opacity 0.6s ease;
+      pointer-events: none;
+    }
+    #cameraVideo.active { opacity: 0.35; }
+    /* When camera is on, dim the body bg square so video shows through */
+    .hero.camera-on #bodyBg .bgSquare { opacity: 0.25; transition: opacity 0.6s ease; }
+    /* Make the face panel semi-transparent so camera bleeds through subtly */
+    .hero.camera-on #avatarContainer .animated-avatar::before { opacity: 0.75; }
+
+    /* ꕥ vision toggle button — lives in charbar (right side) */
+    #visionToggle {
+      background: rgba(255,255,255,0.18); color: rgba(255,255,255,0.7); border: 1px solid rgba(255,255,255,0.22);
+      border-radius: 10px; padding: 12px 12px; font-size: 16px; cursor: pointer;
+      transition: background 0.3s, border-color 0.3s, box-shadow 0.3s, color 0.3s;
+      line-height: 1; flex-shrink: 0;
+    }
+    #visionToggle:hover {
+      background: rgba(255,255,255,0.28); color: rgba(255,255,255,0.9);
+    }
+    #visionToggle.active {
+      background: rgba(255,255,255,0.35); border-color: rgba(255,255,255,0.45); color: #fff;
+      box-shadow: 0 0 10px rgba(255,255,255,0.25);
+    }
+
+    /* Edit button overlay */
+    #editFaceBtn { position:absolute; top:10px; right:10px; z-index:4; background: rgba(0,0,0,0.10); color:#fff; border:1px solid rgba(255,255,255,0.18); border-radius:8px; padding:6px 8px; font-size:12px; cursor:pointer; }
+
+    /* Face Editor Panel */
+    .face-editor-panel {
+      position: fixed; top: 0; right: 0; z-index: 10000;
+      width: 280px; max-height: 100vh; overflow-y: auto;
+      background: rgba(18,28,38,0.92); color: #eee;
+      backdrop-filter: blur(18px) saturate(1.2); -webkit-backdrop-filter: blur(18px) saturate(1.2);
+      border-left: 1px solid rgba(255,255,255,0.12);
+      box-shadow: -4px 0 24px rgba(0,0,0,0.35);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 13px;
+      scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.2) transparent;
+    }
+    .face-editor-panel::-webkit-scrollbar { width: 5px; }
+    .face-editor-panel::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 3px; }
+    .fe-header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 12px 14px; border-bottom: 1px solid rgba(255,255,255,0.1);
+      font-weight: 600; font-size: 14px; position: sticky; top: 0;
+      background: rgba(18,28,38,0.95); z-index: 1;
+    }
+    .fe-close { background: none; border: none; color: #fff; font-size: 22px; cursor: pointer; padding: 0 4px; line-height: 1; }
+    .fe-body { padding: 8px 14px 16px; }
+    .fe-section { margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+    .fe-label { font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: rgba(255,255,255,0.55); margin-bottom: 6px; }
+    .fe-row { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+    .fe-row > span:first-child { width: 50px; font-size: 12px; color: rgba(255,255,255,0.7); flex-shrink: 0; }
+    .fe-row input[type="range"] { flex: 1; height: 4px; accent-color: #5bbfdd; cursor: pointer; }
+    .fe-row input[type="color"] { width: 36px; height: 26px; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 0; cursor: pointer; background: none; }
+    .fe-val { width: 36px; text-align: right; font-size: 11px; color: rgba(255,255,255,0.5); flex-shrink: 0; }
+    .fe-actions { display: flex; gap: 8px; margin-top: 12px; }
+    .fe-actions button {
+      flex: 1; padding: 10px; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px;
+      font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;
+    }
+    #feSaveBtn { background: rgba(91,191,221,0.3); color: #fff; }
+    #feSaveBtn:hover { background: rgba(91,191,221,0.5); }
+    #feResetBtn { background: rgba(255,255,255,0.08); color: #ccc; }
+    #feResetBtn:hover { background: rgba(255,255,255,0.15); }
+
+    /* Char bar below hero (pushes down as chat grows) */
+    .charbar { max-width: 980px; width: 96%; margin: 8px auto 16px auto; display:flex; gap:8px; align-items:center; background: rgba(255,255,255,0.10); border:1px solid rgba(255,255,255,0.24); border-radius:14px; padding:10px; backdrop-filter: saturate(1.2) blur(12px); -webkit-backdrop-filter: saturate(1.2) blur(12px); box-shadow: 0 6px 18px rgba(0,0,0,0.10), 0 0 20px var(--glow-soft) inset; outline: 1px solid rgba(255,255,255,0.10); position: relative; overflow: hidden; }
+    .charbar::after { content:""; position:absolute; inset:0; pointer-events:none; background: linear-gradient(110deg, rgba(255,255,255,0.20) 0%, rgba(255,255,255,0.08) 28%, rgba(255,255,255,0.0) 48%); }
+    .charbar input[type="text"] { flex:1; padding:12px; border-radius:10px; border:1px solid rgba(255,255,255,0.35); background: rgba(255,255,255,0.22); color:#ffffff; outline:none; }
+    .charbar input::placeholder { color: rgba(255,255,255,0.75); }
+    .charbar button { color:#0a2430; }
+    .charbar button { padding:12px 14px; border:none; border-radius:10px; background: rgba(255,255,255,0.65); color:#0a2430; cursor:pointer; border:1px solid rgba(255,255,255,0.42); }
+
+    /* Chat dock below hero (messages appear above input) */
+    .chatdock { max-width: 980px; width: 96%; margin: 8px auto 0 auto; border-radius: 14px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.20); backdrop-filter: saturate(1.2) blur(12px); -webkit-backdrop-filter: saturate(1.2) blur(12px); box-shadow: 0 8px 24px rgba(0,0,0,0.10), 0 0 24px var(--glow-soft) inset; overflow: hidden; position: relative; }
+    .chatdock::after { content:""; position:absolute; inset: -2px; border-radius:16px; pointer-events:none; box-shadow: 0 0 32px 6px color-mix(in srgb, var(--accent) 22%, transparent); mix-blend-mode: screen; opacity:.45; }
+    .chatdock::before { content:""; position:absolute; inset:0; pointer-events:none; background: linear-gradient(115deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.05) 26%, rgba(255,255,255,0.0) 46%); }
+    .chatdock .chat { max-height: clamp(120px, 22vh, 240px); overflow-y: auto; padding: 10px 12px; background: transparent; border: none; }
+    .chatdock .msg { backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); }
+
+    .container { position:relative; max-width: 900px; margin: 0 auto; padding: 0 16px 24px 16px; height:calc(100% - 200px); display:flex; flex-direction:column; }
+    .card { background:var(--card-bg); backdrop-filter: blur(6px); border:1px solid var(--border); border-radius: 16px; padding:16px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); height:100%; display:flex; flex-direction:column; transition: background-color 400ms ease, border-color 300ms ease, box-shadow 300ms ease; }
+    .header { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
+    h1 { margin:0; color: var(--text); font-size:18px; letter-spacing:.5px; text-shadow: 0 0 8px var(--text-glow); }
+    .status { font-size:12px; color: var(--text); text-shadow: 0 0 6px var(--text-glow); }
+    .chat { flex:1; min-height: 0; border-radius:12px; padding:12px; overflow-y:auto; background: rgba(0,0,0,0.03); border:1px solid var(--border); transition: background-color 400ms ease, border-color 300ms ease; }
+    .msg { margin:8px 0; padding:10px 12px; border-radius:12px; max-width:80%; white-space:pre-wrap; word-wrap:break-word; transition: background-color 400ms ease, color 300ms ease, box-shadow 300ms ease; color: #fff; text-shadow: 0 0 6px var(--text-glow); position: relative; overflow: hidden; }
+    .user { background: color-mix(in srgb, var(--bubble-user) 72%, rgba(255,255,255,0.16)); color:#fff; margin-left:auto; border:1px solid rgba(255,255,255,0.18); backdrop-filter: blur(6px) saturate(1.05); -webkit-backdrop-filter: blur(6px) saturate(1.05); }
+    .assistant { background: color-mix(in srgb, var(--bubble-assistant) 72%, rgba(255,255,255,0.16)); color:#fff; border:1px solid rgba(255,255,255,0.16); backdrop-filter: blur(6px) saturate(1.05); -webkit-backdrop-filter: blur(6px) saturate(1.05); }
+    .msg.user { box-shadow: 0 0 12px var(--glow-soft), inset 0 0 0 1px rgba(255,255,255,0.15); }
+    .msg.assistant { box-shadow: 0 0 10px rgba(255,255,255,0.18), inset 0 0 0 1px rgba(255,255,255,0.12); }
+    .msg::after { content:""; position:absolute; inset:0; pointer-events:none; background: linear-gradient(120deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.08) 28%, rgba(255,255,255,0.0) 48%); opacity:.6; }
+    .input-row { display:flex; gap:8px; margin-top:12px; }
+    input[type="text"] { flex:1; padding:12px; border-radius:10px; border:1px solid var(--border); background:rgba(0,0,0,0.35); color:#eee; }
+    button { padding:12px 14px; border:none; border-radius:10px; background:#4CAF50; color:white; cursor:pointer; }
+    /* Plus button glow */
+    #imageBtn, #micBtn { background: rgba(255,255,255,0.18); color: rgba(255,255,255,0.7); border:1px solid rgba(255,255,255,0.22); box-shadow: none; }
+    #imageBtn:hover, #micBtn:hover { background: rgba(255,255,255,0.28); color: rgba(255,255,255,0.9); box-shadow: 0 0 10px rgba(255,255,255,0.15); }
+    #micBtn.active { background: rgba(255,80,80,0.35); color: #fff; border-color: rgba(255,100,100,0.5); box-shadow: 0 0 12px rgba(255,80,80,0.3); }
+    #micBtn.hold { animation: micPulse 1.2s ease-in-out infinite; }
+    @keyframes micPulse {
+      0%, 100% { box-shadow: 0 0 12px rgba(255,80,80,0.3); }
+      50% { box-shadow: 0 0 20px rgba(255,80,80,0.55); }
+    }
+    .small { font-size:12px; color:#c3c3c3; margin-bottom:8px; }
+
+    /* Subtle pulsation */
+    @keyframes glowPulse {
+      0%, 100% { opacity: .45; filter: blur(22px) saturate(1.0); }
+      50% { opacity: .7; filter: blur(28px) saturate(1.12); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .hero::before, #avatarContainer .animated-avatar::after { animation: none; }
+    }
+
+    /* ===== Small square screens (Galaxy Z Flip 6 cover display ~260x260) ===== */
+    /* Maximize space: kill margins, fill viewport */
+    @media (max-height: 400px) and (max-width: 400px) {
+      .hero {
+        margin: 0 !important;
+        border-radius: 0 !important;
+        border: none !important;
+        width: 100vw !important;
+        height: 100vh !important;
+        max-width: none !important;
+        aspect-ratio: auto !important;
+      }
+      .hero::before { inset: 0; border-radius: 0; }
+      .hero::after { border-radius: 0; }
+      #avatarContainer { border-radius: 0; }
+      #avatarContainer .animated-avatar {
+        width: 96vmin !important;
+        height: 96vmin !important;
+        border-radius: 8px;
+      }
+      #avatarContainer .animated-avatar::before {
+        border-radius: 8px;
+      }
+      /* Hide chat/charbar — cover display is face-only */
+      .chatdock, .charbar, .container { display: none !important; }
+      body { overflow: hidden; }
+    }
+
+    /* Prevent avatar.css @media (max-width:768px) from setting hardcoded px positions */
+    @media (max-width: 768px) {
+      #avatarContainer .animated-avatar .eye {
+        width: var(--eye-width, 16px) !important;
+        height: var(--eye-height, 16px) !important;
+        top: auto !important;
+      }
+      #avatarContainer .animated-avatar .left-eye {
+        top: var(--left-eye-top, 20%) !important;
+        left: var(--left-eye-left, 36%) !important;
+      }
+      #avatarContainer .animated-avatar .right-eye {
+        top: var(--right-eye-top, 20%) !important;
+        right: var(--right-eye-right, 36%) !important;
+      }
+      #avatarContainer .animated-avatar .mouth {
+        width: var(--mouth-width, 21px) !important;
+        height: var(--mouth-height, 2px) !important;
+        bottom: auto !important;
+        top: var(--mouth-top, 60%) !important;
+      }
+    }
+  </style>
+  <link rel="stylesheet" href="/static/css/avatar.css?v=20260215f" />
+</head>
+<body>
+  <div class="hero" id="heroPanel">
+    <div id="bodyBg"><div class="bgSquare"></div></div>
+    <video id="cameraVideo" autoplay playsinline muted></video>
+    <button id="editFaceBtn" title="Edit face layout">Edit Face</button>
+    <!-- Desktop avatar container overlay -->
+    <div id="avatarContainer"></div>
+  </div>
+
+  <!-- Face Editor Panel (face elements only) -->
+  <div id="faceEditorPanel" class="face-editor-panel" style="display:none;">
+    <div class="fe-header">
+      <span>Face Editor</span>
+      <button id="feCloseBtn" class="fe-close">&times;</button>
+    </div>
+    <div class="fe-body">
+      <!-- Faceplate -->
+      <div class="fe-section">
+        <div class="fe-label">Faceplate</div>
+        <div class="fe-row"><span>Top</span><input type="range" id="fe-face-top" min="0" max="100" step="1"><span class="fe-val" id="fe-face-top-val"></span></div>
+        <div class="fe-row"><span>Width</span><input type="range" id="fe-face-w" min="0" max="100" step="1"><span class="fe-val" id="fe-face-w-val"></span></div>
+        <div class="fe-row"><span>Height</span><input type="range" id="fe-face-h" min="0" max="100" step="1"><span class="fe-val" id="fe-face-h-val"></span></div>
+      </div>
+      <!-- Eyes -->
+      <div class="fe-section">
+        <div class="fe-label">Eyes</div>
+        <div class="fe-row"><span>Top</span><input type="range" id="fe-eye-top" min="0" max="100" step="1"><span class="fe-val" id="fe-eye-top-val"></span></div>
+        <div class="fe-row"><span>Spread</span><input type="range" id="fe-eye-spread" min="0" max="50" step="1"><span class="fe-val" id="fe-eye-spread-val"></span></div>
+        <div class="fe-row"><span>Size</span><input type="range" id="fe-eye-size" min="1" max="500" step="1"><span class="fe-val" id="fe-eye-size-val"></span></div>
+      </div>
+      <!-- Mouth -->
+      <div class="fe-section">
+        <div class="fe-label">Mouth</div>
+        <div class="fe-row"><span>Top</span><input type="range" id="fe-mouth-top" min="0" max="100" step="1"><span class="fe-val" id="fe-mouth-top-val"></span></div>
+        <div class="fe-row"><span>Width</span><input type="range" id="fe-mouth-w" min="1" max="500" step="1"><span class="fe-val" id="fe-mouth-w-val"></span></div>
+        <div class="fe-row"><span>Height</span><input type="range" id="fe-mouth-h" min="1" max="500" step="1"><span class="fe-val" id="fe-mouth-h-val"></span></div>
+      </div>
+      <!-- Cheeks -->
+      <div class="fe-section">
+        <div class="fe-label">Cheeks</div>
+        <div class="fe-row"><span>Top</span><input type="range" id="fe-cheek-top" min="0" max="100" step="1"><span class="fe-val" id="fe-cheek-top-val"></span></div>
+        <div class="fe-row"><span>Spread</span><input type="range" id="fe-cheek-spread" min="0" max="50" step="1"><span class="fe-val" id="fe-cheek-spread-val"></span></div>
+        <div class="fe-row"><span>Size</span><input type="range" id="fe-cheek-size" min="1" max="500" step="1"><span class="fe-val" id="fe-cheek-size-val"></span></div>
+      </div>
+      <!-- Colors -->
+      <div class="fe-section">
+        <div class="fe-label">Colors</div>
+        <div class="fe-row"><span>Body</span><input type="color" id="fe-color-body" value="#5bbfdd"></div>
+        <div class="fe-row"><span>Face</span><input type="color" id="fe-color-face" value="#a8e4f3"></div>
+      </div>
+      <div class="fe-actions">
+        <button id="feSaveBtn">Save</button>
+        <button id="feResetBtn">Reset</button>
+      </div>
+    </div>
+  </div>
+  <!-- Chat dock below hero that expands the layout -->
+  <div class="chatdock">
+    <div id="chat" class="chat"></div>
+  </div>
+  <!-- Chat bar below chat dock (always under messages) -->
+  <div class="charbar">
+    <input id="message" type="text" placeholder="Type your message..." />
+    <button id="sendBtn">Send</button>
+    <button id="visionToggle" title="Toggle vision">ꕥ</button>
+  </div>
+  <div class="container" style="display:none;">
+    <div class="card" style="display:none">
+      <div class="header">
+        <h1>Substrate WebUI</h1>
+        <div class="status" id="status">Connecting...</div>
+      </div>
+      <div class="small" id="hostInfo"></div>
+      <div class="input-row" style="display:none"></div>
+    </div>
+  </div>
+
+  <script src="/static/js/avatar.js?v=20260215f"></script>
+  <script src="/static/js/avatar-editor.js"></script>
+  <script>
+    // Shim: ensure global access if avatar.js defined AnimatedAvatar in local scope
+    if (!window.AnimatedAvatar && typeof AnimatedAvatar !== 'undefined') {
+      window.AnimatedAvatar = AnimatedAvatar;
+    }
+  </script>
+  <script src="/ui/main.js?v=20260216b"></script>
+</body>
+</html>

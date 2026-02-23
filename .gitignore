@@ -1,0 +1,65 @@
+# MCP server config (contains API tokens)
+config/mcp_servers.json
+
+# Custom settings (contains API keys)
+custom_settings.json
+service_account.json
+
+# Python
+venv/
+venv_208/
+__pycache__/
+*.pyc
+*.pyo
+
+# Node
+node_modules/
+
+# Data
+data/
+*.db
+conversation_history.json
+memory.json
+vector_store
+vector_store.json
+
+# Build output
+dist/
+.deps_installed
+.ollama_warned
+.memory_migrated
+
+# Runtime
+logs/
+uploads/
+screenshots/
+clipboard_snapshots/
+visual_memory/
+*.lock
+*.lnk
+
+# Temp / debug / cruft
+startup_debug.log
+weather.json
+drivers.txt
+news_output.html
+raw_hacker_news.txt
+clipboard_content.txt
+display_devices.txt
+report.txt
+engineering_notes.txt
+mic_settings.json
+face_config.json
+vision_client_settings.json
+tp_speech.lock
+temp_profile/
+camsnap/
+xgo_audio_input/
+workspace/temp/
+workspace/output/
+workspace/recordings/
+
+# OS
+Thumbs.db
+.DS_Store
+desktop.ini

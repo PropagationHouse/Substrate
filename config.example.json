@@ -1,0 +1,50 @@
+{
+  "model": "gemini-2.5-flash",
+  "api_endpoint": "https://generativelanguage.googleapis.com",
+  "perplexity_api_key": "",
+  "system_prompt": "You are a helpful assistant with full desktop control.",
+  "screenshot_prompt": "Describe what you see briefly.",
+  "temperature": 0.7,
+  "top_p": 0.9,
+  "num_gpu": 1,
+  "num_thread": 8,
+  "num_ctx": 4096,
+  "rope_freq_base": 10000,
+  "rope_freq_scale": 1.0,
+  "heartbeat_enabled": true,
+  "heartbeat_interval_seconds": 300,
+  "heartbeat_active_start": null,
+  "heartbeat_active_end": null,
+  "autonomy": {
+    "screenshot": {
+      "enabled": false,
+      "min_interval": 300,
+      "max_interval": 900,
+      "prompt": ""
+    },
+    "messages": {
+      "enabled": false,
+      "min_interval": 300,
+      "max_interval": 900,
+      "prompt": ""
+    },
+    "midjourney": {
+      "enabled": false,
+      "min_interval": 300,
+      "max_interval": 900,
+      "prompt": "",
+      "system_prompt": ""
+    }
+  },
+  "profiles": {
+    "default": {
+      "config": {
+        "system_prompt": "You are a helpful assistant with full desktop control.",
+        "screenshot_prompt": "Describe what you see briefly.",
+        "model": "gemini-2.5-flash",
+        "temperature": 0.7
+      }
+    }
+  },
+  "active_profile": "default"
+}

@@ -1,0 +1,233 @@
+
+=== DEBUG FLOW REPORT ===
+
+Log file: C:\Users\Bl0ck/debug_flow.log
+
+Python files found: 14877
+Weather files found: 61
+Functions in weather flow: 20
+Browser opening methods found: 120
+Import issues found: 28
+Permission issues found: 0
+Syntax errors found: 0
+Direct browser opening test: SUCCESS
+
+Weather files:
+- C:\Users\Bl0ck\Desktop\tp 208\aurora_forecast.py (forecast)
+- C:\Users\Bl0ck\Desktop\tp 208\chat_weather_patch.py (weather)
+- C:\Users\Bl0ck\Desktop\tp 208\debug_flow.py (weather)
+- C:\Users\Bl0ck\Desktop\tp 208\debug_weather_chat.py (weather)
+- C:\Users\Bl0ck\Desktop\tp 208\direct_fix_weather.py (weather)
+- C:\Users\Bl0ck\Desktop\tp 208\integrate_weather.py (weather)
+- C:\Users\Bl0ck\Desktop\tp 208\open_windy.py (weather)
+- C:\Users\Bl0ck\Desktop\tp 208\proxy_server.py (weather)
+- C:\Users\Bl0ck\Desktop\tp 208\standalone_weather.py (weather)
+- C:\Users\Bl0ck\Desktop\tp 208\weather_command.py (weather)
+- C:\Users\Bl0ck\Desktop\tp 208\weather_handler.py (weather)
+- C:\Users\Bl0ck\Desktop\tp 208\weather_search.py (weather)
+- C:\Users\Bl0ck\Desktop\tp 208\src\commands\command_executor.py (weather)
+- C:\Users\Bl0ck\Desktop\tp 208\src\commands\command_parser.py (weather)
+- C:\Users\Bl0ck\Desktop\tp 208\src\search\web_augmented_response.py (weather)
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\huggingface_hub\inference\_client.py (weather)
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\huggingface_hub\inference\_generated\_async_client.py (weather)
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\networkx\algorithms\centrality\group.py (weather)
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\pandas\tests\frame\test_constructors.py (forecast)
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\pip\_vendor\rich\_spinners.py (weather)
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\rdflib\namespace\_BRICK.py (weather)
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\rdflib\namespace\_SDO.py (weather)
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\rich\_spinners.py (weather)
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\scipy\stats\_axis_nan_policy.py (weather)
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\scipy\stats\_continuous_distns.py (weather)
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\scipy\stats\_stats_py.py (forecast)
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\sentence_transformers\backend.py (weather)
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\sentence_transformers\SentenceTransformer.py (weather)
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\sentence_transformers\training_args.py (weather)
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\sentence_transformers\losses\AdaptiveLayerLoss.py (weather)
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\sentence_transformers\losses\AnglELoss.py (weather)
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\sentence_transformers\losses\CachedGISTEmbedLoss.py (weather)
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\sentence_transformers\losses\CachedMultipleNegativesRankingLoss.py (weather)
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\sentence_transformers\losses\CachedMultipleNegativesSymmetricRankingLoss.py (weather)
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\sentence_transformers\losses\ContrastiveLoss.py (weather)
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\sentence_transformers\losses\CoSENTLoss.py (weather)
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\sentence_transformers\losses\CosineSimilarityLoss.py (weather)
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\sentence_transformers\losses\GISTEmbedLoss.py (weather)
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\sentence_transformers\losses\MarginMSELoss.py (weather)
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\sentence_transformers\losses\Matryoshka2dLoss.py (weather)
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\sentence_transformers\losses\MatryoshkaLoss.py (weather)
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\sentence_transformers\losses\MultipleNegativesRankingLoss.py (weather)
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\sentence_transformers\losses\MultipleNegativesSymmetricRankingLoss.py (weather)
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\sentence_transformers\losses\OnlineContrastiveLoss.py (weather)
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\sentence_transformers\losses\TripletLoss.py (weather)
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\spacy\glossary.py (weather)
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\spacy\tests\pipeline\test_entity_linker.py (weather)
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\transformers\generation\candidate_generator.py (forecast)
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\transformers\generation\utils.py (forecast)
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\transformers\models\autoformer\modeling_autoformer.py (forecast)
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\transformers\models\bart\modeling_bart.py (forecast)
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\transformers\models\informer\modeling_informer.py (forecast)
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\transformers\models\patchtsmixer\configuration_patchtsmixer.py (forecast)
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\transformers\models\patchtsmixer\modeling_patchtsmixer.py (forecast)
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\transformers\models\patchtst\configuration_patchtst.py (forecast)
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\transformers\models\patchtst\modeling_patchtst.py (forecast)
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\transformers\models\pegasus\modeling_pegasus.py (forecast)
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\transformers\models\pegasus\modeling_tf_pegasus.py (forecast)
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\transformers\models\pegasus_x\modeling_pegasus_x.py (forecast)
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\transformers\models\stablelm\modeling_stablelm.py (weather)
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\transformers\models\time_series_transformer\modeling_time_series_transformer.py (forecast)
+
+Browser opening methods:
+- C:\Users\Bl0ck\Desktop\tp 208\aurora_forecast.py (webbrowser.open) at line 20: webbrowser.open(url, new=2)  # new=2 opens in a new browser window
+- C:\Users\Bl0ck\Desktop\tp 208\chat_weather_patch.py (webbrowser.open) at line 158: print("[DEBUG] Using webbrowser.open")
+- C:\Users\Bl0ck\Desktop\tp 208\chat_weather_patch.py (webbrowser.open) at line 160: webbrowser.open(url, new=2)  # new=2 forces a new window
+- C:\Users\Bl0ck\Desktop\tp 208\chat_weather_patch.py (webbrowser.open) at line 163: f.write(f"{timestamp} - Used webbrowser.open: SUCCESS\\n")
+- C:\Users\Bl0ck\Desktop\tp 208\chat_weather_patch.py (webbrowser.open) at line 165: print(f"[ERROR] webbrowser.open failed: {e}")
+- C:\Users\Bl0ck\Desktop\tp 208\chat_weather_patch.py (webbrowser.open) at line 167: f.write(f"{timestamp} - webbrowser.open failed: {str(e)}\\n")
+- C:\Users\Bl0ck\Desktop\tp 208\chat_weather_patch.py (subprocess.Popen) at line 145: subprocess.Popen(command)
+- C:\Users\Bl0ck\Desktop\tp 208\chat_weather_patch.py (open_windy) at line 133: # METHOD 1: Try using open_windy.py script
+- C:\Users\Bl0ck\Desktop\tp 208\chat_weather_patch.py (open_windy) at line 136: print("[DEBUG] Using open_windy.py script")
+- C:\Users\Bl0ck\Desktop\tp 208\chat_weather_patch.py (open_windy) at line 137: script_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "open_windy.py")
+- C:\Users\Bl0ck\Desktop\tp 208\chat_weather_patch.py (open_windy) at line 149: f.write(f"{timestamp} - Used open_windy.py script: SUCCESS\\n")
+- C:\Users\Bl0ck\Desktop\tp 208\chat_weather_patch.py (open_windy) at line 151: print(f"[ERROR] open_windy.py script failed: {e}")
+- C:\Users\Bl0ck\Desktop\tp 208\chat_weather_patch.py (open_windy) at line 153: f.write(f"{timestamp} - open_windy.py script failed: {str(e)}\\n")
+- C:\Users\Bl0ck\Desktop\tp 208\chat_weather_patch.py (open_windy) at line 214: """Copy weather_handler.py and open_windy.py from tp 120 to tp 208 if needed"""
+- C:\Users\Bl0ck\Desktop\tp 208\chat_weather_patch.py (open_windy) at line 224: files_to_copy = ["weather_handler.py", "open_windy.py"]
+- C:\Users\Bl0ck\Desktop\tp 208\chat_weather_patch.py (open_windy) at line 275: def verify_open_windy():
+- C:\Users\Bl0ck\Desktop\tp 208\chat_weather_patch.py (open_windy) at line 276: """Verify that the open_windy.py file exists"""
+- C:\Users\Bl0ck\Desktop\tp 208\chat_weather_patch.py (open_windy) at line 279: # Path to open_windy.py
+- C:\Users\Bl0ck\Desktop\tp 208\chat_weather_patch.py (open_windy) at line 280: file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "open_windy.py")
+- C:\Users\Bl0ck\Desktop\tp 208\chat_weather_patch.py (open_windy) at line 283: logging.error(f"open_windy.py not found at {file_path}")
+- C:\Users\Bl0ck\Desktop\tp 208\chat_weather_patch.py (open_windy) at line 286: logging.info("open_windy.py verified successfully")
+- C:\Users\Bl0ck\Desktop\tp 208\chat_weather_patch.py (open_windy) at line 302: # Verify open_windy.py
+- C:\Users\Bl0ck\Desktop\tp 208\chat_weather_patch.py (open_windy) at line 303: if not verify_open_windy():
+- C:\Users\Bl0ck\Desktop\tp 208\chat_weather_patch.py (open_windy) at line 304: logging.error("Failed to verify open_windy.py")
+- C:\Users\Bl0ck\Desktop\tp 208\debug_flow.py (webbrowser.open) at line 135: "webbrowser.open",
+- C:\Users\Bl0ck\Desktop\tp 208\debug_flow.py (webbrowser.open) at line 247: result = webbrowser.open(url, new=2)
+- C:\Users\Bl0ck\Desktop\tp 208\debug_flow.py (webbrowser.open) at line 248: logging.info(f"webbrowser.open result: {result}")
+- C:\Users\Bl0ck\Desktop\tp 208\debug_flow.py (subprocess.Popen) at line 136: "subprocess.Popen",
+- C:\Users\Bl0ck\Desktop\tp 208\debug_flow.py (os.system) at line 137: "os.system",
+- C:\Users\Bl0ck\Desktop\tp 208\debug_flow.py (open_windy) at line 59: "open_windy"
+- C:\Users\Bl0ck\Desktop\tp 208\debug_flow.py (open_windy) at line 82: "def open_windy",
+- C:\Users\Bl0ck\Desktop\tp 208\debug_flow.py (open_windy) at line 138: "open_windy"
+- C:\Users\Bl0ck\Desktop\tp 208\debug_weather_chat.py (open_windy) at line 98: def patch_open_windy():
+- C:\Users\Bl0ck\Desktop\tp 208\debug_weather_chat.py (open_windy) at line 99: """Create a patched version of open_windy.py with extra debugging"""
+- C:\Users\Bl0ck\Desktop\tp 208\debug_weather_chat.py (open_windy) at line 100: logging.info("Patching open_windy.py with extra debugging")
+- C:\Users\Bl0ck\Desktop\tp 208\debug_weather_chat.py (open_windy) at line 103: # Path to open_windy.py
+- C:\Users\Bl0ck\Desktop\tp 208\debug_weather_chat.py (open_windy) at line 104: file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "open_windy.py")
+- C:\Users\Bl0ck\Desktop\tp 208\debug_weather_chat.py (open_windy) at line 114: # Add extra debugging to open_windy_url function
+- C:\Users\Bl0ck\Desktop\tp 208\debug_weather_chat.py (open_windy) at line 115: if "def open_windy_url(location=None):" in content:
+- C:\Users\Bl0ck\Desktop\tp 208\debug_weather_chat.py (open_windy) at line 117: "def open_windy_url(location=None):",
+- C:\Users\Bl0ck\Desktop\tp 208\debug_weather_chat.py (open_windy) at line 118: """def open_windy_url(location=None):
+- C:\Users\Bl0ck\Desktop\tp 208\debug_weather_chat.py (open_windy) at line 130: logging.info("Successfully patched open_windy.py")
+- C:\Users\Bl0ck\Desktop\tp 208\debug_weather_chat.py (open_windy) at line 134: logging.error("Could not find open_windy_url function in open_windy.py")
+- C:\Users\Bl0ck\Desktop\tp 208\debug_weather_chat.py (open_windy) at line 138: logging.error(f"Failed to patch open_windy.py: {str(e)}")
+- C:\Users\Bl0ck\Desktop\tp 208\debug_weather_chat.py (open_windy) at line 256: def test_direct_open_windy():
+- C:\Users\Bl0ck\Desktop\tp 208\debug_weather_chat.py (open_windy) at line 257: """Test the open_windy.py script directly"""
+- C:\Users\Bl0ck\Desktop\tp 208\debug_weather_chat.py (open_windy) at line 261: # Import the open_windy module
+- C:\Users\Bl0ck\Desktop\tp 208\debug_weather_chat.py (open_windy) at line 263: import open_windy
+- C:\Users\Bl0ck\Desktop\tp 208\debug_weather_chat.py (open_windy) at line 267: logging.info(f"Testing open_windy with location: {location}")
+- C:\Users\Bl0ck\Desktop\tp 208\debug_weather_chat.py (open_windy) at line 269: # Call open_windy_url
+- C:\Users\Bl0ck\Desktop\tp 208\debug_weather_chat.py (open_windy) at line 270: result = open_windy.open_windy_url(location)
+- C:\Users\Bl0ck\Desktop\tp 208\debug_weather_chat.py (open_windy) at line 277: logging.error(f"Failed to test open_windy: {str(e)}")
+- C:\Users\Bl0ck\Desktop\tp 208\debug_weather_chat.py (open_windy) at line 289: patch_open_windy()
+- C:\Users\Bl0ck\Desktop\tp 208\debug_weather_chat.py (open_windy) at line 294: test_direct_open_windy()
+- C:\Users\Bl0ck\Desktop\tp 208\direct_fix_weather.py (webbrowser.open) at line 107: webbrowser.open(url, new=2)  # new=2 forces a new window
+- C:\Users\Bl0ck\Desktop\tp 208\direct_fix_weather.py (webbrowser.open) at line 178: webbrowser.open(url, new=2)  # new=2 forces a new window
+- C:\Users\Bl0ck\Desktop\tp 208\integrate_weather.py (open_windy) at line 74: "open_windy"
+- C:\Users\Bl0ck\Desktop\tp 208\open_windy.py (webbrowser.open) at line 74: logging.info("Trying webbrowser.open...")
+- C:\Users\Bl0ck\Desktop\tp 208\open_windy.py (webbrowser.open) at line 75: result = webbrowser.open(url, new=2)  # new=2 forces a new window
+- C:\Users\Bl0ck\Desktop\tp 208\open_windy.py (webbrowser.open) at line 76: logging.info(f"webbrowser.open result: {result}")
+- C:\Users\Bl0ck\Desktop\tp 208\open_windy.py (subprocess.Popen) at line 109: subprocess.Popen(args, shell=shell)
+- C:\Users\Bl0ck\Desktop\tp 208\open_windy.py (subprocess.Popen) at line 110: logging.info("subprocess.Popen executed without error")
+- C:\Users\Bl0ck\Desktop\tp 208\open_windy.py (subprocess.Popen) at line 113: logging.error(f"subprocess.Popen failed: {str(e)}")
+- C:\Users\Bl0ck\Desktop\tp 208\open_windy.py (os.system) at line 80: """Open URL using os.system"""
+- C:\Users\Bl0ck\Desktop\tp 208\open_windy.py (os.system) at line 81: logging.info("Trying os.system...")
+- C:\Users\Bl0ck\Desktop\tp 208\open_windy.py (os.system) at line 90: result = os.system(cmd)
+- C:\Users\Bl0ck\Desktop\tp 208\open_windy.py (os.system) at line 91: logging.info(f"os.system result: {result}")
+- C:\Users\Bl0ck\Desktop\tp 208\open_windy.py (open_windy) at line 23: def open_windy_url(location=None):
+- C:\Users\Bl0ck\Desktop\tp 208\open_windy.py (open_windy) at line 126: success = open_windy_url(location)
+- C:\Users\Bl0ck\Desktop\tp 208\proxy_server.py (webbrowser.open) at line 1460: webbrowser.open(url, new=2)
+- C:\Users\Bl0ck\Desktop\tp 208\proxy_server.py (webbrowser.open) at line 1569: webbrowser.open(apkmirror_url)
+- C:\Users\Bl0ck\Desktop\tp 208\proxy_server.py (webbrowser.open) at line 1570: webbrowser.open(apkpure_url)
+- C:\Users\Bl0ck\Desktop\tp 208\proxy_server.py (webbrowser.open) at line 2640: webbrowser.open(url, new=2)
+- C:\Users\Bl0ck\Desktop\tp 208\proxy_server.py (subprocess.Popen) at line 772: subprocess.Popen(command)
+- C:\Users\Bl0ck\Desktop\tp 208\proxy_server.py (subprocess.Popen) at line 2593: process = subprocess.Popen(
+- C:\Users\Bl0ck\Desktop\tp 208\proxy_server.py (subprocess.Popen) at line 2967: process = subprocess.Popen(
+- C:\Users\Bl0ck\Desktop\tp 208\proxy_server.py (subprocess.Popen) at line 3201: # Override subprocess.Popen to track all created processes
+- C:\Users\Bl0ck\Desktop\tp 208\proxy_server.py (subprocess.Popen) at line 3202: original_popen = subprocess.Popen
+- C:\Users\Bl0ck\Desktop\tp 208\proxy_server.py (subprocess.Popen) at line 3210: subprocess.Popen = tracking_popen
+- C:\Users\Bl0ck\Desktop\tp 208\standalone_weather.py (webbrowser.open) at line 112: logging.info("Opening browser with webbrowser.open")
+- C:\Users\Bl0ck\Desktop\tp 208\standalone_weather.py (webbrowser.open) at line 113: result = webbrowser.open(url, new=2)  # new=2 forces a new window
+- C:\Users\Bl0ck\Desktop\tp 208\standalone_weather.py (webbrowser.open) at line 114: logging.info(f"webbrowser.open result: {result}")
+- C:\Users\Bl0ck\Desktop\tp 208\weather_command.py (webbrowser.open) at line 48: logging.info("Opening browser with webbrowser.open")
+- C:\Users\Bl0ck\Desktop\tp 208\weather_command.py (webbrowser.open) at line 49: result = webbrowser.open(url, new=2)  # new=2 forces a new window
+- C:\Users\Bl0ck\Desktop\tp 208\weather_command.py (webbrowser.open) at line 50: logging.info(f"webbrowser.open result: {result}")
+- C:\Users\Bl0ck\Desktop\tp 208\weather_handler.py (webbrowser.open) at line 133: logging.info("Trying webbrowser.open...")
+- C:\Users\Bl0ck\Desktop\tp 208\weather_handler.py (webbrowser.open) at line 145: result = webbrowser.open(url, new=2)  # new=2 forces a new window
+- C:\Users\Bl0ck\Desktop\tp 208\weather_handler.py (webbrowser.open) at line 146: logging.info(f"webbrowser.open result: {result}")
+- C:\Users\Bl0ck\Desktop\tp 208\weather_handler.py (webbrowser.open) at line 151: logging.error(f"webbrowser.open failed: {str(e)}")
+- C:\Users\Bl0ck\Desktop\tp 208\weather_handler.py (subprocess.Popen) at line 122: subprocess.Popen(command)
+- C:\Users\Bl0ck\Desktop\tp 208\weather_handler.py (subprocess.Popen) at line 165: subprocess.Popen(command)
+- C:\Users\Bl0ck\Desktop\tp 208\weather_handler.py (open_windy) at line 45: success = open_windy(location)
+- C:\Users\Bl0ck\Desktop\tp 208\weather_handler.py (open_windy) at line 99: def open_windy(location=None):
+- C:\Users\Bl0ck\Desktop\tp 208\weather_handler.py (open_windy) at line 111: # METHOD 1: Try using open_windy.py script
+- C:\Users\Bl0ck\Desktop\tp 208\weather_handler.py (open_windy) at line 113: logging.info("Using open_windy.py script")
+- C:\Users\Bl0ck\Desktop\tp 208\weather_handler.py (open_windy) at line 114: script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "open_windy.py")
+- C:\Users\Bl0ck\Desktop\tp 208\weather_handler.py (open_windy) at line 123: logging.info("Used open_windy.py script: SUCCESS")
+- C:\Users\Bl0ck\Desktop\tp 208\weather_handler.py (open_windy) at line 126: logging.error(f"open_windy.py script not found at {script_path}")
+- C:\Users\Bl0ck\Desktop\tp 208\weather_handler.py (open_windy) at line 128: logging.error(f"open_windy.py script failed: {str(e)}")
+- C:\Users\Bl0ck\Desktop\tp 208\src\commands\command_executor.py (webbrowser.open) at line 386: webbrowser.open(url, new=2)
+- C:\Users\Bl0ck\Desktop\tp 208\src\commands\command_executor.py (webbrowser.open) at line 412: webbrowser.open(url, new=2)  # new=2 opens in a new window
+- C:\Users\Bl0ck\Desktop\tp 208\src\commands\command_executor.py (webbrowser.open) at line 428: webbrowser.open(url)
+- C:\Users\Bl0ck\Desktop\tp 208\src\commands\command_executor.py (webbrowser.open) at line 601: webbrowser.open(url)
+- C:\Users\Bl0ck\Desktop\tp 208\src\commands\command_executor.py (webbrowser.open) at line 788: webbrowser.open(url, new=2)  # new=2 opens in a new window
+- C:\Users\Bl0ck\Desktop\tp 208\src\commands\command_executor.py (webbrowser.open) at line 827: webbrowser.open(search_url)
+- C:\Users\Bl0ck\Desktop\tp 208\src\commands\command_executor.py (webbrowser.open) at line 957: webbrowser.open(url, new=2)  # new=2 forces a new window
+- C:\Users\Bl0ck\Desktop\tp 208\src\commands\command_executor.py (webbrowser.open) at line 987: webbrowser.open(url, new=2)  # new=2 forces a new window
+- C:\Users\Bl0ck\Desktop\tp 208\src\commands\command_executor.py (webbrowser.open) at line 1001: webbrowser.open(url, new=2)  # new=2 forces a new window
+- C:\Users\Bl0ck\Desktop\tp 208\src\commands\command_executor.py (webbrowser.open) at line 1037: webbrowser.open(base_url, new=2)  # new=2 forces a new window
+- C:\Users\Bl0ck\Desktop\tp 208\src\commands\command_executor.py (webbrowser.open) at line 1059: webbrowser.open(urls[0], new=2)  # new=2 forces a new window
+- C:\Users\Bl0ck\Desktop\tp 208\src\commands\command_executor.py (webbrowser.open) at line 1063: webbrowser.open(urls[1], new=2)  # Open in new window
+- C:\Users\Bl0ck\Desktop\tp 208\src\commands\command_executor.py (webbrowser.open) at line 1077: webbrowser.open(url, new=2)  # new=2 forces a new window
+- C:\Users\Bl0ck\Desktop\tp 208\src\commands\command_executor.py (webbrowser.open) at line 1088: webbrowser.open(url, new=2)  # new=2 forces a new window
+- C:\Users\Bl0ck\Desktop\tp 208\src\commands\command_executor.py (webbrowser.open) at line 1264: webbrowser.open(url, new=2)
+- C:\Users\Bl0ck\Desktop\tp 208\src\commands\command_executor.py (webbrowser.open) at line 1267: webbrowser.open(url, new=2)
+- C:\Users\Bl0ck\Desktop\tp 208\src\commands\command_executor.py (webbrowser.open) at line 1335: webbrowser.open(base_url, new=2)  # new=2 forces a new window
+- C:\Users\Bl0ck\Desktop\tp 208\src\commands\command_executor.py (webbrowser.open) at line 1445: webbrowser.open(url, new=2)  # new=2 forces a new window
+- C:\Users\Bl0ck\Desktop\tp 208\src\commands\command_executor.py (subprocess.Popen) at line 653: subprocess.Popen([app_paths[app_name.lower()]])
+- C:\Users\Bl0ck\Desktop\tp 208\src\commands\command_executor.py (subprocess.Popen) at line 705: subprocess.Popen([app_paths[app_name.lower()]])
+- C:\Users\Bl0ck\Desktop\tp 208\src\commands\command_executor.py (subprocess.Popen) at line 736: subprocess.Popen(edge_cmd, creationflags=subprocess.CREATE_NO_WINDOW)
+
+Import issues:
+- C:\Users\Bl0ck\Desktop\tp 208\proxy_server.py: 'proxy_server'
+- C:\Users\Bl0ck\Desktop\tp 208\src\commands\command_executor.py: attempted relative import with no known parent package
+- C:\Users\Bl0ck\Desktop\tp 208\src\commands\command_parser.py: attempted relative import with no known parent package
+- C:\Users\Bl0ck\Desktop\tp 208\src\search\web_augmented_response.py: attempted relative import with no known parent package
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\huggingface_hub\inference\_generated\_async_client.py: attempted relative import with no known parent package
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\networkx\algorithms\centrality\group.py: 'Algorithm already exists in dispatch registry: group_betweenness_centrality'
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\pandas\tests\frame\test_constructors.py: No module named 'pytest'
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\scipy\stats\_continuous_distns.py: attempted relative import with no known parent package
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\scipy\stats\_stats_py.py: attempted relative import with no known parent package
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\sentence_transformers\SentenceTransformer.py: attempted relative import with no known parent package
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\sentence_transformers\training_args.py: 'NoneType' object has no attribute '__dict__'
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\sentence_transformers\losses\Matryoshka2dLoss.py: attempted relative import with no known parent package
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\sentence_transformers\losses\OnlineContrastiveLoss.py: attempted relative import with no known parent package
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\spacy\glossary.py: attempted relative import with no known parent package
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\spacy\tests\pipeline\test_entity_linker.py: No module named 'pytest'
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\transformers\generation\candidate_generator.py: attempted relative import with no known parent package
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\transformers\generation\utils.py: attempted relative import with no known parent package
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\transformers\models\autoformer\modeling_autoformer.py: attempted relative import with no known parent package
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\transformers\models\bart\modeling_bart.py: attempted relative import with no known parent package
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\transformers\models\informer\modeling_informer.py: attempted relative import with no known parent package
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\transformers\models\patchtsmixer\configuration_patchtsmixer.py: attempted relative import with no known parent package
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\transformers\models\patchtsmixer\modeling_patchtsmixer.py: attempted relative import with no known parent package
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\transformers\models\patchtst\modeling_patchtst.py: attempted relative import with no known parent package
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\transformers\models\pegasus\modeling_pegasus.py: attempted relative import with no known parent package
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\transformers\models\pegasus\modeling_tf_pegasus.py: No module named 'tensorflow'
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\transformers\models\pegasus_x\modeling_pegasus_x.py: attempted relative import with no known parent package
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\transformers\models\stablelm\modeling_stablelm.py: attempted relative import with no known parent package
+- C:\Users\Bl0ck\Desktop\tp 208\venv\Lib\site-packages\transformers\models\time_series_transformer\modeling_time_series_transformer.py: attempted relative import with no known parent package
+
+Syntax errors:
+
+
+=== END OF REPORT ===

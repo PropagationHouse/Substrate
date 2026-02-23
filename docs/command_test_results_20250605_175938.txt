@@ -1,0 +1,101 @@
+COMMAND PARSER TEST RESULTS
+=========================
+
+Command: 'show me the latest news'
+Expected type: browser_search
+Actual type: browser_search
+Error testing 'show me the latest news': 'charmap' codec can't encode character '\u2713' in position 7: character maps to <undefined>
+--------------------------------------------------
+
+Command: 'show me videos about python'
+Expected type: browser_search
+Actual type: browser_search
+Error testing 'show me videos about python': 'charmap' codec can't encode character '\u2713' in position 7: character maps to <undefined>
+--------------------------------------------------
+
+Command: 'show me information about climate change'
+Expected type: browser_search
+Actual type: browser_search
+Error testing 'show me information about climate change': 'charmap' codec can't encode character '\u2713' in position 7: character maps to <undefined>
+--------------------------------------------------
+
+Command: 'lookup quantum computing'
+Expected type: sonar_search
+Actual type: sonar_search
+Error testing 'lookup quantum computing': 'charmap' codec can't encode character '\u2713' in position 7: character maps to <undefined>
+--------------------------------------------------
+
+Command: 'research artificial intelligence'
+Expected type: sonar_search
+Actual type: sonar_search
+Error testing 'research artificial intelligence': 'charmap' codec can't encode character '\u2713' in position 7: character maps to <undefined>
+--------------------------------------------------
+
+Command: 'search for renewable energy'
+Expected type: sonar_search
+Actual type: sonar_search
+Error testing 'search for renewable energy': 'charmap' codec can't encode character '\u2713' in position 7: character maps to <undefined>
+--------------------------------------------------
+
+Command: 'dig on space exploration'
+Expected type: sonar_search
+Actual type: sonar_search
+Error testing 'dig on space exploration': 'charmap' codec can't encode character '\u2713' in position 7: character maps to <undefined>
+--------------------------------------------------
+
+Command: 'dig up information about black holes'
+Expected type: sonar_search
+Actual type: sonar_search
+Error testing 'dig up information about black holes': 'charmap' codec can't encode character '\u2713' in position 7: character maps to <undefined>
+--------------------------------------------------
+
+Command: 'find information about climate change'
+Expected type: sonar_search
+Actual type: sonar_search
+Error testing 'find information about climate change': 'charmap' codec can't encode character '\u2713' in position 7: character maps to <undefined>
+--------------------------------------------------
+
+Command: 'hey lookup quantum computing'
+Expected type: sonar_search
+Actual type: None
+Error testing 'hey lookup quantum computing': 'charmap' codec can't encode character '\u2717' in position 7: character maps to <undefined>
+--------------------------------------------------
+
+Command: 'please research artificial intelligence'
+Expected type: sonar_search
+Actual type: None
+Error testing 'please research artificial intelligence': 'charmap' codec can't encode character '\u2717' in position 7: character maps to <undefined>
+--------------------------------------------------
+
+Command: 'could you dig on space exploration'
+Expected type: sonar_search
+Actual type: None
+Error testing 'could you dig on space exploration': 'charmap' codec can't encode character '\u2717' in position 7: character maps to <undefined>
+--------------------------------------------------
+
+Command: 'I need to dig up information about black holes'
+Expected type: None
+Actual type: None
+Error testing 'I need to dig up information about black holes': 'charmap' codec can't encode character '\u2713' in position 7: character maps to <undefined>
+--------------------------------------------------
+
+Command: 'open youtube'
+Expected type: None
+Actual type: None
+Error testing 'open youtube': 'charmap' codec can't encode character '\u2713' in position 7: character maps to <undefined>
+--------------------------------------------------
+
+Command: 'what time is it'
+Expected type: None
+Actual type: None
+Error testing 'what time is it': 'charmap' codec can't encode character '\u2713' in position 7: character maps to <undefined>
+--------------------------------------------------
+
+Command: 'tell me about the weather'
+Expected type: None
+Actual type: None
+Error testing 'tell me about the weather': 'charmap' codec can't encode character '\u2713' in position 7: character maps to <undefined>
+--------------------------------------------------
+
+
+SUMMARY: 13/16 tests passed (81.2%)

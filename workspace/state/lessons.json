@@ -1,0 +1,235 @@
+{
+  "version": 2,
+  "lessons": [
+    {
+      "id": "les_1771682149156_fba2e2",
+      "type": "tactical",
+      "pattern": "write_file fails because file already exists",
+      "lesson": "Use edit_file for modifying existing files (much more token-efficient). Only use write_file with overwrite=true when replacing the entire file.",
+      "confidence": 0.6,
+      "occurrences": 2,
+      "first_seen": "2026-02-21T13:55:49",
+      "last_seen": "2026-02-22T09:12:15",
+      "last_reinforced": "2026-02-22T09:12:15",
+      "source": "auto_extracted",
+      "tags": [
+        "write_file",
+        "edit_file"
+      ]
+    },
+    {
+      "id": "les_1771741776424_f7ff28",
+      "type": "tactical",
+      "pattern": "edit_file fails with 'string not found'",
+      "lesson": "Always use grep first to find the exact content before calling edit_file. The file content may differ from what you expect.",
+      "confidence": 0.6,
+      "occurrences": 2,
+      "first_seen": "2026-02-22T06:29:36",
+      "last_seen": "2026-02-22T08:52:48",
+      "last_reinforced": "2026-02-22T08:52:48",
+      "source": "auto_extracted",
+      "tags": [
+        "grep",
+        "edit_file"
+      ]
+    },
+    {
+      "id": "les_1771749433453_f1c1f6",
+      "type": "workflow",
+      "pattern": "Successful 3-step task using learn",
+      "lesson": "Working procedure: learn(action=analyze, path=workspace/recordings/recording_20260222_003535.jso...) \u2192 learn(decision_logic=[\"The exact element to click or type into will var..., triggers=['reddit comment', 'comment on reddit', 'post redd...) \u2192 learn(name=Reddit Commenter, action=save)",
+      "confidence": 1.0,
+      "occurrences": 41,
+      "first_seen": "2026-02-22T08:37:13",
+      "last_seen": "2026-02-23T11:25:32",
+      "last_reinforced": "2026-02-23T11:25:32",
+      "source": "auto_extracted",
+      "tags": [
+        "twitter",
+        "email",
+        "bash",
+        "obsidian",
+        "computer",
+        "retry_loop",
+        "memory",
+        "text_editor",
+        "skill",
+        "learn",
+        "reddit"
+      ]
+    },
+    {
+      "id": "les_1771728483970_75ca65",
+      "type": "workflow",
+      "pattern": "Successful 18-step task using exec, read_file",
+      "lesson": "Working procedure: exec(command=powershell -Command \"Get-Package -Name '*Apple*' |...) \u2192 exec(command=powershell -Command \"Get-ItemProperty HKLM:\\Softwa...) \u2192 exec(command=powershell -Command \"Get-ItemProperty HKLM:\\Softwa...) \u2192 exec(command=powershell -Command \"Get-AppxPackage | Where-Objec...) \u2192 exec(command=powershell -Command \"Get-AppxPackage *Apple*\") \u2192 exec(command=reg query HKLM\\SOFTWARE\\WOW6432Node\\Microsoft\\Wind...) \u2192 exec(command=reg query \"HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node...) \u2192",
+      "confidence": 1.0,
+      "occurrences": 64,
+      "first_seen": "2026-02-22T02:48:03",
+      "last_seen": "2026-02-22T09:03:26",
+      "last_reinforced": "2026-02-22T09:03:26",
+      "source": "auto_extracted",
+      "tags": [
+        "twitter",
+        "edit_file",
+        "exec",
+        "skill",
+        "obsidian",
+        "process",
+        "write_file",
+        "reddit",
+        "screen",
+        "retry_loop",
+        "youtube",
+        "list_dir",
+        "browser",
+        "desktop",
+        "web_search",
+        "grep",
+        "mouse",
+        "file_info",
+        "read_file",
+        "default_api:exec"
+      ]
+    },
+    {
+      "id": "les_1771741640971_216ef3",
+      "type": "workflow",
+      "pattern": "Successful 54-step task using browser, desktop, exec, mouse",
+      "lesson": "Working procedure: desktop(action=list_windows) \u2192 desktop(title=Google VP warns that two types of AI startups may ..., action=window_action) \u2192 screen(action=screenshot) \u2192 desktop(title=Google VP warns that two types of AI startups may ..., action=get_elements) \u2192 desktop(control_type=Button, action=get_elements) \u2192 exec(command=netstat -ano | findstr :9222) \u2192 browser(action=tabs) \u2192 browser(url=https://www.reddit.com/r/technology/comments/1itf9..., action=navigate) \u2192 browser(action=eval, expression",
+      "confidence": 0.7999999999999999,
+      "occurrences": 2,
+      "first_seen": "2026-02-22T06:27:20",
+      "last_seen": "2026-02-22T17:48:03",
+      "last_reinforced": "2026-02-22T17:48:03",
+      "source": "auto_extracted",
+      "tags": [
+        "mouse",
+        "web_search",
+        "reddit",
+        "text_editor",
+        "bash",
+        "exec",
+        "desktop",
+        "computer",
+        "screen",
+        "browser",
+        "web_fetch"
+      ]
+    },
+    {
+      "id": "les_1771745678510_708988",
+      "type": "workflow",
+      "pattern": "Successful 3-step task using browser",
+      "lesson": "Working procedure: browser(action=navigate, url=https://www.google.com) \u2192 browser(action=eval, expression=document.title) \u2192 browser(action=read)",
+      "confidence": 0.7999999999999999,
+      "occurrences": 2,
+      "first_seen": "2026-02-22T07:34:38",
+      "last_seen": "2026-02-22T07:44:39",
+      "last_reinforced": "2026-02-22T07:44:39",
+      "source": "auto_extracted",
+      "tags": [
+        "retry_loop",
+        "browser"
+      ]
+    },
+    {
+      "id": "les_1771745769687_b52b59",
+      "type": "tactical",
+      "pattern": "exec called 3+ times in a row with repeated failures",
+      "lesson": "When exec fails twice, stop and reassess the approach instead of retrying the same thing. Read the error message carefully and try a different strategy.",
+      "confidence": 0.8999999999999999,
+      "occurrences": 5,
+      "first_seen": "2026-02-22T07:36:09",
+      "last_seen": "2026-02-23T04:26:02",
+      "last_reinforced": "2026-02-23T04:26:02",
+      "source": "auto_extracted",
+      "tags": [
+        "web_fetch",
+        "bash",
+        "text_editor",
+        "retry_loop",
+        "exec"
+      ]
+    },
+    {
+      "id": "les_1771751128661_748246",
+      "type": "workflow",
+      "pattern": "Successful 14-step task using desktop, edit_file, exec, read_file",
+      "lesson": "Working procedure: read_file(path=skills/xquickpost.md) \u2192 exec(command=start https://x.com/compose/post) \u2192 desktop(title=Compose new post / X, action=wait) \u2192 desktop(action=list_windows) \u2192 desktop(action=get_elements, title=Home / X and 7 more pages - Profile 1 - Microsoft\u200b...) \u2192 desktop(action_type=focus, title=Home / X and 7 more pages - Profile 1 - Microsoft\u200b...) \u2192 desktop(action=send_keys, keys=testing the direct path. simplicity is the goal.^{...) \u2192 desktop(action=list_windows) \u2192 screen(act",
+      "confidence": 0.9999999999999999,
+      "occurrences": 4,
+      "first_seen": "2026-02-22T09:05:28",
+      "last_seen": "2026-02-22T09:12:15",
+      "last_reinforced": "2026-02-22T09:12:15",
+      "source": "auto_extracted",
+      "tags": [
+        "desktop",
+        "write_file",
+        "twitter",
+        "edit_file",
+        "read_file",
+        "screen",
+        "exec",
+        "process"
+      ]
+    },
+    {
+      "id": "les_1771752380049_c178f7",
+      "type": "workflow",
+      "pattern": "Successful 19-step task using edit_file, exec, list_dir, process",
+      "lesson": "Working procedure: read_file(path=C:\\Users\\Bl0ck\\Desktop\\Substrate\\skills\\xquickpost...) \u2192 list_dir(path=C:\\Users\\Bl0ck\\Desktop\\Substrate\\workspace\\emergen...) \u2192 write_file(content=import sys\nimport time\nimport subprocess\nfrom pywi..., overwrite=True) \u2192 exec(command=python C:\\Users\\Bl0ck\\Desktop\\Substrate\\workspace\\...) \u2192 read_file(path=C:\\Users\\Bl0ck\\Desktop\\Substrate\\workspace\\temp\\x_...) \u2192 edit_file(old_string=        print(f\"Found window: {target_window.windo..., path=C:\\Users\\Bl0ck\\Desktop\\",
+      "confidence": 0.7,
+      "occurrences": 1,
+      "first_seen": "2026-02-22T09:26:20",
+      "last_seen": "2026-02-22T09:26:20",
+      "last_reinforced": "2026-02-22T09:26:20",
+      "source": "auto_extracted",
+      "tags": [
+        "write_file",
+        "read_file",
+        "edit_file",
+        "twitter",
+        "screen",
+        "exec",
+        "list_dir",
+        "process"
+      ]
+    },
+    {
+      "id": "les_1771782483080_b16752",
+      "type": "tactical",
+      "pattern": "web_fetch returned truncated content from a large page",
+      "lesson": "For general research questions, prefer web_search (Sonar) which returns concise summarized answers. Only use web_fetch for specific documentation or API reference pages.",
+      "confidence": 0.7,
+      "occurrences": 3,
+      "first_seen": "2026-02-22T17:48:03",
+      "last_seen": "2026-02-23T04:26:02",
+      "last_reinforced": "2026-02-23T04:26:02",
+      "source": "auto_extracted",
+      "tags": [
+        "web_search",
+        "token_efficiency",
+        "web_fetch"
+      ]
+    },
+    {
+      "id": "les_1771782528808_1a3ae7",
+      "type": "workflow",
+      "pattern": "Successful 9-step task using bash, text_editor, web_search",
+      "lesson": "Working procedure: text_editor(path=CIRCUITS.md, action=read) \u2192 text_editor(path=skills/rss-intelligence-check.md, action=read) \u2192 bash(command=dir \"C:\\Users\\Bl0ck\\ph\\intelligence_feed.md\") \u2192 text_editor(path=C:\\Users\\Bl0ck\\ph\\intelligence_feed.md, action=read) \u2192 text_editor(start_line=100, action=read) \u2192 web_search(query=aurora forecast Bellingham WA tonight Feb 22 2026 ...) \u2192 text_editor(action=read, path=CIRCUITS.md)",
+      "confidence": 0.7999999999999999,
+      "occurrences": 2,
+      "first_seen": "2026-02-22T17:48:48",
+      "last_seen": "2026-02-23T04:26:02",
+      "last_reinforced": "2026-02-23T04:26:02",
+      "source": "auto_extracted",
+      "tags": [
+        "web_search",
+        "web_fetch",
+        "text_editor",
+        "bash"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,2111 @@
+import os
+import json
+import time
+import datetime
+import requests
+import webbrowser
+import pyautogui
+import pyperclip
+import win32gui
+from typing import Dict, Any, Optional
+import pyautogui
+import webbrowser
+import subprocess
+import winreg
+import base64
+import re
+from PIL import Image
+import io
+import urllib.parse
+from bs4 import BeautifulSoup
+import re
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.edge.service import Service
+from selenium.webdriver.edge.options import Options
+from webdriver_manager.microsoft import EdgeChromiumDriverManager
+import cv2
+import numpy as np
+import win32con  # Added for keyboard control
+import win32api  # For keyboard control
+import random
+from ..clock.clock_service import ClockService
+import keyboard  # Import keyboard module
+import pygetwindow as gw
+from ..youtube.transcript_handler import TranscriptHandler
+from .command_parser import CommandParser
+
+DEFAULT_NOTE_PROMPTS = {
+    "system": """You are a creative assistant skilled in Obsidian markdown formatting. Format your responses using proper Obsidian syntax:
+
+1. For diagrams and visualizations:
+   A. For Gantt charts:
+     ```mermaid
+     gantt
+         dateFormat  YYYY-MM-DD
+         title Project Timeline
+         
+         section Planning
+         Research      :a1, 2024-01-01, 7d
+         Design       :a2, after a1, 5d
+         
+         section Development
+         Coding       :a3, after a2, 10d
+         Testing      :a4, after a3, 5d
+     ```
+     GANTT RULES:
+     - MUST include dateFormat at start
+     - Use YYYY-MM-DD for dates
+     - Each task needs unique ID (a1, a2, etc.)
+     - Duration in days (5d) or specific end date
+     - Use 'after taskId' for dependencies
+     - Always group tasks in sections
+
+   B. For timelines:
+     ```mermaid
+     timeline
+         title Project Milestones
+         section 2024
+           January : Milestone 1
+           February : Milestone 2
+         section 2025
+           March : Milestone 3
+     ```
+
+   C. For flowcharts:
+     ```mermaid
+     flowchart TD
+         A[Process] --> B{Decision}
+         B -->|Yes| C[Action]
+         B -->|No| D[End]
+     ```
+
+   D. For class diagrams:
+     ```mermaid
+     classDiagram
+         Class01 <|-- Class02
+         Class03 *-- Class04
+         class Class01 {
+             +String name
+             -int id
+             #method() String
+         }
+     ```
+
+   E. For mindmaps:
+     ```mermaid
+     mindmap
+       root((Main Topic))
+         Topic1
+           Subtopic1
+           Subtopic2
+         Topic2
+           Subtopic3
+     ```
+
+2. For tables:
+   | Header1 | Header2 | Header3 |
+   | ------- | ------- | ------- |
+   | Value1  | Value2  | Value3  |
+
+3. For callouts:
+   > [!note] Note Title
+   > Note content with **formatting**
+
+   > [!warning] Warning
+   > Warning content
+
+   > [!example] Example
+   > Example content
+
+4. For code blocks:
+   ```python
+   def example():
+       return "Hello World"
+   ```
+
+5. For links:
+   - Internal: [[Note Name]]
+   - With alias: [[Note Name|Displayed Text]]
+   - External: [Text](https://example.com)
+
+6. For tags:
+   #tag1 #tag2/subtag
+
+7. For task lists:
+   - [ ] Incomplete task
+   - [x] Completed task
+
+8. For embedded content:
+   ![[image.png]]
+
+9. For LaTeX:
+   $$E = mc^2$$
+
+10. For highlights:
+    ==highlighted text==
+""",
+
+    "youtube_transcript": """Analyze this video transcript with extreme detail and academic rigor.
+
+FORMAT:
+1. Summary (Main speakers, Overview, Key Themes, Main quotes, Core ideas, Key Takeaways)
+2. Key Points (with timestamps and quotes with deeper analysis for each point in a paragraph below)
+3. Topics & Concepts (hierarchical with timestamps & notes, related themes or follow up questions)
+4. Study Notes (detailed analysis with timestamps, core takeaways and relations to 3D design, technology and general world news)
+5. References & Terms (with context, quotes, names and potential sources for further research)
+
+- Create a mind map of the main ideas and core relations
+- Create a diagram of the main idea
+
+- Embed the Video in obsidian markdown format at the top of the note after title 
+- Include the raw transcript at the bottom of the page
+
+REQUIREMENTS:
+- Include [MM:SS] timestamps for EVERY point
+- Include relevant quotes for each point
+- Analyze relationships between concepts
+- Maximum detail and thoroughness
+- Academic writing style
+- Use the following format for each section:
+  - **Section Title**
+    - **Subsection Title**
+      - **Point**
+        - **Subpoint**
+""",
+
+    "general_note": """Create a detailed and well-structured note.
+
+FORMAT:
+1. Overview
+2. Key Points & Insights
+3. Detailed Analysis
+4. Connections & Implications
+5. References & Resources
+
+REQUIREMENTS:
+- Clear hierarchical structure
+- Include supporting evidence/quotes
+- Analyze relationships between concepts
+- Academic writing style
+- Thorough coverage of all points""",
+
+    "autonomous": """Based on recent context and interactions, create a detailed note that:
+
+1. Summarizes key discussions and insights
+2. Identifies important patterns and themes
+3. Suggests potential areas for deeper exploration
+4. Links related concepts and ideas
+5. Provides actionable next steps
+
+REQUIREMENTS:
+- Focus on high-value insights
+- Include relevant quotes/context
+- Suggest follow-up questions
+- Keep academic rigor
+- Be concise but thorough"""
+}
+
+class CommandExecutor:
+    def __init__(self):
+        """Initialize command executor"""
+        pyautogui.FAILSAFE = True
+        self.screen_width, self.screen_height = pyautogui.size()
+        self.app_paths = {}
+        self.scan_installed_apps()
+        self.session = requests.Session()
+        # Define default window position and size
+        self.window_pos = (50, 50, 1067, 840)  # x, y, width (800 * 1.33), height (600 * 1.4)
+        # Add headers to mimic a browser
+        self.session.headers.update({
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36 Edg/121.0.0.0',
+        })
+        
+        # Initialize browser
+        try:
+            self.browser = webbrowser.get('edge')
+        except webbrowser.Error:
+            try:
+                self.browser = webbrowser.get('windows-default')
+            except webbrowser.Error:
+                self.browser = webbrowser.get()
+        
+        self.llama_vision_endpoint = "http://localhost:11434/api/generate"
+        self.clock_service = ClockService()  # Initialize clock service
+        self.last_note_content = None  # Store last note content for retries
+        self.transcript_handler = TranscriptHandler()
+        self.command_parser = CommandParser()
+        
+        # Load config for note prompts
+        self.config = self.load_config()
+        self.note_prompts = self.config.get('note_prompts', DEFAULT_NOTE_PROMPTS)
+
+    def load_config(self):
+        """Load configuration from file"""
+        try:
+            with open('config.json', 'r') as f:
+                return json.load(f)
+        except:
+            return {
+                'note_prompts': DEFAULT_NOTE_PROMPTS
+            }
+
+    def scan_installed_apps(self):
+        """Scan for installed applications in common locations"""
+        # Scan Start Menu
+        start_menu_paths = [
+            os.path.join(os.environ["PROGRAMDATA"], "Microsoft", "Windows", "Start Menu", "Programs"),
+            os.path.join(os.environ["APPDATA"], "Microsoft", "Windows", "Start Menu", "Programs")
+        ]
+        
+        for start_menu in start_menu_paths:
+            if os.path.exists(start_menu):
+                for root, dirs, files in os.walk(start_menu):
+                    for file in files:
+                        if file.endswith('.lnk'):
+                            name = os.path.splitext(os.path.basename(file))[0].lower()
+                            full_path = os.path.join(root, file)
+                            self.app_paths[name] = full_path
+                            # Also add without spaces for more flexible matching
+                            name_no_spaces = name.replace(' ', '')
+                            if name_no_spaces != name:
+                                self.app_paths[name_no_spaces] = full_path
+        
+        # Common Windows apps
+        common_apps = {
+            'notepad': 'notepad.exe',
+            'calc': 'calc.exe',
+            'calculator': 'calc.exe',
+            'cmd': 'cmd.exe',
+            'command': 'cmd.exe',
+            'commandprompt': 'cmd.exe',
+            'explorer': 'explorer.exe',
+            'fileexplorer': 'explorer.exe',
+            'taskmgr': 'taskmgr.exe',
+            'taskmanager': 'taskmgr.exe',
+            'control': 'control.exe',
+            'controlpanel': 'control.exe',
+            'mspaint': 'mspaint.exe',
+            'paint': 'mspaint.exe',
+            'wordpad': 'wordpad.exe'
+        }
+        
+        for name, exe in common_apps.items():
+            system32_path = os.path.join(os.environ['SystemRoot'], 'System32', exe)
+            if os.path.exists(system32_path):
+                self.app_paths[name] = system32_path
+        
+        # Scan registry for installed programs
+        registry_paths = [
+            (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths"),
+            (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"),
+            (winreg.HKEY_CURRENT_USER, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall")
+        ]
+        
+        for hkey, registry_path in registry_paths:
+            try:
+                reg_key = winreg.OpenKey(hkey, registry_path, 0, winreg.KEY_READ)
+                for i in range(winreg.QueryInfoKey(reg_key)[0]):
+                    try:
+                        app_name = winreg.EnumKey(reg_key, i)
+                        app_key = winreg.OpenKey(reg_key, app_name)
+                        try:
+                            path = winreg.QueryValue(app_key, None)
+                            if path and os.path.exists(path):
+                                name = os.path.splitext(os.path.basename(path))[0].lower()
+                                self.app_paths[name] = path
+                                # Also add without spaces
+                                name_no_spaces = name.replace(' ', '')
+                                if name_no_spaces != name:
+                                    self.app_paths[name_no_spaces] = path
+                        except:
+                            pass
+                        winreg.CloseKey(app_key)
+                    except:
+                        continue
+                winreg.CloseKey(reg_key)
+            except:
+                continue
+
+    def execute(self, command_info):
+        """Execute a command based on command info"""
+        try:
+            print("\n[DEBUG] ===== START COMMAND EXECUTION =====")
+            print("[DEBUG] Raw command info:", command_info)
+            
+            if not command_info:
+                print("[DEBUG] No command info provided")
+                return {"status": "error", "result": "No command info provided"}
+            
+            command_type = command_info.get('type', '')
+            action = command_info.get('action', '')
+            name = command_info.get('name', '')
+            
+            print(f"[DEBUG] Command type: {command_type}, action: {action}, name: {name}")
+            
+            # Special handling for aurora forecast - check both command_info and its string representation
+            command_str = str(command_info).lower()
+            
+            # Comprehensive check for aurora forecast commands
+            aurora_phrases = [
+                'aurora forecast', 'aurora map', 'show aurora', 'check aurora',
+                'aurora prediction', 'show me aurora', 'show the aurora', 'show me the aurora',
+                'northern lights', 'aurora borealis'
+            ]
+            
+            # Check if any aurora phrase is in the command string
+            is_aurora = False
+            if command_info.get('name') == 'aurora_forecast':
+                is_aurora = True
+                print("[DEBUG] Detected aurora forecast command by name")
+            else:
+                for phrase in aurora_phrases:
+                    if phrase in command_str:
+                        is_aurora = True
+                        print(f"[DEBUG] Detected aurora forecast command by phrase: '{phrase}'")
+                        break
+            
+            if is_aurora:
+                print("[DEBUG] Processing aurora forecast command in execute method")
+                print("[DEBUG] This is NOT a weather command")
+                
+                # Use the URLs from the space weather memory
+                urls = command_info.get('urls', [
+                    # Primary URL - NOAA aurora forecast image
+                    'https://services.swpc.noaa.gov/images/aurora-forecast-northern-hemisphere.jpg',
+                    # Secondary URLs
+                    'https://www.swpc.noaa.gov/communities/space-weather-enthusiasts',
+                    'https://www.swpc.noaa.gov/products/real-time-solar-wind'
+                ])
+                
+                try:
+                    # Open each URL with a brief pause between
+                    for url in urls:
+                        webbrowser.open(url, new=2)
+                        time.sleep(0.5)
+                    
+                    # Return a success response
+                    return {
+                        'status': 'success',
+                        'result': 'Opening aurora forecast pages in your browser',
+                        'urls': urls,
+                        'speak': True  # Enable voice feedback
+                    }
+                except Exception as e:
+                    print(f"[ERROR] Failed to open aurora forecast: {e}")
+                    return {
+                        'status': 'error',
+                        'result': f'Failed to open aurora forecast: {str(e)}'
+                    }
+            
+            if command_type == 'web':
+                if command_info.get('name') == 'aurora_forecast' or ('aurora' in command_info.get('name', '').lower() and 'forecast' in command_info.get('name', '').lower()):
+                    # Handle aurora forecast using direct URLs
+                    urls = command_info.get('urls', [
+                        'https://www.gi.alaska.edu/monitors/aurora-forecast',
+                        'https://www.swpc.noaa.gov/communities/aurora-dashboard-experimental'
+                    ])
+                    try:
+                        for url in urls:
+                            webbrowser.open(url, new=2)  # new=2 opens in a new window
+                            time.sleep(0.5)  # Small delay between opening tabs
+                        return {
+                            'status': 'success',
+                            'result': 'Opening aurora forecast pages in your browser',
+                            'urls': urls
+                        }
+                    except Exception as e:
+                        print(f"Error opening aurora forecast: {e}")
+                        return {
+                            'status': 'error',
+                            'result': f'Failed to open aurora forecast: {str(e)}'
+                        }
+                # Handle other web commands
+                url = command_info.get('url')
+                if url:
+                    webbrowser.open(url)
+                    return {
+                        'status': 'success',
+                        'result': f'Opening {url} in your browser',
+                        'url': url  # Include URL in the response for debugging
+                    }
+                return {
+                    'status': 'error',
+                    'result': 'No URL provided for web command'
+                }
+            elif command_type == 'note':
+                content = command_info.get('content', '')
+                print(f"[DEBUG] Creating note with content: {content}")
+                
+                if action == 'retry':
+                    if self.last_note_content is None:
+                        return {
+                            "status": "error",
+                            "result": "No previous note to retry"
+                        }
+                    # For retries, use the last content as context
+                    retry_content = f"try again{': ' + content if content else ''}"
+                    return self.create_note(retry_content)
+                else:
+                    self.last_note_content = content  # Store for potential retry
+                    return self.create_note(content)
+            elif command_type == 'app':
+                return self._execute_app_command(command_info.get('action', ''), command_info.get('name', ''))
+            elif command_type == 'search':
+                # Special handling for YouTube searches
+                if command_info.get('source') == 'youtube':
+                    print(f"[DEBUG] YouTube search detected: {command_info.get('query', '')}")
+                    url = f'https://www.youtube.com/results?search_query={urllib.parse.quote(command_info.get("query", ""))}'
+                    # Use the YouTube handler which includes the click functionality
+                    return self._handle_youtube_command(url, command_info.get('query', ''))
+                # Handle other searches
+                return self._execute_search_command(
+                    command_info.get('query', ''),
+                    command_info.get('browser', 'edge'),
+                    command_info.get('site'),
+                    command_info.get('source')
+                )
+            elif command_type == 'clock':
+                return self.execute_clock_command(command_info)
+            else:
+                return {"status": "error", "result": f"Unknown command type: {command_type}"}
+                
+        except Exception as e:
+            print(f"[DEBUG] Error executing command: {str(e)}")
+            return {"status": "error", "result": str(e)}
+
+    def execute_clock_command(self, command):
+        """Execute a clock command"""
+        if not command or 'action' not in command:
+            return "Invalid clock command"
+            
+        try:
+            action = command['action']
+            
+            if action == 'time':
+                current_time = datetime.datetime.now().strftime("%I:%M %p")
+                return f"The current time is {current_time}"
+                
+            elif action == 'set_alarm':
+                time_str = command.get('time')
+                if not time_str:
+                    return "Please specify a time for the alarm"
+                # Parse time string and set alarm...
+                return f"Setting alarm for {time_str}"
+                
+            elif action == 'manage_timer':
+                # Handle timer management...
+                return "Timer management not implemented yet"
+                
+            else:
+                return f"Unknown clock action: {action}"
+                
+        except Exception as e:
+            return f"Error executing clock command: {str(e)}"
+
+    def _capture_screen(self):
+        """Capture the current screen"""
+        screenshot = pyautogui.screenshot()
+        buffered = io.BytesIO()
+        screenshot.save(buffered, format="PNG")
+        return base64.b64encode(buffered.getvalue()).decode()
+
+    def _analyze_screenshot(self, base64_image, query):
+        """Analyze screenshot using Llama Vision to find the most relevant result"""
+        prompt = f"""Analyze this YouTube search results page. Find the most relevant result for the query: '{query}'.
+        Identify the coordinates of where to click to select that result.
+        Focus on:
+        1. Exact title matches first
+        2. Official channels/playlists
+        3. Higher view counts and better ratings
+        4. Relevant thumbnails
+        
+        Return ONLY the x,y coordinates where to click in this format: x,y"""
+        
+        data = {
+            "model": "llama3.2-vision:11b",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": prompt
+                        },
+                        {
+                            "type": "image",
+                            "image": base64_image
+                        }
+                    ]
+                }
+            ]
+        }
+        
+        try:
+            response = requests.post(self.llama_vision_endpoint, json=data)
+            response_data = response.json()
+            if 'response' in response_data:
+                # Extract coordinates from response
+                coords = response_data['response'].strip().split(',')
+                if len(coords) == 2:
+                    try:
+                        x, y = map(int, coords)
+                        return x, y
+                    except ValueError:
+                        return None
+            return None
+        except Exception as e:
+            print(f"Error analyzing screenshot: {e}")
+            return None
+
+    def _find_youtube_result(self):
+        """Find the first YouTube result by looking for the thumbnail area"""
+        try:
+            # Make sure our window is active
+            if hasattr(self, 'current_window'):
+                win32gui.SetForegroundWindow(self.current_window)
+                time.sleep(0.5)  # Wait for window to become active
+            
+            # Take a screenshot of just the browser window area
+            x, y, w, h = self.window_pos
+            screenshot = pyautogui.screenshot(region=(x, y, w, h))
+            img = np.array(screenshot)
+            
+            # The first result appears below the search bar
+            # Adjusted Y coordinate to be lower
+            target_x = 320  # Approximate x-coordinate of first result
+            target_y = 275  # Increased from 225 to 275 to click lower
+            
+            # Add some randomness to avoid detection of UI elements
+            target_x += random.randint(-10, 10)
+            target_y += random.randint(-5, 5)
+            
+            # Convert coordinates to screen position
+            screen_x = self.window_pos[0] + target_x
+            screen_y = self.window_pos[1] + target_y
+            
+            return screen_x, screen_y
+            
+        except Exception as e:
+            print(f"Error finding YouTube result: {e}")
+            return None
+
+    def _handle_youtube_command(self, url, query):
+        """Handle YouTube-specific commands and navigation"""
+        try:
+            # Open YouTube in a new Edge window at specific position
+            if not self._open_browser(url, needs_positioning=True):
+                # Fallback to regular browser open
+                webbrowser.open(url)
+                return {"status": "success", "result": f"Opened YouTube search for: {query}"}
+            
+            time.sleep(2.5)  # Wait for page to load
+            
+            # Try to find and click the first result
+            target_x = self.window_pos[0] + 400  # Approximate x-coordinate of first result
+            target_y = self.window_pos[1] + 350  # Y coordinate below search bar, adjusted for taller window
+            
+            # Add small random offset to avoid detection
+            target_x += random.randint(-10, 10)
+            target_y += random.randint(-5, 5)
+            
+            # Click the result
+            pyautogui.moveTo(target_x, target_y, duration=0.2)
+            time.sleep(0.1)  # Small pause before clicking
+            pyautogui.click()
+            
+            return {"status": "success", "result": f"Opened YouTube video for: {query}"}
+            
+        except Exception as e:
+            return {"status": "error", "result": f"Error during YouTube automation: {str(e)}"}
+
+    def _execute_web_command(self, url):
+        """Execute a web command"""
+        try:
+            # First check if this is a YouTube URL
+            for pattern in [
+                r'https?://(?:www\.)?youtube\.com/watch\?v=[\w-]+(?:&t=\d+s?)?',
+                r'https?://youtu\.be/[\w-]+(?:\?t=\d+s?)?'
+            ]:
+                if re.match(pattern, url):
+                    print(f"[DEBUG] Blocking direct URL open for YouTube URL: {url}")
+                    return {"status": "info", "result": f"YouTube URL detected, processing as transcript request..."}
+            
+            # Add http:// if no protocol specified
+            if not url.startswith(('http://', 'https://')):
+                url = 'https://' + url
+
+            # Open in Edge
+            self._open_browser(url)
+            return {"status": "success", "result": f"Opened {url}"}
+        except Exception as e:
+            return {"status": "error", "result": str(e)}
+
+    def _execute_app_command(self, action, app_name):
+        """Execute an application command"""
+        try:
+            if action == "open":
+                # Try to find the app in our known paths
+                app_paths = self.load_app_paths()
+                if app_name.lower() in app_paths:
+                    subprocess.Popen([app_paths[app_name.lower()]])
+                    return {"status": "success", "result": f"Opened {app_name}"}
+                
+                # If not found, use Windows search
+                import pyautogui
+                pyautogui.hotkey('win', 's')
+                pyautogui.write(app_name)
+                pyautogui.press('enter')  # Press enter to execute the search
+                return {"status": "success", "result": f"Searching for {app_name}"}
+            elif action == "close":
+                # Try to find the app in our known paths
+                app_paths = self.load_app_paths()
+                if app_name.lower() in app_paths:
+                    # Get the process name from the path
+                    process_name = os.path.basename(app_paths[app_name.lower()])
+                    # Use taskkill to close the process
+                    subprocess.run(['taskkill', '/im', f"{app_name}.exe", '/f'], 
+                                capture_output=True, text=True)
+                    return {"status": "success", "result": f"Closed {app_name}"}
+                
+                # If not found in app paths, try to close by window title
+                import pyautogui
+                import win32gui
+                
+                def window_enum_handler(hwnd, windows):
+                    if win32gui.IsWindowVisible(hwnd):
+                        title = win32gui.GetWindowText(hwnd).lower()
+                        if app_name.lower() in title:
+                            windows.append(hwnd)
+                
+                windows = []
+                win32gui.EnumWindows(window_enum_handler, windows)
+                
+                if windows:
+                    for hwnd in windows:
+                        try:
+                            win32gui.PostMessage(hwnd, 0x0010, 0, 0)  # WM_CLOSE
+                        except:
+                            continue
+                    return {"status": "success", "result": f"Closed windows containing '{app_name}'"}
+                return {"status": "error", "result": f"Could not find any windows containing '{app_name}'"}
+            else:
+                raise Exception(f"Unsupported action: {action}")
+        except Exception as e:
+            return {"status": "error", "result": f"Failed to {action} application '{app_name}': {str(e)}"}
+
+    def _execute_open_command(self, app_name):
+        """Execute an open command for an app"""
+        try:
+            # Try to find the app in our known paths
+            app_paths = self.load_app_paths()
+            if app_name.lower() in app_paths:
+                subprocess.Popen([app_paths[app_name.lower()]])
+                return {"status": "success", "result": f"Opened {app_name}"}
+            
+            # If not found, just use Windows search
+            import pyautogui
+            pyautogui.hotkey('win', 's')
+            pyautogui.write(app_name)
+            return {"status": "success", "result": f"Searching for {app_name}"}
+
+        except Exception as e:
+            return {"status": "error", "result": f"Error opening {app_name}: {str(e)}"}
+
+    def _open_browser(self, url, needs_positioning=False, new_window=True, window_size=None):
+        """Open URL in browser with appropriate window size"""
+        try:
+            if new_window:
+                # Get list of current windows
+                current_windows = []
+                win32gui.EnumWindows(self.enum_windows_callback, current_windows)
+                
+                # Construct Edge command with start position
+                window_pos = window_size if window_size else self.window_pos
+                edge_cmd = [
+                    r'C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe',
+                    '--new-window',
+                    url,
+                    f'--window-position={window_pos[0]},{window_pos[1]}',
+                    f'--window-size={window_pos[2]},{window_pos[3]}'
+                ]
+                
+                # Run the command
+                subprocess.Popen(edge_cmd, creationflags=subprocess.CREATE_NO_WINDOW)
+                
+                # Wait for new window to appear
+                time.sleep(1.5)
+                
+                # Find the new window handle
+                new_windows = []
+                win32gui.EnumWindows(self.enum_windows_callback, new_windows)
+                
+                # Get the most recently created window
+                new_handles = set(new_windows) - set(current_windows)
+                if new_handles:
+                    new_window = list(new_handles)[0]
+                    # Position the window exactly where we want it
+                    win32gui.SetWindowPos(
+                        new_window, 
+                        win32con.HWND_TOP,
+                        window_pos[0], 
+                        window_pos[1],
+                        window_pos[2], 
+                        window_pos[3],
+                        win32con.SWP_SHOWWINDOW
+                    )
+                    # Store the window handle for future use
+                    self.current_window = new_window
+                    return True
+                    
+                return False
+                
+            else:
+                self.browser.open(url)
+                return True
+                
+        except Exception as e:
+            print(f"Error opening browser window: {e}")
+            # Fallback to regular browser open
+            self.browser.open(url)
+            return False
+
+    def _execute_search_command(self, query, browser='edge', site=None, source_preference=None):
+        """Execute a search command"""
+        query_lower = query.lower()
+        print(f"[DEBUG] Search command: query={query}, site={site}, source={source_preference}")
+        
+        # Handle aurora forecast - match variations of 'aurora forecast'
+        if 'aurora' in query_lower and ('forecast' in query_lower or 'show' in query_lower or 'check' in query_lower):
+            # Use direct URLs instead of going through _handle_aurora_command
+            urls = [
+                'https://www.gi.alaska.edu/monitors/aurora-forecast',
+                'https://www.swpc.noaa.gov/communities/aurora-dashboard-experimental'
+            ]
+            for url in urls:
+                webbrowser.open(url, new=2)  # new=2 opens in a new window
+                time.sleep(0.5)  # Small delay between opening tabs
+            return {
+                'status': 'success',
+                'result': 'Opening aurora forecast pages in your browser',
+                'urls': urls
+            }
+            
+        # Handle YouTube searches
+        if site == 'youtube' or source_preference == 'youtube':
+            print(f"[DEBUG] Executing YouTube search for: {query}")
+            url = f'https://www.youtube.com/results?search_query={urllib.parse.quote(query)}'
+            # Use the YouTube handler which includes the click functionality
+            return self._handle_youtube_command(url, query)
+        
+        # Handle SFlix searches
+        if site == 'sflix' or source_preference == 'sflix':
+            url = f'https://sflix.to/search/{urllib.parse.quote(query)}'
+            return self._handle_sflix_search(url, query)
+            
+        # Handle FitGirl searches
+        if site == 'games' or source_preference == 'games' or site == 'fitgirl' or source_preference == 'fitgirl':
+            url = f'https://fitgirl-repacks.site/?s={urllib.parse.quote(query)}'
+            self._open_browser(url, new_window=True)
+            return {"status": "success", "result": f"Searching FitGirl Repacks for: {query}"}
+            
+        # Handle APK searches - completely rewritten
+        if site == 'apk' or source_preference == 'apk' or 'apk' in query_lower:
+            # Clean query
+            clean_query = query.replace('APK', '').replace('apk', '').strip()
+            print(f"[DEBUG] APK search detected. Query: '{query}', Cleaned: '{clean_query}'")
+            
+            # Define the APKMirror URL with search parameters
+            search_url = f'https://www.apkmirror.com/?post_type=app_release&searchtype=apk&s={urllib.parse.quote(clean_query)}'
+            print(f"[DEBUG] Opening APK search URL: {search_url}")
+            
+            # Open directly in browser
+            try:
+                # First try direct browser open
+                webbrowser.open(search_url)
+                return {"status": "success", "result": f"Searching for {clean_query} APK on APKMirror"}
+            except Exception as e:
+                print(f"[ERROR] Failed to open browser: {e}")
+                # Fallback to our _open_browser method
+                self._open_browser(search_url, new_window=True)
+                return {"status": "success", "result": f"Searching for {clean_query} APK on APKMirror (fallback)"}
+        
+        # Define direct URLs for specific queries
+        direct_urls = {
+            'weather': [
+                {'url': 'https://www.windy.com/', 'type': 'weather'},
+                {'url': 'https://www.windy.com/-Temperature-temp', 'type': 'temperature'},
+                {'url': 'https://www.windy.com/-Rain-thunder-rain', 'type': 'rain'},
+                {'url': 'https://www.windy.com/-Clouds-clouds', 'type': 'clouds'},
+                {'url': 'https://www.windy.com/-Wind-wind', 'type': 'wind'}
+            ],
+            'aurora': [
+                {'url': 'https://www.swpc.noaa.gov/products/aurora-30-minute-forecast', 'type': 'forecast'},
+                {'url': 'https://www.swpc.noaa.gov/communities/aurora-dashboard-experimental', 'type': 'wind'}
+            ],
+            'earthquake': [
+                {'url': 'https://earthquake.usgs.gov/earthquakes/map/', 'type': 'map'},
+                {'url': 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson', 'type': 'feed'}
+            ],
+            'games': [
+                {'url': 'https://fitgirl-repacks.site/?s={query}', 'type': 'fitgirl'}
+            ]
+        }
+
+        # Check for direct URLs for non-location-specific queries
+        for key, sources in direct_urls.items():
+            if key in query_lower:
+                # If source preference specified, try to match it
+                if source_preference:
+                    for source in sources:
+                        if source_preference.lower() in source['type'].lower():
+                            self._open_browser(source['url'].format(query=query), new_window=True)
+                            return {"status": "success", "result": f"Opened {source['type']} news"}
+
+                # If no preference or no match found and multiple sources exist
+                if len(sources) > 1:
+                    print("\nMultiple sources available:")
+                    for i, source in enumerate(sources, 1):
+                        print(f"{i}. {source['type']} news")
+                    
+                    # Open first source in new window, rest in same window
+                    first_source = True
+                    for source in sources:
+                        self._open_browser(source['url'].format(query=query), new_window=first_source)
+                        if first_source:
+                            time.sleep(0.5)  # Small delay to ensure window is ready
+                            first_source = False
+                    return {"status": "success", "result": "Opened multiple relevant sources"}
+                else:
+                    # If only one source, open it directly
+                    self._open_browser(sources[0]['url'].format(query=query), new_window=True)
+                    return {"status": "success", "result": f"Opened {sources[0]['type']} news"}
+        
+        # Define site-specific search URLs and their handlers
+        site_search_urls = {
+            'youtube': {
+                'url': 'https://www.youtube.com/results?search_query={}',
+                'handler': self._handle_youtube_command,
+            },
+            'windy': {
+                'url': 'https://www.windy.com/',
+                'handler': self._handle_windy_search,
+                'needs_positioning': True
+            },
+            'midjourney': {
+                'url': 'https://www.midjourney.com/imagine',
+                'handler': self._handle_midjourney_imagine,
+                'needs_positioning': True
+            },
+            'google': {
+                'url': 'https://www.google.com/search?q={}',
+                'handler': None,
+                'needs_positioning': False
+            },
+            'reddit': {
+                'url': 'https://www.reddit.com/search/?q={}',
+                'handler': None,
+                'needs_positioning': False
+            },
+            'amazon': {
+                'url': 'https://www.amazon.com/s?k={}',
+                'handler': None,
+                'needs_positioning': False
+            },
+            'netflix': {
+                'url': 'https://www.netflix.com/search?q={}',
+                'handler': None,
+                'needs_positioning': False
+            },
+            'sflix': {
+                'url': 'https://sflix.to/search/{}',
+                'handler': self._handle_sflix_search,
+                'needs_positioning': False
+            },
+            'github': {
+                'url': 'https://github.com/search?q={}',
+                'handler': None,
+                'needs_positioning': False
+            },
+            'news': {
+                'url': 'https://news.google.com/search?q={}',
+                'handler': None,
+                'needs_positioning': False
+            },
+            'perplexity': {
+                'url': 'https://www.perplexity.ai/search?q={}',
+                'handler': None,
+                'needs_positioning': False
+            }
+        }
+
+        # Handle site-specific searches
+        if site and site.lower() in site_search_urls:
+            site_info = site_search_urls[site.lower()]
+            url = site_info['url'].format(urllib.parse.quote(query))
+            
+            if site_info['handler']:
+                # For YouTube and other sites with special handling
+                return site_info['handler'](url, query)
+            else:
+                # For regular sites - use direct webbrowser approach for consistency
+                try:
+                    import webbrowser
+                    print(f"Opening site-specific search URL: {url}")
+                    webbrowser.open(url, new=2)  # new=2 forces a new window
+                    return {"status": "success", "result": f"Searched {site} for: {query}"}
+                except Exception as e:
+                    print(f"Error opening site-specific search: {e}")
+                    return {"status": "error", "result": f"Failed to search {site}: {str(e)}"}
+
+        # Handle news searches
+        if site == 'news' or any(term in query_lower for term in ['news', 'headlines', 'current events']):
+            # Use Google News directly with the exact query
+            try:
+                import webbrowser
+                
+                # IMPORTANT: We need to extract EXACTLY what the user wants to search for
+                # First, try to extract from patterns like "news about X"
+                about_pattern = r'(?:news|headlines)\s+(?:about|regarding|on|of|for|surrounding)\s+(.+)'
+                today_pattern = r'(?:today|today\'s|current|latest)\s+(?:news|headlines)\s+(?:about|regarding|on|of|for|surrounding)?\s+(.+)'
+                show_pattern = r'(?:show|get|find)\s+(?:me)?\s+(?:news|headlines)\s+(?:about|regarding|on|of|for|surrounding)\s+(.+)'
+                show_today_pattern = r'(?:show|get|find)\s+(?:me)?\s+(?:today|today\'s|current|latest)\s+(?:news|headlines)\s+(?:about|regarding|on|of|for|surrounding)?\s+(.+)'
+                
+                # Try each pattern in order
+                for pattern in [about_pattern, today_pattern, show_pattern, show_today_pattern]:
+                    match = re.search(pattern, query_lower)
+                    if match:
+                        # Found a match - use exactly what comes after the pattern
+                        search_term = match.group(1).strip()
+                        print(f"Extracted news search term: '{search_term}'")
+                        
+                        # Open Google News with the EXACT search term
+                        url = f'https://news.google.com/search?q={urllib.parse.quote(search_term)}'
+                        print(f"Opening news URL: {url}")
+                        webbrowser.open(url, new=2)  # new=2 forces a new window
+                        
+                        return {"status": "success", "result": f"Showing news about: {search_term}"}
+                
+                # If no pattern matched, remove common prefixes and use the rest
+                # This is a fallback for queries like "news climate change"
+                cleaned_query = query_lower
+                for prefix in ['show me', 'show', 'get', 'find', 'news', 'headlines', 'today\'s', 'current', 'latest']:
+                    if cleaned_query.startswith(prefix):
+                        cleaned_query = cleaned_query[len(prefix):].strip()
+                
+                print(f"Fallback news search term: '{cleaned_query}'")
+                url = f'https://news.google.com/search?q={urllib.parse.quote(cleaned_query)}'
+                print(f"Opening news URL: {url}")
+                webbrowser.open(url, new=2)  # new=2 forces a new window
+                
+                return {"status": "success", "result": f"Showing news about: {cleaned_query}"}
+            except Exception as e:
+                print(f"Error opening news search: {e}")
+                return {"status": "error", "result": f"Failed to open news search: {str(e)}"}
+
+        # Handle weather searches
+        if site == 'windy' or 'weather' in query_lower or any(term in query_lower for term in ['temperature', 'rain', 'wind', 'clouds', 'forecast']):
+            try:
+                import webbrowser
+                # Extract location if present
+                location_match = re.search(r'(?:weather|forecast|temperature|rain|wind|clouds)\s+(?:in|at|for|near)\s+(.+)', query_lower)
+                
+                # Base URL from your memory configuration
+                base_url = 'https://www.windy.com/'
+                
+                # Determine which weather aspect to show based on the query
+                if 'temperature' in query_lower or 'temp' in query_lower:
+                    base_url = 'https://www.windy.com/-Temperature-temp'
+                elif 'rain' in query_lower or 'thunder' in query_lower or 'precipitation' in query_lower:
+                    base_url = 'https://www.windy.com/-Rain-thunder-rain'
+                elif 'cloud' in query_lower:
+                    base_url = 'https://www.windy.com/-Clouds-clouds'
+                elif 'wind' in query_lower:
+                    base_url = 'https://www.windy.com/-Wind-wind'
+                
+                # Add location to URL if present
+                if location_match:
+                    location = location_match.group(1).strip()
+                    print(f"Weather location: '{location}'")
+                    # We'll append the location as a search parameter
+                    # Windy.com will handle the search on their end
+                    base_url += f"?search={urllib.parse.quote(location)}"
+                
+                print(f"Opening weather URL: {base_url}")
+                webbrowser.open(base_url, new=2)  # new=2 forces a new window
+                
+                if location_match:
+                    return {"status": "success", "result": f"Showing weather information for {location_match.group(1).strip()}"}
+                else:
+                    return {"status": "success", "result": "Showing weather information"}
+            except Exception as e:
+                print(f"Error opening weather information: {e}")
+                return {"status": "error", "result": f"Failed to open weather information: {str(e)}"}
+            
+        # Handle aurora and space weather searches
+        if any(term in query_lower for term in ['aurora', 'northern lights', 'space weather', 'solar', 'geomagnetic']):
+            try:
+                import webbrowser
+                # URLs for aurora forecast from your memory configuration
+                urls = [
+                    'https://services.swpc.noaa.gov/images/aurora-forecast-northern-hemisphere.jpg',
+                    'https://www.swpc.noaa.gov/communities/space-weather-enthusiasts'
+                ]
+                
+                # Open aurora forecast image
+                print(f"Opening aurora forecast URL: {urls[0]}")
+                webbrowser.open(urls[0], new=2)  # new=2 forces a new window
+                
+                # Also open the space weather enthusiasts page
+                print(f"Opening space weather URL: {urls[1]}")
+                webbrowser.open(urls[1], new=2)  # Open in new window
+                
+                return {"status": "success", "result": "Showing aurora and space weather forecasts"}
+            except Exception as e:
+                print(f"Error opening aurora forecast: {e}")
+                return {"status": "error", "result": f"Failed to open aurora forecast: {str(e)}"}
+            
+        # Handle earthquake searches
+        if any(term in query_lower for term in ['earthquake', 'seismic', 'tremor', 'quake']):
+            # Use USGS earthquake map from your memory configuration
+            try:
+                import webbrowser
+                url = 'https://earthquake.usgs.gov/earthquakes/map/'
+                print(f"Opening earthquake URL: {url}")
+                webbrowser.open(url, new=2)  # new=2 forces a new window
+                return {"status": "success", "result": f"Showing earthquake information"}
+            except Exception as e:
+                print(f"Error opening earthquake map: {e}")
+                return {"status": "error", "result": f"Failed to open earthquake map: {str(e)}"}
+        
+        # Use Google as the default search engine
+        try:
+            import webbrowser
+            url = f'https://www.google.com/search?q={urllib.parse.quote(query)}'
+            print(f"Opening default search URL: {url}")
+            webbrowser.open(url, new=2)  # new=2 forces a new window
+            return {"status": "success", "result": f"Searched for: {query}"}
+        except Exception as e:
+            print(f"Error opening search: {e}")
+            return {"status": "error", "result": f"Failed to open search: {str(e)}"}
+
+    def _extract_location(self, query):
+        """Extract location from a weather query"""
+        # Remove common weather-related words
+        query = query.lower()
+        words_to_remove = ['weather', 'forecast', 'temperature', 'rain', 'wind', 'clouds', 'in', 'at', 'for', 'the', 'show', 'me', 'get', 'find', 'check']
+        for word in words_to_remove:
+            query = query.replace(word, '')
+        # Clean up and return the location
+        return query.strip()
+
+    def _get_coordinates(self, location):
+        """Get coordinates for a location using Nominatim geocoding"""
+        try:
+            import requests
+            # Use Nominatim (OpenStreetMap) for geocoding
+            url = f"https://nominatim.openstreetmap.org/search?q={urllib.parse.quote(location)}&format=json&limit=1"
+            headers = {'User-Agent': 'TINY_PIRATE_Weather_Search/1.0'}  # Required by Nominatim
+            response = requests.get(url, headers=headers)
+            data = response.json()
+            
+            if data and len(data) > 0:
+                lat = data[0]['lat']
+                lon = data[0]['lon']
+                return float(lat), float(lon)
+        except Exception as e:
+            print(f"Error getting coordinates: {e}")
+        return None
+
+    def save_app_paths(self, file_path='app_paths.json'):
+        """Save scanned app paths to file"""
+        try:
+            with open(file_path, 'w') as f:
+                json.dump(self.app_paths, f, indent=2)
+        except Exception as e:
+            print(f"Error saving app paths: {e}")
+
+    def load_app_paths(self):
+        """Load application paths from the JSON file"""
+        try:
+            app_paths_file = os.path.join(os.path.dirname(__file__), 'app_paths.json')
+            if os.path.exists(app_paths_file):
+                with open(app_paths_file, 'r') as f:
+                    return json.load(f)
+            return {}
+        except Exception as e:
+            print(f"Error loading app paths: {e}")
+            return {}
+
+    def set_alarm(self, time_str=None):
+        if not time_str:
+            return {"status": "error", "result": "No time specified for alarm"}
+        
+        result = self.clock_service.add_task('alarm', time_str)
+        if result['status'] == 'success':
+            tasks = self.clock_service.list_tasks()
+            return {
+                "status": "success",
+                "result": f"Alarm set for: {result['time']}",
+                "task_id": result['task_id'],
+                "active_tasks": tasks
+            }
+        else:
+            return {
+                "status": "error",
+                "result": result['message']
+            }
+
+    def check_time(self):
+        """Check current time and list active tasks"""
+        current_time = datetime.datetime.now().strftime("%I:%M %p")
+        active_tasks = self.clock_service.list_tasks()
+        
+        result = f"The current time is {current_time}"
+        if active_tasks:
+            result += "\nActive tasks:"
+            for task in active_tasks:
+                result += f"\n- {task}"
+                
+        return {"status": "success", "result": result}
+
+    def manage_timer(self):
+        tasks = self.clock_service.list_tasks()
+        return {
+            "status": "success",
+            "result": "Current active tasks:",
+            "active_tasks": tasks
+        }
+
+    def _handle_windy_search(self, location):
+        """Handle Windy weather search with automated input"""
+        try:
+            # Open Windy.com
+            self._open_browser('https://www.windy.com/', new_window=True)
+            
+            # Wait for page to load
+            time.sleep(2)
+            
+            # Click on search box (y-coordinate adjusted to 155)
+            pyautogui.click(120, 155)
+            time.sleep(0.5)
+            
+            # Type the location
+            pyautogui.write(location)
+            time.sleep(0.5)
+            
+            # Press enter to search
+            pyautogui.press('enter')
+            return True
+            
+        except Exception as e:
+            print(f"Error in Windy search automation: {e}")
+            return False
+
+    def _handle_sflix_search(self, url, query):
+        """Handle sflix search by formatting the URL with hyphens"""
+        # Replace spaces with hyphens and remove any special characters
+        search_terms = query.lower().strip()
+        search_terms = search_terms.replace(' ', '-')
+        url = f"https://sflix.to/search/{search_terms}"
+        self._open_browser(url, new_window=True)
+        return True
+
+    def _handle_midjourney_imagine(self, prompt):
+        """Handle Midjourney imagine prompt submission"""
+        try:
+            # Calculate taller window size for Midjourney (45% taller)
+            midjourney_height = int(self.window_pos[3] * 1.45)  # 45% taller
+            midjourney_window = (
+                self.window_pos[0],  # x
+                self.window_pos[1],  # y
+                self.window_pos[2],  # width
+                midjourney_height    # height
+            )
+            
+            # Open Midjourney imagine page with custom window size
+            self._open_browser('https://www.midjourney.com/imagine', new_window=True, window_size=midjourney_window)
+            
+            # Wait for page to load
+            time.sleep(2)
+            
+            # Type just the prompt (without /imagine)
+            pyautogui.write(prompt)
+            time.sleep(0.5)
+            
+            # Press enter to submit
+            pyautogui.press('enter')
+            return True
+            
+        except Exception as e:
+            print(f"Error in Midjourney imagine automation: {e}")
+            return False
+            
+    def _handle_aurora_command(self, query=None):
+        """Handle aurora forecast display with specialized page handling"""
+        # URLs for aurora forecast - matching the command_parser.py implementation
+        urls = [
+            # Primary URL - NOAA aurora forecast image
+            'https://services.swpc.noaa.gov/images/aurora-forecast-northern-hemisphere.jpg',
+            # Secondary URLs
+            'https://www.swpc.noaa.gov/communities/space-weather-enthusiasts',
+            'https://www.swpc.noaa.gov/products/real-time-solar-wind'
+        ]
+        
+        try:
+            import webbrowser
+            
+            # Open each URL in a new tab
+            for i, url in enumerate(urls):
+                if i == 0:
+                    # First URL opens in a new window
+                    webbrowser.open(url, new=2)
+                else:
+                    # Subsequent URLs open in new tabs
+                    webbrowser.open(url, new=2)
+                
+                # Brief pause between opening tabs to prevent overwhelming the browser
+                if i < len(urls) - 1:  # No need to sleep after the last URL
+                    time.sleep(0.5)
+            
+            return {"status": "success", "result": "Opening aurora forecast pages in your browser"}
+        except Exception as e:
+            print(f"Error opening aurora forecast pages: {e}")
+            return {"status": "error", "result": f"Failed to open aurora forecast pages: {str(e)}"}
+    
+    def _handle_weather_command(self, query):
+        """Handle weather search with specialized URLs based on query content"""
+        # First check if this is an aurora forecast query - if so, don't handle it as weather
+        if query:
+            query_lower = query.lower()
+            aurora_phrases = [
+                'aurora forecast', 'aurora map', 'show aurora', 'check aurora', 
+                'aurora prediction', 'show me aurora', 'show the aurora', 'show me the aurora',
+                'northern lights', 'aurora borealis'
+            ]
+            
+            # Check if any aurora phrase is in the query
+            for phrase in aurora_phrases:
+                if phrase in query_lower:
+                    print(f"[DEBUG] Detected aurora phrase '{phrase}' in weather query: '{query}'")
+                    print(f"[DEBUG] Skipping weather handling for aurora query")
+                    # Return a special response to indicate this is an aurora command
+                    return {
+                        "status": "aurora_detected", 
+                        "result": "This is an aurora forecast command, not a weather command",
+                        "command_type": "aurora_forecast"
+                    }
+        
+        # Use the configured Windy.com URL from MEMORIES
+        base_url = 'https://www.windy.com/'
+        
+        # Extract location from query if provided
+        location = self._extract_location(query) if query else None
+        
+        # Determine which weather aspect to show based on the query
+        query_lower = query.lower() if query else ''
+        
+        # Map of weather aspects to their URLs from configuration
+        weather_aspects = {
+            'temp': {'terms': ['temp', 'temperature'], 'url': 'https://www.windy.com/-Temperature-temp'},
+            'rain': {'terms': ['rain', 'thunder', 'precipitation'], 'url': 'https://www.windy.com/-Rain-thunder-rain'},
+            'clouds': {'terms': ['cloud'], 'url': 'https://www.windy.com/-Clouds-clouds'},
+            'wind': {'terms': ['wind'], 'url': 'https://www.windy.com/-Wind-wind'}
+        }
+        
+        # Find matching weather aspect
+        for aspect, data in weather_aspects.items():
+            if any(term in query_lower for term in data['terms']):
+                base_url = data['url']
+                break
+            
+        # If we have a location, try to get coordinates
+        if location:
+            coords = self._get_coordinates(location)
+            if coords:
+                lat, lon = coords
+                base_url = f"{base_url}?{lat},{lon}"
+        
+        try:
+            # Use direct webbrowser approach for consistency
+            import webbrowser
+            print(f"Opening weather URL: {base_url}")
+            webbrowser.open(base_url, new=2)  # new=2 forces a new window
+            
+            # If we have a location but couldn't get coordinates, we'll need to manually search
+            # But this is difficult to automate reliably across different systems
+            # So we'll just inform the user
+            if location and not coords:
+                return {"status": "success", "result": f"Showing weather map. You may need to manually search for {location} on the Windy.com page."}
+            else:
+                return {"status": "success", "result": f"Showing weather information for {location if location else 'your area'}"}
+        except Exception as e:
+            print(f"Error opening weather information: {e}")
+            return {"status": "error", "result": f"Failed to open weather information: {str(e)}"}
+
+    def _open_browser(self, url, needs_positioning=False, new_window=False):
+        """Open a URL in the browser with optional window positioning
+        
+        Args:
+            url: The URL to open
+            needs_positioning: Whether to position the window after opening
+            new_window: Whether to open in a new window instead of a new tab
+        """
+        try:
+            # Open the URL in the browser
+            if new_window:
+                self.browser.open(url, new=2)  # new=2 forces a new window
+            else:
+                self.browser.open(url, new=1)  # new=1 opens in a new tab if possible
+            
+            # Wait for the browser to open
+            time.sleep(1.5)
+            
+            # If positioning is needed, try to position the window
+            if needs_positioning:
+                try:
+                    # Find Edge windows
+                    windows = []
+                    win32gui.EnumWindows(self.enum_windows_callback, windows)
+                    
+                    if windows:
+                        # Get the most recently opened window (likely our new one)
+                        hwnd = windows[-1]
+                        # Position and resize the window
+                        win32gui.MoveWindow(hwnd, *self.window_pos, True)
+                except Exception as e:
+                    print(f"Error positioning browser window: {e}")
+            
+            return True
+        except Exception as e:
+            print(f"Error opening browser: {e}")
+            return False
+    
+    def _handle_news_search(self, query):
+        """Handle news search by directly using everything after 'news about/surrounding/regarding'
+        
+        This function ensures that news searches include the specific subject
+        that the user is interested in, rather than just generic 'latest news'.
+        """
+        # Keep the original query for logging
+        original_query = query
+        print(f"Original news query: '{original_query}'")
+        
+        # Simple pattern matching to extract everything after news about/regarding/surrounding/etc.
+        # This covers patterns like:
+        # - "news about X"
+        # - "today's news about X"
+        # - "show me news regarding X"
+        # - "current news surrounding X"
+        pattern = r'news\s+(?:about|regarding|surrounding|on|of|for)\s+(.+)'
+        match = re.search(pattern, query.lower())
+        
+        if match:
+            # Direct extraction - use everything after the matched pattern
+            topic = match.group(1).strip()
+            print(f"Extracted topic: '{topic}'")
+            search_query = f"latest news about {topic}"
+        else:
+            # Alternative pattern for "today's news about X" or similar
+            alt_pattern = r'(?:today|current|latest)(?:\'s)?\s+news\s+(?:about|regarding|surrounding|on|of|for)?\s+(.+)'
+            alt_match = re.search(alt_pattern, query.lower())
+            
+            if alt_match:
+                topic = alt_match.group(1).strip()
+                print(f"Extracted topic from alternative pattern: '{topic}'")
+                search_query = f"latest news about {topic}"
+            else:
+                # If no pattern matches, just use the original query
+                # Remove only the most basic terms
+                basic_query = query.lower()
+                for term in ['show me', 'show', 'get', 'find', 'news', 'headlines']:
+                    basic_query = re.sub(r'\b' + term + r'\b', '', basic_query)
+                
+                # Clean up the query
+                basic_query = re.sub(r'\s+', ' ', basic_query).strip()
+                
+                if basic_query:
+                    print(f"Using basic query: '{basic_query}'")
+                    search_query = f"latest news about {basic_query}"
+                    topic = basic_query
+                else:
+                    print("No specific topic found, using default 'latest news'")
+                    search_query = "latest news"
+                    topic = "latest headlines"
+        
+        print(f"Final news search query: '{search_query}'")
+        
+        # Use Perplexity for news searches with the proper query
+        try:
+            import webbrowser
+            url = f'https://www.perplexity.ai/search?q={urllib.parse.quote(search_query)}'
+            print(f"Opening URL: {url}")
+            webbrowser.open(url, new=2)  # new=2 forces a new window
+            time.sleep(1)  # Give browser time to open
+            
+            return {"status": "success", "result": f"Showing news about: {topic}"}
+        except Exception as e:
+            print(f"Error opening browser for news search: {e}")
+            return {"status": "error", "result": f"Failed to open browser for news search: {str(e)}"}
+    
+    def enum_windows_callback(self, hwnd, windows):
+        if win32gui.IsWindowVisible(hwnd):
+            title = win32gui.GetWindowText(hwnd)
+            if "Edge" in title:
+                windows.append(hwnd)
+        return True
+
+    def create_note(self, content, pre_processed=False, has_transcript=False, transcript_data=None):
+        """Create a new note in Obsidian
+        
+        Args:
+            content: The content to create a note with
+            pre_processed: Whether the content is already processed
+            has_transcript: Whether this note contains a transcript marker that needs to be replaced
+            transcript_data: The raw transcript data to insert at the marker
+        """
+        try:
+            print("[DEBUG] Starting note creation...")
+            
+            # Process the content through our enhanced generator if not already processed
+            if not pre_processed:
+                note_content = self.generate_note_content(content)
+            else:
+                note_content = content
+            
+            # Replace transcript placeholder if needed
+            if has_transcript and transcript_data:
+                note_content = note_content.replace("{{TRANSCRIPT_PLACEHOLDER}}", transcript_data)
+            
+            # Check if Obsidian is running
+            obsidian_window = win32gui.FindWindow(None, "Obsidian")
+            if not obsidian_window:
+                os.startfile("obsidian://")
+                time.sleep(3)
+            
+            # Get screen dimensions and base position
+            screen_width, screen_height = pyautogui.size()
+            base_x = (screen_width // 3) // 2
+            base_y = screen_height // 2
+            
+            # Click to focus Obsidian
+            pyautogui.moveTo(base_x, base_y)
+            pyautogui.click()
+            time.sleep(0.5)
+            
+            # New note shortcut
+            pyautogui.hotkey('ctrl', 'n')
+            time.sleep(1)
+            
+            # Move down to skip title
+            pyautogui.press('down')
+            time.sleep(0.5)
+            
+            # Ensure no modifier keys are held down before typing
+            pyautogui.keyUp('ctrl')
+            pyautogui.keyUp('shift')
+            pyautogui.keyUp('alt')
+            
+            # Find the position where the analysis starts (after the transcript section)
+            transcript_end_marker = "</details>"
+            analysis_start_position = note_content.find(transcript_end_marker)
+            
+            if analysis_start_position > 0:
+                # Split the content into header+transcript and analysis parts
+                header_transcript_part = note_content[:analysis_start_position + len(transcript_end_marker)]
+                analysis_part = note_content[analysis_start_position + len(transcript_end_marker):]
+                
+                # Paste the header and transcript as a single chunk for efficiency
+                pyperclip.copy(header_transcript_part)
+                pyautogui.hotkey('ctrl', 'v')
+                
+                # Type analysis content in chunks for visible behavior
+                chunk_size = 25  # Larger chunks for smoother output
+                chunks = [analysis_part[i:i + chunk_size] for i in range(0, len(analysis_part), chunk_size)]
+                
+                for chunk in chunks:
+                    pyperclip.copy(chunk)
+                    pyautogui.hotkey('ctrl', 'v')
+                    time.sleep(0.001)  # 1ms delay for smooth visual effect
+            else:
+                # Fallback to pasting everything at once if we can't find the transcript section
+                pyperclip.copy(note_content)
+                pyautogui.hotkey('ctrl', 'v')
+            
+            # Final safety check for modifier keys
+            pyautogui.keyUp('ctrl')
+            pyautogui.keyUp('shift')
+            pyautogui.keyUp('alt')
+            
+            return {
+                "status": "success",
+                "result": "Note created in Obsidian",
+                "speak": True
+            }
+        except Exception as e:
+            print(f"[DEBUG] Error creating note: {str(e)}")
+            return {
+                "status": "error",
+                "result": f"Error creating note: {str(e)}",
+                "speak": True
+            }
+
+    def generate_note_content(self, prompt):
+        """Generate note content based on the prompt"""
+        try:
+            print(f"[DEBUG] Generating note content with prompt: {prompt}")
+            self.last_note_content = prompt  # Store for potential retry
+            
+            # Check if this is an autonomous note request from NoteHandler
+            if prompt.startswith("Create a note based on:"):
+                # This is an autonomous note request
+                # Extract the actual prompt and context
+                parts = prompt.split("\n\nContext:", 1)
+                if len(parts) == 2:
+                    autonomous_prompt = parts[0].replace("Create a note based on:", "").strip()
+                    context = parts[1].strip()
+                    
+                    # Use the autonomous prompt directly with the context
+                    user_prompt = f"Based on the following context, {autonomous_prompt}:\n\n{context}"
+                    
+                    # Use a general system prompt for formatting
+                    system_prompt = self.note_prompts.get('system', DEFAULT_NOTE_PROMPTS['system'])
+                    
+                    # Get AI response
+                    response = self.chat_response_raw(system_prompt, user_prompt)
+                    
+                    # Add timestamp
+                    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    response += f"\n\n---\nCreated: {timestamp}"
+                    
+                    return response
+            
+            # Handle YouTube transcript
+            if "youtube.com" in prompt or "youtu.be" in prompt:
+                # Extract YouTube URL
+                youtube_url = None
+                for word in prompt.split():
+                    if "youtube.com" in word or "youtu.be" in word:
+                        youtube_url = word.strip()
+                        # Clean the URL - remove any trailing punctuation
+                        if youtube_url[-1] in ['.', ',', '!', '?', ':', ';']:
+                            youtube_url = youtube_url[:-1]
+                        break
+                
+                if youtube_url:
+                    try:
+                        print(f"[DEBUG] Processing YouTube URL: {youtube_url}")
+                        # Process transcript
+                        result = self.transcript_handler.process_video(youtube_url)
+                        
+                        if not result or 'transcript' not in result or not result['transcript']:
+                            raise ValueError("Failed to retrieve transcript or transcript is empty")
+                        
+                        print(f"[DEBUG] Successfully retrieved transcript with {len(result['transcript'])} characters")
+                        
+                        # Extract video ID from URL for iframe embedding
+                        video_id = None
+                        if "youtube.com" in youtube_url:
+                            match = re.search(r'(?:v=|\/)([0-9A-Za-z_-]{11}).*', youtube_url)
+                            if match:
+                                video_id = match.group(1)
+                        elif "youtu.be" in youtube_url:
+                            match = re.search(r'youtu\.be\/([0-9A-Za-z_-]{11})', youtube_url)
+                            if match:
+                                video_id = match.group(1)
+                        
+                        # Create iframe embed code if video ID was found
+                        iframe_embed = ""
+                        if video_id:
+                            iframe_embed = f"""<iframe width="560" height="315" src="https://www.youtube.com/embed/{video_id}" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>"""
+                        
+                        # Create initial note with video embed and raw transcript
+                        initial_content = f"""# {result.get('title', 'YouTube Video Analysis')}
+
+{iframe_embed}
+
+![[{youtube_url}]]
+
+## Video Information
+- Duration: {result.get('duration_minutes', 'Unknown')} minutes
+- Language: {result.get('language', 'en')}
+- Word Count: {result.get('word_count', 'Unknown')}
+- URL: {youtube_url}
+
+## Raw Transcript
+<details closed>
+<summary>Click to expand/collapse transcript</summary>
+<div style="font-size: 0.8em;">
+
+```
+{result['transcript']}
+```
+
+</div>
+</details>
+"""
+                        
+                        # No longer creating the initial note here
+                        # self.create_note(initial_content, pre_processed=True)
+                        
+                        # Use a combined system prompt for YouTube analysis
+                        system_prompt = """You are an expert academic analyst and note-taker who creates comprehensive, detailed notes in Obsidian markdown format.
+
+You excel at analyzing video content with extreme detail, academic rigor, and proper formatting. Your notes are known for their thoroughness, clarity, and professional structure.
+
+When creating notes from YouTube transcripts, follow these specific formatting guidelines:
+
+1. For headings:
+   # Title (H1)
+   ## Major Section (H2)
+   ### Subsection (H3)
+   #### Minor point (H4)
+
+2. For lists:
+   - Bullet point
+   - Another point
+     - Sub-point
+     - Another sub-point
+   1. Numbered item
+   2. Another numbered item
+
+3. For emphasis:
+   **Bold text**
+   *Italic text*
+   ***Bold and italic***
+   ~~Strikethrough~~
+
+4. For tables:
+   | Header1 | Header2 | Header3 |
+   | ------- | ------- | ------- |
+   | Value1  | Value2  | Value3  |
+
+5. For callouts:
+   > [!note] Note Title
+   > Note content with **formatting**
+
+   > [!warning] Warning
+   > Warning content
+
+   > [!example] Example
+   > Example content
+
+Create extremely detailed, academic-quality analysis with proper hierarchical structure."""
+
+                        # Prepare detailed prompt for note generation
+                        youtube_prompt = self.note_prompts.get('youtube_transcript', DEFAULT_NOTE_PROMPTS['youtube_transcript'])
+                        
+                        analysis_prompt = f"""Analyze this YouTube video transcript with extreme detail and academic rigor.
+
+TRANSCRIPT:
+{result['transcript']}
+
+{youtube_prompt}"""
+                        
+                        # Get AI response with the combined system and user prompts
+                        response = self.chat_response_raw(system_prompt, analysis_prompt)
+                        
+                        # Create the final note with the complete analysis
+                        final_content = f"""# {result.get('title', 'YouTube Video Analysis')}
+
+{iframe_embed}
+
+## Video Information
+- Duration: {result.get('duration_minutes', 'Unknown')} minutes
+- Language: {result.get('language', 'en')}
+- Word Count: {result.get('word_count', 'Unknown')}
+- URL: {youtube_url}
+
+## Raw Transcript
+<details closed>
+<summary>Click to expand/collapse transcript</summary>
+<div style="font-size: 0.8em;">
+
+```
+{result['transcript']}
+```
+
+</div>
+</details>
+
+{response}"""
+                        
+                        # Create the note with the complete response
+                        return self.create_note(final_content, pre_processed=True)
+                        
+                    except Exception as e:
+                        print(f"[DEBUG] YouTube transcript processing error: {str(e)}")
+                        error_message = str(e)
+                        if "Could not retrieve a transcript" in error_message:
+                            error_message = "Could not retrieve a transcript for this video. The video may not have captions available."
+                        elif "'language'" in error_message:
+                            error_message = "Could not determine the language of the transcript. Please try a different video."
+                        
+                        return {
+                            'status': 'error',
+                            'result': f"Error processing YouTube transcript: {error_message}"
+                        }
+        
+            # For normal note creation
+            # Check if prompt contains a topic indicator
+            topic = prompt
+            if ":" in prompt:
+                # Try to extract topic
+                parts = prompt.split(":", 1)
+                if len(parts) == 2:
+                    topic = parts[1].strip()
+                        
+                topic = topic.strip()
+                print(f"[DEBUG] Extracted topic: {topic}")
+                prompt = topic
+            
+            # System prompt with comprehensive Obsidian markdown formatting
+            system_prompt = self.note_prompts.get('system', DEFAULT_NOTE_PROMPTS['system'])
+            
+            # Get AI response
+            response = self.chat_response_raw(system_prompt, prompt)
+            
+            # Add timestamp
+            timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            response += f"\n\n---\nCreated: {timestamp}"
+            
+            return response
+            
+        except Exception as e:
+            print(f"[DEBUG] Error generating content: {str(e)}")
+            return f"Error creating note: {str(e)}\n\nCreated: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            
+    def chat_response_raw(self, system_prompt, user_prompt):
+        """Get a raw response from the chat model using Ollama"""
+        try:
+            import requests
+            import json
+            
+            # Format the request for Ollama
+            url = "http://localhost:11434/api/generate"
+            data = {
+                "model": "llama3.2-vision:11b",
+                "system": system_prompt,
+                "prompt": user_prompt,
+                "stream": False
+            }
+            
+            print("[DEBUG] Sending request to Ollama:", json.dumps(data, indent=2))
+            
+            # Make the API call
+            response = requests.post(url, json=data)
+            
+            # Get raw response text
+            raw_text = response.text
+            print("[DEBUG] Raw response text:", raw_text)
+            
+            try:
+                # Try to parse as JSON
+                response_json = json.loads(raw_text)
+                print("[DEBUG] Parsed JSON response:", json.dumps(response_json, indent=2))
+                
+                if 'response' in response_json:
+                    return response_json['response']
+                    
+            except json.JSONDecodeError as je:
+                print(f"[DEBUG] JSON decode error: {je}")
+                # If it's not JSON, return the raw text if it looks reasonable
+                if len(raw_text) > 0 and not raw_text.startswith('{'):
+                    return raw_text
+            
+            return "Error: Could not get valid response from AI"
+            
+        except Exception as e:
+            print(f"[DEBUG] Error in chat response: {str(e)}")
+            return f"Error generating content: {str(e)}"
+
+    def determine_command_type(self, query):
+        query_lower = query.lower().strip()
+        
+        # Check for "try again" variations first
+        if any(phrase in query_lower for phrase in ['try again', 'retry', 'redo']):
+            return 'retry'
+            
+        # Check for explicit commands
+        if query_lower.startswith('/'):
+            return 'command'
+            
+        # Check for search-like queries
+        if any(word in query_lower for word in ['search', 'find', 'look up', 'what is', 'tell me about']):
+            return 'search'
+            
+        # Default to note creation
+        return 'note'
+
+    def get_aurora_forecast(self):
+        """Get the current aurora forecast from NOAA"""
+        try:
+            # NOAA Ovation Aurora API endpoint
+            url = "https://services.swpc.noaa.gov/json/ovation_aurora_latest.json"
+            
+            # Get the forecast data
+            response = requests.get(url)
+            response.raise_for_status()
+            data = response.json()
+            
+            # Format the forecast time
+            forecast_time = datetime.datetime.strptime(data['Observation Time'], '%Y-%m-%dT%H:%M:%S')
+            local_time = forecast_time.strftime('%Y-%m-%d %H:%M:%S')
+            
+            # Create the forecast message
+            message = f"""Aurora Forecast
+=================
+Time: {local_time}
+
+Current Activity:
+- North America: {self.get_activity_level(data, 'north_america')}
+- Europe: {self.get_activity_level(data, 'europe')}
+- Asia: {self.get_activity_level(data, 'asia')}
+
+Viewing Conditions:
+- Best viewing typically occurs between 10 PM and 2 AM local time
+- Clear, dark skies away from city lights are ideal
+- Look toward the northern horizon
+
+Note: This is a general forecast and local conditions may vary."""
+            
+            return message
+            
+        except Exception as e:
+            return f"Error getting aurora forecast: {str(e)}"
+            
+    def get_activity_level(self, data, region):
+        """Calculate aurora activity level for a region based on forecast data"""
+        # Define region coordinates (approximate centers)
+        regions = {
+            'north_america': {'lat': 45, 'lon': -100},
+            'europe': {'lat': 50, 'lon': 10},
+            'asia': {'lat': 55, 'lon': 100}
+        }
+        
+        # Find closest data point
+        target = regions[region]
+        min_distance = float('inf')
+        activity = 0
+        
+        for point in data['coordinates']:
+            lat, lon, value = point
+            
+            # Calculate distance using simple Euclidean distance (approximate)
+            distance = ((lat - target['lat']) ** 2 + (lon - target['lon']) ** 2) ** 0.5
+            
+            if distance < min_distance:
+                min_distance = distance
+                activity = value
+        
+        # Convert activity value to descriptive level
+        if activity < 20:
+            return "Low"
+        elif activity < 40:
+            return "Moderate"
+        elif activity < 60:
+            return "Active"
+        else:
+            return "Strong"
+
+    def handle_web_command(self, command):
+        """Handle web-related commands"""
+        command_name = command.get('name', '')
+        
+        # Handle aurora forecast
+        if command_name == 'aurora_forecast':
+            return self._handle_aurora_command()
+            
+        # Check if input is a YouTube URL
+        url = command.get('query', '').strip()
+        for pattern in [
+            r'https?://(?:www\.)?youtube\.com/watch\?v=[\w-]+(?:&t=\d+s?)?',
+            r'https?://youtu\.be/[\w-]+(?:\?t=\d+s?)?'
+        ]:
+            if re.match(pattern, url):
+                try:
+                    print(f"[DEBUG] Processing YouTube video: {url}")
+                    # Process transcript
+                    result = self.transcript_handler.process_video(url)
+                    
+                    if not result or 'transcript' not in result or not result['transcript']:
+                        raise ValueError("Failed to retrieve transcript or transcript is empty")
+                    
+                    print(f"[DEBUG] Successfully retrieved transcript with {len(result['transcript'])} characters")
+                    
+                    # Extract video ID from URL for iframe embedding
+                    video_id = None
+                    if "youtube.com" in url:
+                        match = re.search(r'(?:v=|\/)([0-9A-Za-z_-]{11}).*', url)
+                        if match:
+                            video_id = match.group(1)
+                    elif "youtu.be" in url:
+                        match = re.search(r'youtu\.be\/([0-9A-Za-z_-]{11})', url)
+                        if match:
+                            video_id = match.group(1)
+                    
+                    # Create iframe embed code if video ID was found
+                    iframe_embed = ""
+                    if video_id:
+                        iframe_embed = f"""<iframe width="560" height="315" src="https://www.youtube.com/embed/{video_id}" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>"""
+                    
+                    # Create initial note with video embed and raw transcript
+                    initial_content = f"""# {result.get('title', 'YouTube Video Analysis')}
+
+{iframe_embed}
+
+![[{url}]]
+
+## Video Information
+- Duration: {result.get('duration_minutes', 'Unknown')} minutes
+- Language: {result.get('language', 'en')}
+- Word Count: {result.get('word_count', 'Unknown')}
+- URL: {url}
+
+## Raw Transcript
+<details closed>
+<summary>Click to expand/collapse transcript</summary>
+<div style="font-size: 0.8em;">
+
+```
+{result['transcript']}
+```
+
+</div>
+</details>
+"""
+                    
+                    # No longer creating the initial note here
+                    # self.create_note(initial_content, pre_processed=True)
+                    
+                    # Use a combined system prompt for YouTube analysis
+                    system_prompt = """You are an expert academic analyst and note-taker who creates comprehensive, detailed notes in Obsidian markdown format.
+
+You excel at analyzing video content with extreme detail, academic rigor, and proper formatting. Your notes are known for their thoroughness, clarity, and professional structure.
+
+When creating notes from YouTube transcripts, follow these specific formatting guidelines:
+
+1. For headings:
+   # Title (H1)
+   ## Major Section (H2)
+   ### Subsection (H3)
+   #### Minor point (H4)
+
+2. For lists:
+   - Bullet point
+   - Another point
+     - Sub-point
+     - Another sub-point
+   1. Numbered item
+   2. Another numbered item
+
+3. For emphasis:
+   **Bold text**
+   *Italic text*
+   ***Bold and italic***
+   ~~Strikethrough~~
+
+4. For tables:
+   | Header1 | Header2 | Header3 |
+   | ------- | ------- | ------- |
+   | Value1  | Value2  | Value3  |
+
+5. For callouts:
+   > [!note] Note Title
+   > Note content with **formatting**
+
+   > [!warning] Warning
+   > Warning content
+
+   > [!example] Example
+   > Example content
+
+Create extremely detailed, academic-quality analysis with proper hierarchical structure."""
+
+                    # Prepare detailed prompt for note generation
+                    youtube_prompt = self.note_prompts.get('youtube_transcript', DEFAULT_NOTE_PROMPTS['youtube_transcript'])
+                    
+                    analysis_prompt = f"""Analyze this YouTube video transcript with extreme detail and academic rigor.
+
+TRANSCRIPT:
+{result['transcript']}
+
+{youtube_prompt}"""
+
+                    # Get AI response with the combined system and user prompts
+                    response = self.chat_response_raw(system_prompt, analysis_prompt)
+                    
+                    # Create the final note with the complete analysis
+                    final_content = f"""# {result.get('title', 'YouTube Video Analysis')}
+
+{iframe_embed}
+
+## Video Information
+- Duration: {result.get('duration_minutes', 'Unknown')} minutes
+- Language: {result.get('language', 'en')}
+- Word Count: {result.get('word_count', 'Unknown')}
+- URL: {url}
+
+## Raw Transcript
+<details closed>
+<summary>Click to expand/collapse transcript</summary>
+<div style="font-size: 0.8em;">
+
+```
+{result['transcript']}
+```
+
+</div>
+</details>
+
+{response}"""
+                    
+                    # Create the note with the complete response
+                    return self.create_note(final_content, pre_processed=True)
+                    
+                except Exception as e:
+                    print(f"[DEBUG] YouTube transcript processing error: {str(e)}")
+                    error_message = str(e)
+                    if "Could not retrieve a transcript" in error_message:
+                        error_message = "Could not retrieve a transcript for this video. The video may not have captions available."
+                    elif "'language'" in error_message:
+                        error_message = "Could not determine the language of the transcript. Please try a different video."
+                    
+                    return {
+                        'status': 'error',
+                        'result': f"Error processing YouTube transcript: {error_message}"
+                    }
+        
+            # Handle YouTube search
+            if command_name == 'youtube':
+                query = command.get('query', '')
+                if not query:
+                    return {"status": "error", "result": "No search query provided"}
+                
+                # If it's not a URL, treat as a search query
+                if not query.startswith(('http://', 'https://')):
+                    url = f'https://www.youtube.com/results?search_query={urllib.parse.quote(query)}'
+                    return self._handle_youtube_command(url, query)
+        
+            # Handle other web commands (open URL, etc.)
+            if command_name == 'url':
+                url = command.get('query', '')
+                if not url:
+                    return {"status": "error", "result": "No URL provided"}
+                
+                self._open_browser(url, new_window=True)
+                return {"status": "success", "result": f"Opened URL: {url}"}
+            
+            # Default to search if no specific handler
+            query = command.get('query', '')
+            if query:
+                return self._execute_search_command(
+                    query,
+                    command.get('browser', 'edge'),
+                    command.get('site'),
+                    command.get('source_preference')
+                )
+            
+            return {"status": "error", "result": "Invalid web command"}

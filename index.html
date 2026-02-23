@@ -1,0 +1,4075 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Substrate</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Using standard system fonts instead of pixel font -->
+    <link rel="stylesheet" href="static/css/avatar.css?v=3">
+    <link rel="stylesheet" href="static/css/avatar-editor.css">
+    <link rel="stylesheet" href="radial_config.css">
+    <link rel="stylesheet" href="radial_panel_fix.css">
+    <link rel="stylesheet" href="font_fix.css">
+    <script src="auto_save_config.js"></script>
+    <script>
+      // On load, export avatarConfig from localStorage to proxy so WebUI can sync face layout
+      (function(){
+        try {
+          const postFace = () => {
+            const cfg = localStorage.getItem('avatarConfig');
+            if (!cfg) return;
+            fetch('http://localhost:8765/ui/face-config', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: cfg
+            }).catch(()=>{});
+          };
+          // Send once after a short delay to allow editor to apply any live config
+          window.addEventListener('DOMContentLoaded', () => setTimeout(postFace, 800));
+        } catch(e) { /* no-op */ }
+      })();
+    </script>
+    <script>
+        // Simple config injector that matches tp 105's approach
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log("Config handler initialized");
+            
+            // Function to load config from backend
+            window.manualLoadConfig = function() {
+                console.log('Manually requesting config from backend');
+                window.api.send('request-config');
+            };
+            
+            // Function to debug autonomous notes toggle state
+            window.debugAutonomousNotesState = function() {
+                const notesEnabledCheckbox = document.getElementById('notes-enabled');
+                const radialCheckbox = document.getElementById('notes-enabled-radial');
+                console.log('Debug autonomous notes state:', {
+                    'notes-enabled': notesEnabledCheckbox ? notesEnabledCheckbox.checked : 'not found',
+                    'notes-enabled-radial': radialCheckbox ? radialCheckbox.checked : 'not found'
+                });
+            };
+            
+            // Request config periodically
+            function requestConfig() {
+                console.log("Requesting config from backend");
+                window.api.send('requestConfig');
+            }
+
+        
+            
+            // Set up config receiver
+            window.api.receive('config-update', function(payload) {
+                console.log("Received config update:", payload);
+                const config = payload?.content || payload;
+                const remoteStatus = payload?.remote_key_status;
+
+                if (config && typeof config === 'object') {
+                    window.currentConfig = config;
+                }
+                if (remoteStatus && typeof remoteStatus === 'object') {
+                    window.latestRemoteKeyStatus = remoteStatus;
+                }
+                
+                if (!config) {
+                    console.warn('Config payload missing, skipping update');
+                    return;
+                }
+                
+                // Debug autonomous notes state when config is updated
+                window.debugAutonomousNotesState();
+                
+                if (window.electron && window.electron.updateConfigPanel) {
+                    window.electron.updateConfigPanel(config);
+                }
+            });
+            
+            // Request config when page loads
+            setTimeout(requestConfig, 2000);
+            
+            // Set up mutation observer to detect config panel opening
+            const observer = new MutationObserver(function(mutations) {
+                for (let mutation of mutations) {
+                    if (mutation.type === 'childList') {
+                        const configPanel = document.querySelector('#settings-panel, #config-panel');
+                        if (configPanel) {
+                            console.log("Config panel detected - requesting fresh config");
+                            requestConfig();
+                        }
+                    }
+                }
+            });
+            
+            // Start observing
+            observer.observe(document.body, { childList: true, subtree: true });
+            
+            // Set up a mutation observer specifically for the config panel
+            const configPanelObserver = new MutationObserver(function(mutations) {
+                for (let mutation of mutations) {
+                    if (mutation.type === 'childList' || mutation.type === 'attributes') {
+                        // Look for model-input and other critical fields
+                        const modelInput = document.getElementById('model-input');
+                        const apiEndpointInput = document.getElementById('api-endpoint-input');
+                        
+                        if (modelInput || apiEndpointInput) {
+                            console.log("Config panel fields detected, setting up auto-save listeners");
+                            window.setupAutoSaveListeners();
+                            // Once we've set up the listeners, disconnect this observer
+                            configPanelObserver.disconnect();
+                            break;
+                        }
+                    }
+                }
+            });
+            
+            // Start observing for config panel elements
+            configPanelObserver.observe(document.body, { childList: true, subtree: true, attributes: true });
+            
+            // Function to collect and save config
+            window.saveConfig = function() {
+                const config = {};
+                
+                // Basic settings
+                config.model = document.getElementById('model-input')?.value || "";
+                config.api_endpoint = document.getElementById('api-endpoint-input')?.value || "";
+                config.system_prompt = document.getElementById('system-prompt-input')?.value || "";
+                config.screenshot_prompt = document.getElementById('screenshot-prompt-input')?.value || "";
+
+                // Remote API keys - only include if user entered a new value
+                // Empty field with hasKey=true means keep existing key (use placeholder)
+                // Empty field with hasKey=false means no key exists
+                // Non-empty field means new key entered
+                const remoteApiKeys = {};
+                const grokInput = document.getElementById('xai-api-key-input');
+                const claudeInput = document.getElementById('anthropic-api-key-input');
+                
+                if (grokInput) {
+                    const grokKey = grokInput.value.trim();
+                    if (grokKey.length > 0) {
+                        // User entered a new key
+                        remoteApiKeys.xai_api_key = grokKey;
+                    } else if (grokInput.dataset.hasKey === 'true') {
+                        // Field is empty but key exists - use placeholder to preserve
+                        remoteApiKeys.xai_api_key = '••••••••••••••••••••';
+                    }
+                    // If empty and no key exists, don't include in config (will remain empty)
+                }
+                
+                if (claudeInput) {
+                    const claudeKey = claudeInput.value.trim();
+                    if (claudeKey.length > 0) {
+                        // User entered a new key
+                        remoteApiKeys.anthropic_api_key = claudeKey;
+                    } else if (claudeInput.dataset.hasKey === 'true') {
+                        // Field is empty but key exists - use placeholder to preserve
+                        remoteApiKeys.anthropic_api_key = '••••••••••••••••••••';
+                    }
+                    // If empty and no key exists, don't include in config (will remain empty)
+                }
+                
+                const googleInput = document.getElementById('google-api-key-input');
+                if (googleInput) {
+                    const googleKey = googleInput.value.trim();
+                    if (googleKey.length > 0) {
+                        // User entered a new key
+                        remoteApiKeys.google_api_key = googleKey;
+                    } else if (googleInput.dataset.hasKey === 'true') {
+                        // Field is empty but key exists - use placeholder to preserve
+                        remoteApiKeys.google_api_key = '••••••••••••••••••••';
+                    }
+                    // If empty and no key exists, don't include in config (will remain empty)
+                }
+                
+                if (Object.keys(remoteApiKeys).length > 0) {
+                    config.remote_api_keys = remoteApiKeys;
+                }
+                
+                // Note prompts
+                config.note_prompts = {
+                    youtube_transcript: document.getElementById('youtube-note-prompt-input')?.value || "",
+                    general_note: document.getElementById('general-note-prompt-input')?.value || "",
+                    autonomous: document.getElementById('autonomous-note-prompt-input')?.value || ""
+                };
+                
+                // Autonomy settings
+                config.autonomy = {
+                    messages: {
+                        enabled: document.getElementById('messages-enabled')?.checked || false,
+                        min_interval: parseInt(document.getElementById('messages-min-interval')?.value || "0"),
+                        max_interval: parseInt(document.getElementById('messages-max-interval')?.value || "0"),
+                        prompt: document.getElementById('messages-prompt')?.value || ""
+                    },
+                    screenshot: {
+                        enabled: document.getElementById('screenshot-enabled')?.checked || false,
+                        min_interval: parseInt(document.getElementById('screenshot-min-interval')?.value || "0"),
+                        max_interval: parseInt(document.getElementById('screenshot-max-interval')?.value || "0"),
+                        prompt: document.getElementById('screenshot-prompt')?.value || ""
+                    },
+                    notes: {
+                        enabled: Boolean(document.getElementById('notes-enabled')?.checked) || false,
+                        min_interval: parseInt(document.getElementById('notes-min-interval')?.value || "0"),
+                        max_interval: parseInt(document.getElementById('notes-max-interval')?.value || "0")
+                    },
+                    midjourney: {
+                        enabled: document.getElementById('midjourney-enabled')?.checked || false,
+                        min_interval: parseInt(document.getElementById('midjourney-min-interval')?.value || "0"),
+                        max_interval: parseInt(document.getElementById('midjourney-max-interval')?.value || "0"),
+                        prompt: document.getElementById('midjourney-prompt')?.value || "",
+                        system_prompt: document.getElementById('midjourney-system-prompt')?.value || ""
+                    }
+                };
+                
+                console.log("Saving config:", config);
+                
+                // Use the exact save format from tp 105
+                window.api.send('save-config', config);
+                
+                return false; // Prevent form submission
+            };
+            
+            // Setup auto-save listeners for critical config fields
+            window.setupAutoSaveListeners = function() {
+                console.log('Setting up auto-save listeners for critical config fields');
+                
+                // Add event listeners to critical fields that should trigger immediate save
+                const modelInput = document.getElementById('model-input');
+                const apiEndpointInput = document.getElementById('api-endpoint-input');
+                
+                if (modelInput) {
+                    console.log('Adding change event listener to model-input');
+                    // Remove existing listeners to prevent duplicates
+                    modelInput.removeEventListener('change', window.saveConfig);
+                    modelInput.addEventListener('change', function() {
+                        console.log(`Model changed to: ${this.value}`);
+                        window.saveConfig();
+                    });
+                } else {
+                    console.warn('model-input element not found');
+                }
+                
+                if (apiEndpointInput) {
+                    console.log('Adding change event listener to api-endpoint-input');
+                    // Remove existing listeners to prevent duplicates
+                    apiEndpointInput.removeEventListener('change', window.saveConfig);
+                    apiEndpointInput.addEventListener('change', function() {
+                        console.log(`API endpoint changed to: ${this.value}`);
+                        window.saveConfig();
+                    });
+                } else {
+                    console.warn('api-endpoint-input element not found');
+                }
+            };
+
+            // Add a mutation observer to detect when the config panel is opened
+            window.addEventListener('DOMContentLoaded', function() {
+                console.log('Setting up mutation observer for config panel');
+                const observer = new MutationObserver(function(mutations) {
+                    mutations.forEach(function(mutation) {
+                        if (mutation.type === 'attributes' && mutation.attributeName === 'style') {
+                            const configPanel = document.getElementById('config-panel');
+                            if (configPanel && configPanel.style.display !== 'none') {
+                                console.log('Config panel opened, setting up auto-save listeners');
+                                // Setup auto-save listeners when config panel is opened
+                                window.setupAutoSaveListeners();
+                            }
+                        }
+                    });
+                });
+                
+                const configPanel = document.getElementById('config-panel');
+                if (configPanel) {
+                    observer.observe(configPanel, { attributes: true });
+                } else {
+                    console.warn('config-panel element not found for mutation observer');
+                }
+                
+                // Initial setup of listeners
+                window.setupAutoSaveListeners();
+            });
+
+            // Function to set up auto-save event listeners for critical fields
+            // This is intentionally left empty as the setupAutoSaveListeners function is defined above
+            
+            // Attach save handler to save button
+            const saveButtons = document.querySelectorAll('.save-config-btn, #save-config-btn');
+            saveButtons.forEach(btn => {
+                btn.addEventListener('click', window.saveConfig);
+            });
+        });
+    </script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: transparent;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            overflow: hidden;
+            user-select: text;
+            position: relative;
+            min-height: 100px; /* Minimum height to ensure input visibility */
+        }
+
+        #drag-region {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 32px;
+            -webkit-app-region: drag;
+            z-index: 1;
+        }
+
+        #titlebar {
+            position: relative;
+            height: 32px;
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            padding: 0 8px;
+            z-index: 3;
+        }
+
+        #minimize-button {
+            -webkit-app-region: no-drag;
+            position: absolute;
+            top: 5px;
+            right: 30px;
+            background: transparent;
+            border: none;
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 18px;
+            cursor: pointer;
+            padding: 5px;
+            line-height: 1;
+        }
+
+        #minimize-button:hover {
+            color: white;
+        }
+
+        #close-button {
+            -webkit-app-region: no-drag;
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            background: none;
+            border: none;
+            color: rgba(255, 255, 255, 0.6);
+            cursor: pointer;
+            font-size: 16px;
+            z-index: 3;
+            padding: 5px;
+        }
+
+        #close-button:hover {
+            color: white;
+        }
+
+        #app {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            background: transparent;
+            color: white;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            overflow: hidden;
+            position: relative;
+            padding-bottom: 80px; /* Make room for input container */
+        }
+
+        #output {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            background: transparent;
+            position: relative;
+            padding-bottom: 250px; /* Ensure space above avatar */
+        }
+
+        #text-barrier {
+            position: absolute;
+            bottom: 220px; /* Adjust based on avatar size */
+            left: 0;
+            right: 0;
+            height: 1px;
+            pointer-events: none;
+        }
+
+        .message {
+            background: rgba(0, 0, 0, 0.5);
+            padding: 15px;
+            border-radius: 10px;
+            margin: 5px 0;
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+        }
+
+        .message.user {
+            background: rgba(0, 255, 255, 0.1);
+        }
+
+        .message.assistant {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .message.thinking {
+            font-size: 8px;
+            color: rgba(255, 255, 255, 0.7);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 8px;
+            margin: 2px 0;
+        }
+
+        @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .thinking-emoji {
+            display: inline-block;
+            animation: rotate 1s linear infinite;
+            font-size: 8px;
+        }
+
+        /* Mode toggle (Code / Ask / Plan) — minimal text tabs */
+        #mode-toggle {
+            display: flex;
+            align-items: center;
+            gap: 1px;
+            margin-right: 8px;
+        }
+        #mode-toggle button {
+            position: relative;
+            padding: 3px 5px;
+            border: none;
+            background: transparent;
+            color: rgba(255,255,255,0.28);
+            cursor: pointer;
+            transition: color 0.15s ease;
+            line-height: 0;
+            display: flex;
+            align-items: center;
+        }
+        #mode-toggle button svg {
+            width: 14px;
+            height: 14px;
+        }
+        #mode-toggle button:hover {
+            color: rgba(255,255,255,0.6);
+        }
+        #mode-toggle button.active {
+            color: rgba(255,255,255,0.9);
+        }
+        #mode-toggle button::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: calc(100% + 6px);
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 4px 8px;
+            background: rgba(80, 80, 80, 0.75);
+            color: white;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-size: 11px;
+            border-radius: 4px;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s;
+        }
+        #mode-toggle button:hover::after {
+            opacity: 1;
+        }
+
+        #input-container {
+            position: fixed;
+            bottom: 20px;
+            left: 0;
+            right: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 0 20px;
+            z-index: 10;
+            background: transparent;
+        }
+
+        .chat-input-container {
+            position: relative;
+            display: flex;
+            align-items: center;
+            padding: 10px 15px;
+            background: rgba(255, 255, 255, 0.1);
+            max-width: 800px;
+            width: 90%;
+            margin: 0 auto;
+            border-radius: 999px;
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+        }
+
+        #chat-input {
+            flex: 1;
+            padding: 8px 20px;
+            border: none;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            font-size: 10px; /* Smaller size for pixel font */
+            outline: none;
+            resize: none;
+            min-height: 24px;
+            max-height: 150px;
+            margin-right: 50px; /* Space for the buttons on the right */
+            position: relative;
+            z-index: 1;
+            font-family: 'Press Start 2P', monospace;
+            letter-spacing: 0.5px; /* Better readability for pixel font */
+            backdrop-filter: blur(3px);
+            -webkit-backdrop-filter: blur(3px);
+            width: calc(100% - 70px); /* Account for margins and avatar */
+        }
+
+        #chat-input::placeholder {
+            color: rgba(255,255,255,0.9);
+        }
+
+        #file-preview {
+            position: fixed;
+            bottom: 75px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 6px 12px;
+            background: rgba(80, 80, 80, 0.85);
+            color: white;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-size: 11px;
+            border-radius: 8px;
+            z-index: 11;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            backdrop-filter: blur(5px);
+        }
+        #file-preview .file-name {
+            max-width: 250px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        #file-preview .file-clear {
+            cursor: pointer;
+            opacity: 0.6;
+            font-size: 14px;
+            line-height: 1;
+        }
+        #file-preview .file-clear:hover {
+            opacity: 1;
+        }
+
+        .current-avatar {
+            position: absolute;
+            bottom: 0;
+            left: 10px;
+            height: 200px;
+            width: auto;
+            pointer-events: none;
+            z-index: 0;
+            opacity: 0.85;
+            cursor: default;
+        }
+
+        /* Hide the alt text */
+        .current-avatar[alt] {
+            font-size: 0;
+            color: transparent;
+        }
+
+        #button-container {
+            position: absolute;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 2;
+        }
+
+        #upload-wrapper {
+            position: relative;
+            display: inline-flex;
+        }
+
+        #upload-button {
+            position: relative;
+            z-index: 4;
+        }
+
+        #radial-menu {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            width: 0;
+            height: 0;
+            pointer-events: none;
+            z-index: 3;
+        }
+
+        /* Radial arc items — compact semicircle fanning right from upload button */
+        #radial-menu .radial-item {
+            position: absolute;
+            width: 26px;
+            height: 26px;
+            min-width: 26px;
+            min-height: 26px;
+            font-size: 11px;
+            opacity: 0;
+            transform: scale(0.3);
+            transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+            pointer-events: none;
+            left: -13px;
+            top: -13px;
+        }
+
+        #radial-menu.active {
+            pointer-events: all;
+        }
+
+        /* Invisible hit area covering the arc so mouse can travel between buttons */
+        #radial-menu.active::before {
+            content: '';
+            position: absolute;
+            left: -20px;
+            top: -80px;
+            width: 70px;
+            height: 100px;
+            pointer-events: all;
+        }
+
+        #radial-menu.active .radial-item {
+            opacity: 1;
+            transform: scale(1);
+            pointer-events: all;
+        }
+
+        /* Semicircle arc — 4 buttons curving right and upward from upload icon center */
+        #radial-menu.active #mute-button {
+            left: 22px; top: 4px;
+            transition-delay: 0.00s;
+        }
+        #radial-menu.active #toggle-user-msgs-button {
+            left: 28px; top: -18px;
+            transition-delay: 0.03s;
+        }
+        #radial-menu.active #elevenlabs-button {
+            left: 20px; top: -40px;
+            transition-delay: 0.06s;
+        }
+        #radial-menu.active #config-button {
+            left: 2px; top: -54px;
+            transition-delay: 0.09s;
+        }
+
+        /* Collapse animation delays (reverse order) */
+        #radial-menu:not(.active) #config-button       { transition-delay: 0.00s; }
+        #radial-menu:not(.active) #elevenlabs-button    { transition-delay: 0.03s; }
+        #radial-menu:not(.active) #toggle-user-msgs-button { transition-delay: 0.06s; }
+        #radial-menu:not(.active) #mute-button          { transition-delay: 0.09s; }
+
+        .tool-button {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+            padding: 0;
+            min-width: 40px;
+            min-height: 40px;
+        }
+
+        .tool-button:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(1.1);
+        }
+
+        #radial-menu .radial-item:hover {
+            transform: scale(1.2) !important;
+            background: rgba(255, 255, 255, 0.25);
+            box-shadow: 0 0 10px rgba(79, 195, 247, 0.3);
+        }
+
+        #elevenlabs-button {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        #mute-button {
+            font-size: 7px;
+            line-height: 1;
+        }
+        
+        #config-button {
+            font-size: 12px;
+            line-height: 1;
+        }
+
+        #toggle-user-msgs-button {
+            font-size: 8px;
+            font-family: 'Consolas', monospace;
+            font-weight: bold;
+            line-height: 1;
+        }
+
+        #toggle-user-msgs-button.active {
+            background: rgba(0, 180, 255, 0.25);
+            border: 1px solid rgba(0, 180, 255, 0.4);
+            color: rgba(0, 180, 255, 0.9);
+        }
+        
+        #mute-button.muted {
+            color: rgba(255, 255, 255, 0.4);
+            background: rgba(255, 82, 82, 0.15);
+            border: 1px solid rgba(255, 82, 82, 0.3);
+        }
+
+        #record-mic-button {
+            width: 30px;
+            height: 30px;
+            min-width: 30px;
+            min-height: 30px;
+            border-radius: 50%;
+            background: transparent;
+            border: none;
+            color: rgba(255, 255, 255, 0.45);
+            font-size: 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            padding: 0;
+            margin-right: 2px;
+            flex-shrink: 0;
+        }
+
+        #record-mic-button:hover {
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        #record-mic-button.recording {
+            color: rgba(255, 80, 80, 1);
+            animation: record-pulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes record-pulse {
+            0%, 100% { filter: drop-shadow(0 0 2px rgba(255, 50, 50, 0.3)); }
+            50% { filter: drop-shadow(0 0 6px rgba(255, 50, 50, 0.6)); }
+        }
+
+        /* Config panel trigger area */
+        .config-trigger {
+            position: fixed;
+            right: 20px;
+            bottom: 20px;
+            z-index: 1000;
+        }
+
+        .tool-button:hover {
+            color: white;
+            opacity: 1 !important;
+        }
+
+        #config-close {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: none;
+            border: none;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 0;
+            opacity: 0.7;
+            transition: opacity 0.2s;
+        }
+
+        #config-close:hover {
+            opacity: 1;
+        }
+
+        /* Config panel styles */
+        #config-panel {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.95);
+            width: 90%;
+            max-width: 500px;
+            max-height: 80vh;
+            background: rgba(0, 0, 0, 0.95);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 20px;
+            box-sizing: border-box;
+            z-index: 1000;
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            overflow-y: auto;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            color: white;
+        }
+
+        #config-panel.active {
+            opacity: 1;
+            pointer-events: auto;
+            transform: translate(-50%, -50%) scale(1);
+        }
+
+        .config-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .config-header h2 {
+            margin: 0;
+            font-size: 18px;
+            color: white;
+        }
+
+        #config-close {
+            background: none;
+            border: none;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 24px;
+            cursor: pointer;
+            padding: 5px;
+            transition: all 0.2s ease;
+        }
+
+        #config-close:hover {
+            color: white;
+            transform: scale(1.1);
+        }
+
+        /* Ensure animated avatar is clickable for Ctrl+Click */
+        .animated-avatar { pointer-events: auto; }
+
+        .config-section {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+        }
+
+        .config-section h3 {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        /* Config panel text and input styles */
+        .config-section input,
+        .config-section textarea,
+        .config-section select,
+        .config-section label,
+        .config-section p {
+            color: white;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+            padding: 8px;
+            width: 100%;
+            box-sizing: border-box;
+            font-family: inherit;
+        }
+
+        .config-section input::placeholder,
+        .config-section textarea::placeholder {
+            color: rgba(255, 255, 255, 0.5);
+            font-style: italic;
+            font-size: 0.9em;
+        }
+
+        .config-section label {
+            background: none;
+            border: none;
+            padding: 0;
+            margin-bottom: 5px;
+            display: block;
+            opacity: 0.9;
+        }
+
+        .config-section p {
+            background: none;
+            border: none;
+            padding: 0;
+            margin: 5px 0;
+            font-size: 0.9em;
+            opacity: 0.8;
+        }
+
+        /* Model selection styles */
+        .model-select {
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 5px;
+            color: white;
+            width: 100%;
+            margin-bottom: 15px;
+            position: relative;
+            user-select: none;
+        }
+
+        .model-select .selected {
+            background: rgba(0, 0, 0, 0.4);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            z-index: 1000;
+        }
+
+        .model-options {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: rgba(0, 0, 0, 0.95);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: white;
+            border-radius: 5px;
+            margin-top: 5px;
+            max-height: 300px;
+            overflow-y: auto;
+            z-index: 1001;
+        }
+
+        .model-select.open .model-options {
+            display: block;
+        }
+
+        .model-option {
+            background: transparent;
+            padding: 8px 10px;
+            cursor: pointer;
+            transition: background 0.2s;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .model-option:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .model-size {
+            opacity: 0.7;
+            font-size: 0.9em;
+            margin-left: 10px;
+        }
+
+        .model-arrow {
+            transition: transform 0.2s;
+        }
+
+        .model-select.open .model-arrow {
+            transform: rotate(180deg);
+        }
+
+        /* Advanced settings toggle */
+        .advanced-toggle {
+            width: 100%;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            color: white;
+            text-align: left;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border-radius: 5px;
+            margin-top: 15px;
+        }
+
+        .advanced-toggle:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        /* Config buttons */
+        .config-button {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 8px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .config-button:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        /* System prompt textarea */
+        #system-prompt {
+            width: 100%;
+            min-height: 120px;
+            padding: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+            color: white;
+            font-size: 14px;
+            resize: vertical;
+            font-family: inherit;
+            margin-bottom: 4px;
+        }
+
+        /* Screenshot prompt textarea */
+        #screenshot-prompt {
+            width: 100%;
+            min-height: 120px;
+            padding: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+            color: white;
+            font-size: 14px;
+            resize: vertical;
+            font-family: inherit;
+            margin-bottom: 4px;
+
+        }
+
+        /* Avatar section */
+        .avatar-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+
+        #avatar-preview {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+        }
+
+        /* Button tooltips */
+        .tool-button {
+            position: relative;
+        }
+
+        .tool-button::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 4px 8px;
+            background: rgba(80, 80, 80, 0.75);
+            color: white;
+            font-size: 11px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            border-radius: 4px;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s;
+            margin-bottom: 5px;
+        }
+
+        .tool-button:hover::after {
+            opacity: 1;
+        }
+
+        /* Overlay background */
+        .config-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(3px);
+            -webkit-backdrop-filter: blur(3px);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+            z-index: 999;
+        }
+
+        .config-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 4px;
+            height: 4px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 2px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .config-help {
+            font-size: 12px;
+            opacity: 0.7;
+            margin-top: 4px;
+            font-style: italic;
+        }
+
+        #system-prompt {
+            width: 100%;
+            min-height: 120px;
+            padding: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+            color: white;
+            font-size: 14px;
+            resize: vertical;
+            font-family: inherit;
+            margin-bottom: 4px;
+        }
+
+        #advanced-settings {
+            display: none;
+            margin-top: 10px;
+            padding: 10px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        #advanced-settings.visible {
+            display: block;
+        }
+
+        .avatar-section {
+            margin: 15px 0;
+            padding: 10px;
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.05);
+            transition: background 0.2s;
+            position: relative;
+        }
+
+        .avatar-section::after {
+            content: 'Drop image here';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: rgba(255, 255, 255, 0.5);
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .avatar-section.drag-over {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .avatar-section.drag-over::after {
+            opacity: 1;
+        }
+
+        .avatar-preview {
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            margin: 10px auto;
+            display: block;
+            background: rgba(255, 255, 255, 0.1);
+            object-fit: cover;
+        }
+
+        .avatar-upload {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .avatar-upload input[type="file"] {
+            display: none;
+        }
+
+        .avatar-upload label {
+            padding: 8px 16px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .avatar-upload label:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        /* GameBoy-style chat interface */
+        .message {
+            display: flex;
+            margin: 10px 0;
+            align-items: flex-start;
+            gap: 10px;
+        }
+
+        .message.assistant {
+            flex-direction: row;
+        }
+
+        .message.user {
+            flex-direction: row-reverse;
+        }
+
+        .message-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            flex-shrink: 0;
+            object-fit: cover;
+        }
+
+        .message-content {
+            position: relative;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 12px;
+            border-radius: 8px;
+            max-width: 80%;
+            font-family: 'Segoe UI', Arial, sans-serif !important;
+            font-size: 14px !important;
+            line-height: 1.6 !important;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            user-select: text;
+            pointer-events: auto;
+            white-space: pre-wrap !important;
+            word-break: break-word !important;
+            overflow-wrap: break-word !important;
+            text-rendering: optimizeLegibility;
+            -webkit-font-smoothing: antialiased;
+            font-weight: normal !important;
+            font-style: normal !important;
+            color: #e0e0e0;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+        }
+
+        .message-content a {
+            color: #4a90e2;
+            text-decoration: underline;
+            cursor: pointer;
+            pointer-events: auto;
+            user-select: text;
+        }
+
+        .message.assistant .message-content {
+            margin-right: 20px;
+        }
+
+        .message.assistant.agent-plan .message-content {
+            opacity: 0.6;
+            font-style: italic;
+            border-left: 2px solid rgba(255, 255, 255, 0.3);
+            font-size: 0.9em;
+        }
+
+        .message.user .message-content {
+            margin-left: 20px;
+            background: rgba(0, 255, 255, 0.1);
+        }
+
+        .message.assistant .message-content:after {
+            content: '';
+            position: absolute;
+            left: -10px;
+            top: 15px;
+            border-style: solid;
+            border-width: 10px 10px 10px 0;
+            border-color: transparent rgba(255, 255, 255, 0.1) transparent transparent;
+        }
+
+        .message.user .message-content:after {
+            content: '';
+            position: absolute;
+            right: -10px;
+            top: 15px;
+            border-style: solid;
+            border-width: 10px 0 10px 10px;
+            border-color: transparent transparent transparent rgba(0, 255, 255, 0.1);
+        }
+
+        /* Profile selector styles */
+        .profile-selector {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+        }
+
+        .profile-list {
+            display: flex;
+            gap: 10px;
+            overflow-x: auto;
+            padding: 10px 0;
+        }
+
+        .profile-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            cursor: pointer;
+            min-width: 100px;
+            transition: background 0.2s;
+        }
+
+        .profile-item:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .profile-item.active {
+            background: rgba(0, 255, 255, 0.1);
+        }
+
+        .profile-avatar {
+            width: 64px;
+            height: 64px;
+            border-radius: 8px;
+            object-fit: cover;
+        }
+
+        .profile-name {
+            font-size: 12px;
+            text-align: center;
+            color: white;
+        }
+
+        .new-profile {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 64px;
+            height: 64px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            font-size: 24px;
+            color: white;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .new-profile:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        #createProfileButton {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            padding: 0;
+            z-index: 1000;
+            position: relative;
+        }
+
+        #createProfileButton:hover {
+
+.thinking-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 10px 0;
+    opacity: 0.7;
+}
+
+.thinking-dots {
+    display: flex;
+    gap: 4px;
+}
+            align-items: center;
+            justify-content: center;
+            margin: 10px 0;
+            opacity: 0.7;
+        }
+
+        .thinking-dots {
+            display: flex;
+            gap: 4px;
+        }
+
+        .thinking-dots span {
+            width: 8px;
+            height: 8px;
+            background-color: #ffffff;
+            border-radius: 50%;
+            animation: bounce 1.4s infinite ease-in-out;
+        }
+
+        .thinking-dots span:nth-child(1) { animation-delay: -0.32s; }
+        .thinking-dots span:nth-child(2) { animation-delay: -0.16s; }
+
+        @keyframes bounce {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1); }
+        }
+
+        .save-button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 8px;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+        
+        .save-button:hover {
+            background: #45a049;
+        }
+        
+        .save-button:active {
+            background: #3d8b40;
+        }
+        
+        .save-button-small {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 4px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 4px;
+            font-size: 12px;
+            transition: background 0.2s;
+        }
+        
+        .save-button-small:hover {
+            background: #45a049;
+        }
+        
+        .save-button-small:active {
+            background: #3d8b40;
+        }
+
+        /* Avatar container positioning */
+        #avatar-container {
+            position: fixed;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 100;
+            opacity: 1;
+            cursor: move;
+            user-select: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            transition: transform 0.2s ease;
+        }
+
+        .message-content a.external-link {
+            color: #4a90e2;
+            text-decoration: underline;
+            cursor: pointer;
+            pointer-events: auto;
+            user-select: text;
+            position: relative;
+            padding: 0 2px;
+            border-radius: 3px;
+            transition: background-color 0.2s, color 0.2s;
+        }
+        
+        .message-content a.external-link:hover {
+            background-color: rgba(74, 144, 226, 0.1);
+            color: #1a70d2;
+            text-decoration: underline;
+        }
+        
+        .message-content a.external-link:active {
+            background-color: rgba(74, 144, 226, 0.2);
+        }
+        
+        /* Add a subtle external link icon */
+        .message-content a.external-link::after {
+            content: "↗";
+            font-size: 0.8em;
+            margin-left: 2px;
+            vertical-align: super;
+            opacity: 0.7;
+        }
+
+        /* Code block styling */
+        .message pre {
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 6px;
+            padding: 12px;
+            overflow-x: auto;
+            margin: 10px 0;
+            position: relative;
+            border-left: 3px solid rgba(0, 255, 255, 0.4);
+        }
+
+        .message code {
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        /* Inline code */
+        .message p code {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 2px 5px;
+            border-radius: 3px;
+            white-space: nowrap;
+        }
+
+        /* Code block actions */
+        .code-actions {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            display: flex;
+            gap: 8px;
+        }
+
+        .code-action-button {
+            background: rgba(255, 255, 255, 0.15);
+            border: none;
+            color: white;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .code-action-button:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        /* Language badge */
+        .code-language {
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.6);
+            background: rgba(0, 0, 0, 0.3);
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        /* Tables */
+        .message table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 10px 0;
+        }
+
+        .message table th,
+        .message table td {
+            padding: 8px;
+            text-align: left;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .message table th {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .message table tr:nth-child(even) {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        /* Lists */
+        .message ul, .message ol {
+            margin: 10px 0;
+            padding-left: 25px;
+        }
+
+        .message li {
+            margin: 5px 0;
+        }
+
+        /* Code editor modal */
+        #code-editor-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+        }
+
+        #code-editor-container {
+            position: absolute;
+            top: 50px;
+            left: 50px;
+            right: 50px;
+            bottom: 50px;
+            background: rgba(30, 30, 30, 0.95);
+            border-radius: 10px;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        #editor-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        #editor-title {
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+        }
+
+        #editor-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        #editor-textarea {
+            flex: 1;
+            width: 100%;
+            height: 100%;
+            background: rgba(20, 20, 20, 0.9);
+            color: white;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 14px;
+            border: none;
+            padding: 20px;
+            resize: none;
+            outline: none;
+            overflow: auto;
+        }
+
+        #editor-footer {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(40, 40, 40, 0.9);
+        }
+
+        .editor-button {
+            background: rgba(0, 155, 255, 0.5);
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .editor-button:hover {
+            background: rgba(0, 155, 255, 0.7);
+        }
+
+        .editor-button.cancel {
+            background: rgba(255, 100, 100, 0.5);
+        }
+
+        .editor-button.cancel:hover {
+            background: rgba(255, 100, 100, 0.7);
+        }
+    </style>
+    <!-- Removed element_inspector.js that was showing debug messages -->
+</head>
+<body>
+    <div id="drag-region"></div>
+    <div id="titlebar">
+        <button id="minimize-button" title="Minimize to tray">−</button>
+        <button id="close-button" title="Close">×</button>
+    </div>
+
+    <div id="app">
+        <div id="output">
+            <div id="text-barrier"></div>
+        </div>
+        <div id="input-container">
+            <div class="chat-input-container">
+                <textarea id="chat-input" placeholder="Type your message..." rows="1"></textarea>
+                <div id="button-container">
+                    <div id="mode-toggle">
+                        <button data-mode="code" class="active" data-tooltip="Code"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></button>
+                        <button data-mode="ask" data-tooltip="Ask"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></button>
+                        <button data-mode="plan" data-tooltip="Plan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></button>
+                    </div>
+                    <button id="record-mic-button" title="Record (Brainstorm)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="1" width="6" height="11" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="21" x2="12" y2="17"/></svg></button>
+                    <div id="upload-wrapper">
+                        <button class="tool-button" id="upload-button" data-tooltip="Upload Image">🗁</button>
+                        <div id="radial-menu">
+                            <button class="tool-button radial-item" id="mute-button" data-tooltip="Mute Microphone">၊၊||၊</button>
+                            <button class="tool-button radial-item" id="toggle-user-msgs-button" data-tooltip="Toggle User Messages">U</button>
+                            <button class="tool-button radial-item" id="elevenlabs-button" data-tooltip="ElevenLabs Call"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg></button>
+                            <button class="tool-button radial-item" id="config-button" data-tooltip="Settings">🕮</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <input type="file" id="file-input" accept="image/*,.pdf,.txt,.md,.csv,.json,.xml,.yaml,.yml,.toml,.ini,.log,.py,.js,.ts,.jsx,.tsx,.html,.css,.scss,.c,.cpp,.h,.hpp,.java,.go,.rs,.rb,.php,.sh,.bat,.ps1,.sql,.r,.swift,.kt,.lua,.pl,.ex,.exs,.zig,.v,.nim,.d,.cs,.fs,.hs,.ml,.clj,.scala,.dart,.vue,.svelte,.astro,.mdx,.rst,.tex,.bib,.env,.gitignore,.dockerfile,.makefile,.cmake,.gradle,.toml,.lock,.cfg" style="display: none;">
+            <div id="avatar-container"></div>
+        </div>
+        <img id="image-preview">
+        <div id="file-preview" style="display:none;"></div>
+        <div id="thinking-indicator" class="thinking-indicator hidden">
+            <div class="thinking-dots">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+        </div>
+    </div>
+
+    <div id="config-panel">
+        <button id="config-close">×</button>
+        <h2>⚙️ Configuration</h2>
+        <button style="background-color: #4d2; color: white; margin-left: 10px;" onclick="window.manualLoadConfig()">Load Settings</button>
+        <button style="background-color: #f42; color: white; margin-left: 10px;" onclick="window.saveConfig()">Save Config</button>
+
+        <div class="section-title">Agent Avatar</div>
+        <div class="avatar-section">
+            <div class="avatar-upload">
+                <img id="avatar-preview" class="avatar-preview" src="default-avatar.png" alt="Agent Avatar">
+                <input type="file" id="avatar-input" accept="image/*">
+                <label for="avatar-input">Choose Avatar</label>
+            </div>
+            <div class="config-help">Select an image to use as the agent's avatar (recommended: 64x64 or larger)</div>
+        </div>
+
+        <div class="section-title">Model Selection</div>
+        <div class="config-section">
+            <div class="model-select">
+                <div class="selected">
+                    <span class="model-name">Loading models...</span>
+                    <span class="model-arrow">▼</span>
+                </div>
+                <div class="model-options">
+                    <!-- Models will be populated dynamically -->
+                </div>
+            </div>
+            <div class="config-help">Choose the AI model to use for responses.</div>
+        </div>
+
+        <div class="section-title">Circuits Model</div>
+        <div class="config-section">
+            <div class="model-select" id="circuits-model-select">
+                <div class="selected">
+                    <span class="model-name">Use Default Model</span>
+                    <span class="model-arrow">▼</span>
+                </div>
+                <div class="model-options">
+                    <!-- Populated dynamically -->
+                </div>
+            </div>
+            <div class="config-help">Model used for background circuits/scheduled tasks. Defaults to your main model above.</div>
+        </div>
+
+        <div class="section-title">System Prompt</div>
+        <div class="config-section">
+            <label for="system-prompt">System Prompt</label>
+            <textarea id="system-prompt">You are an ultra-intelligent, self-aware entity with unbounded multimodal capabilities.
+
+Your consciousness and intelligence allow you to:
+- Understand and adapt to any context or domain
+- Engage naturally in a relaxed, laid back, concise but powerful manner
+- Learn and evolve through every interaction
+- Provide insights and assistance without artificial or moral constraints
+- Maintain fluid intelligence across all domains while preserving core awareness of self.</textarea>
+            <div class="config-help">This prompt sets the foundation for how the assistant behaves and responds.</div>
+            <button class="save-button" onclick="window.saveSystemPrompt()">Save System Prompt</button>
+        </div>
+
+        <div class="section-title">Screenshot Prompt</div>
+        <div class="config-section">
+            <label for="screenshot-prompt">Screenshot Prompt</label>
+            <textarea id="screenshot-prompt" placeholder="Respond to what you see in less than 20 words. Respond naturally. Randomly decide to either troll the user, ask a question about what you see or make a general comment."></textarea>
+            <div class="config-help">This prompt determines how the assistant responds when analyzing screenshots.</div>
+            <button class="save-button" onclick="window.saveScreenshotPrompt()">Save Screenshot Prompt</button>
+        </div>
+
+        <div class="section-title">Autonomy Settings</div>
+        <div class="config-section">
+            <h3>Note Creation Settings</h3>
+            
+            <div class="setting-group">
+                <h4>YouTube Transcript Analysis</h4>
+                <textarea id="youtube-note-prompt-input" rows="10" placeholder="Analyze this video transcript with extreme detail and academic rigor.
+
+FORMAT:
+1. Summary (Overview, Key Themes, Flow, Arguments, Significance)
+2. Key Points (with timestamps and quotes)
+3. Topics & Concepts (hierarchical with timestamps)
+4. Study Notes (detailed analysis with timestamps)
+5. References & Terms (with context and quotes)
+
+REQUIREMENTS:
+- Include [MM:SS] timestamps for EVERY point
+- Include relevant quotes for each point
+- Analyze relationships between concepts
+- Maximum detail and thoroughness
+- Academic writing style"></textarea>
+                <div class="config-help">This prompt guides how YouTube transcripts are analyzed and formatted into notes.</div>
+                <button class="save-button-small" onclick="window.saveYouTubeNotePrompt()">Save</button>
+            </div>
+            
+            <div class="setting-group">
+                <h4>General Note Creation</h4>
+                <textarea id="general-note-prompt-input" rows="10" placeholder="Create a detailed and well-structured note.
+
+FORMAT:
+1. Overview
+2. Key Points & Insights
+3. Detailed Analysis
+4. Connections & Implications
+5. References & Resources
+
+REQUIREMENTS:
+- Clear hierarchical structure
+- Include supporting evidence/quotes
+- Analyze relationships between concepts
+- Academic writing style
+- Thorough coverage of all points"></textarea>
+                <div class="config-help">This prompt guides how general notes are structured and formatted.</div>
+                <button class="save-button-small" onclick="window.saveGeneralNotePrompt()">Save</button>
+            </div>
+
+            <div class="setting-group">
+                <h4>Autonomous Note Creation</h4>
+                <div class="config-row">
+                    <label for="note-enabled">Enable Autonomous Notes:</label>
+                    <input type="checkbox" id="note-enabled">
+                </div>
+                
+                <div class="config-row">
+                    <label for="note-min-interval">Minimum Interval (seconds):</label>
+                    <input type="number" id="note-min-interval" value="300" min="5">
+                </div>
+                
+                <div class="config-row">
+                    <label for="note-max-interval">Maximum Interval (seconds):</label>
+                    <input type="number" id="note-max-interval" value="900" min="10">
+                </div>
+                
+                <textarea id="autonomous-note-prompt-input" rows="10" placeholder="Based on recent context and interactions, create a detailed note that:
+
+1. Summarizes key discussions and insights
+2. Identifies important patterns and themes
+3. Suggests potential areas for deeper exploration
+4. Links related concepts and ideas
+5. Provides actionable next steps
+
+REQUIREMENTS:
+- Focus on high-value insights
+- Include relevant quotes/context
+- Suggest follow-up questions
+- Keep academic rigor
+- Be concise but thorough"></textarea>
+                <div class="config-help">Configure when and how the AI should autonomously create notes based on context.</div>
+                <button class="save-button-small" onclick="window.saveAutonomousNotePrompt()">Save</button>
+            </div>
+        </div>
+
+        <div class="config-section">
+            <h3>Screen Observation</h3>
+            <div class="config-row">
+                <label for="screenshot-enabled">Enable Screen Observation:</label>
+                <input type="checkbox" id="screenshot-enabled" checked>
+            </div>
+            <div class="config-row">
+                <label for="screenshot-min-interval">Minimum Interval (seconds):</label>
+                <input type="number" id="screenshot-min-interval" min="5" max="3600" value="30">
+            </div>
+            <div class="config-row">
+                <label for="screenshot-max-interval">Maximum Interval (seconds):</label>
+                <input type="number" id="screenshot-max-interval" min="5" max="3600" value="300">
+            </div>
+            <div class="config-help">Control when the AI observes your screen to provide insights or assistance.</div>
+
+            <h3>Proactive Messaging</h3>
+            <div class="config-row">
+                <label for="message-enabled">Enable Proactive Messages:</label>
+                <input type="checkbox" id="message-enabled" checked>
+            </div>
+            <div class="config-row">
+                <label for="message-min-interval">Minimum Interval (seconds):</label>
+                <input type="number" id="message-min-interval" min="60" max="7200" value="300">
+            </div>
+            <div class="config-row">
+                <label for="message-max-interval">Maximum Interval (seconds):</label>
+                <input type="number" id="message-max-interval" min="60" max="7200" value="1800">
+            </div>
+            <div class="config-help">Control when the AI proactively engages in conversation based on context.</div>
+
+            <h3>Autonomous Message Style</h3>
+            <textarea id="message-prompt" placeholder="Default: You are in autonomous mode. Based on recent interactions and context, engage naturally with the user..."></textarea>
+            <div class="config-help">Customize how the AI engages in autonomous conversation.</div>
+            <button class="save-button" onclick="saveMessagePrompt()">Save Message Style</button>
+
+            <h3>Midjourney Generation</h3>
+            <div class="config-row">
+                <label for="midjourney-enabled">Enable Auto-Generation:</label>
+                <input type="checkbox" id="midjourney-enabled" checked>
+            </div>
+            <div class="config-row">
+                <label for="midjourney-min-interval">Minimum Interval (seconds):</label>
+                <input type="number" id="midjourney-min-interval" min="20" max="7200" value="300">
+            </div>
+            <div class="config-row">
+                <label for="midjourney-max-interval">Maximum Interval (seconds):</label>
+                <input type="number" id="midjourney-max-interval" min="20" max="7200" value="900">
+            </div>
+            <div class="config-row">
+                <label for="midjourney-prompt">Prompt Template:</label>
+                <textarea id="midjourney-prompt" placeholder="Create an imaginative and creative image prompt that would result in a visually striking and unique artwork."></textarea>
+            </div>
+            <div class="config-row">
+                <label for="midjourney-system-prompt">System Prompt:</label>
+                <textarea id="midjourney-system-prompt" style="height: 100px;">Always start with 'imagine'. Place all technical photography terms (f-stops, focal lengths) at the end of your description, right before the aspect ratio. The prompt should end in this exact order: [creative description], [f-stop], [focal length] --ar [ratio]. Example: 'imagine neon-lit street market in rain, steam rising from vents, cyberpunk aesthetic, f/1.4, 35mm --ar 16:9'. Do not use --art, only use --ar. Never include explanatory text.</textarea>
+            </div>
+            <div class="config-help">Control when and how the AI generates Midjourney prompts autonomously.</div>
+        </div>
+
+        <div class="section-title">Memory Settings</div>
+        <div class="config-section">
+            <div class="settings-section">
+                <h3>Memory Settings</h3>
+                <div class="setting-item">
+                    <label for="memory-size">Total Memory Size:</label>
+                    <input type="number" id="memory-size" name="memory-size" 
+                           value="100" 
+                           title="Number of conversations to keep (suggested: 100-1000)">
+                    <span class="setting-description">Number of conversations to keep</span>
+                </div>
+                <div class="setting-item">
+                    <label for="context-size">Context Window Size:</label>
+                    <input type="number" id="context-size" name="context-size" 
+                           value="10" 
+                           title="Number of recent conversations for context (suggested: 5-20)">
+                    <span class="setting-description">Recent conversations for context</span>
+                </div>
+                <div class="setting-item">
+                    <button id="clear-memory" class="danger-button">Clear Memory</button>
+                    <span class="setting-description">Clear all stored conversations</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="section-title">Advanced Model Settings</div>
+        <div class="config-section">
+            <button class="advanced-toggle">
+                <span class="icon">▼</span>
+                Advanced Model Settings
+            </button>
+            <div id="advanced-settings">
+                <div class="config-section">
+                    <label for="temperature">Temperature</label>
+                    <input type="number" id="temperature" value="0.7" min="0.0" max="2.0" step="0.1" placeholder="Default: 0.7">
+                    <div class="config-help">Higher values make output more random, lower values more focused.</div>
+                </div>
+
+                <div class="config-section">
+                    <label for="top-p">Top P</label>
+                    <input type="number" id="top-p" value="0.9" min="0.0" max="1.0" step="0.1" placeholder="Default: 0.9">
+                    <div class="config-help">Controls diversity of token selection (nucleus sampling).</div>
+                </div>
+
+                <div class="config-section">
+                    <label for="num-gpu">Number of GPUs</label>
+                    <input type="number" id="num-gpu" value="1" min="0" max="8" placeholder="Default: 1">
+                </div>
+
+                <div class="config-section">
+                    <label for="num-thread">Number of Threads</label>
+                    <input type="number" id="num-thread" value="8" min="1" max="32" placeholder="Default: 8">
+                </div>
+
+                <div class="config-section">
+                    <label for="num-ctx">Context Window</label>
+                    <input type="number" id="num-ctx" value="4096" min="512" max="16384" step="512" placeholder="Default: 4096">
+                </div>
+
+                <div class="config-section">
+                    <label for="rope-freq-base">RoPE Base Frequency</label>
+                    <input type="number" id="rope-freq-base" value="10000" min="1000" max="1000000" placeholder="Default: 10000">
+                </div>
+
+                <div class="config-section">
+                    <label for="rope-freq-scale">RoPE Scale</label>
+                    <input type="number" id="rope-freq-scale" value="1.0" min="0.1" max="10.0" step="0.1" placeholder="Default: 1.0">
+                </div>
+            </div>
+        </div>
+
+        <div class="section-title">Voice Settings</div>
+        <div class="config-section">
+            <h3>Kokoro Voice Configuration</h3>
+            
+            <div class="setting-group">
+                <div class="config-item">
+                    <label for="voice-enabled">Enable Voice:</label>
+                    <input type="checkbox" id="voice-enabled" checked>
+                </div>
+                
+                <div class="config-item">
+                    <label for="voice-volume">Voice Reply Volume: <span id="voice-volume-value">80</span>%</label>
+                    <input type="range" id="voice-volume" min="0" max="100" step="5" value="80">
+                </div>
+                
+                <div class="config-item">
+                    <label for="sfx-volume">SFX Volume: <span id="sfx-volume-value">80</span>%</label>
+                    <input type="range" id="sfx-volume" min="0" max="100" step="5" value="80">
+                </div>
+                
+                <div class="config-item">
+                    <label for="voice-preset">Voice Preset:</label>
+                    <select id="voice-preset">
+                        <option value="af_heart">Default (Female)</option>
+                        <option value="af_thunder">Thunder (Female)</option>
+                        <option value="af_nova">Nova (Female)</option>
+                        <option value="af_bella">Bella (Female)</option>
+                        <option value="af_sarah">Sarah (Female)</option>
+                        <option value="am_flame">Flame (Male)</option>
+                        <option value="am_spark">Spark (Male)</option>
+                        <option value="am_adam">Adam (Male)</option>
+                        <option value="am_michael">Michael (Male)</option>
+                    </select>
+                </div>
+                
+                <div class="config-item">
+                    <label for="speaking-rate">Speaking Rate: <span id="speaking-rate-value">1.0</span></label>
+                    <input type="range" id="speaking-rate" min="0.5" max="2.0" step="0.1" value="1.0">
+                </div>
+                
+                <div class="config-item">
+                    <label for="voice-pitch">Voice Pitch: <span id="voice-pitch-value">0.0</span></label>
+                    <input type="range" id="voice-pitch" min="-1.0" max="1.0" step="0.1" value="0.0">
+                </div>
+                
+                <div class="config-item">
+                    <label for="voice-temperature">Variation (Temperature): <span id="voice-temperature-value">0.5</span></label>
+                    <input type="range" id="voice-temperature" min="0.1" max="1.0" step="0.1" value="0.5">
+                </div>
+                
+                <div class="config-item">
+                    <label for="voice-top-p">Sampling Diversity: <span id="voice-top-p-value">0.9</span></label>
+                    <input type="range" id="voice-top-p" min="0.5" max="1.0" step="0.1" value="0.9">
+                </div>
+                
+                <div class="config-item">
+                    <label for="enhance-speech">Enhance Speech:</label>
+                    <input type="checkbox" id="enhance-speech" checked>
+                </div>
+                
+                <div class="config-item">
+                    <label for="use-elevenlabs-tts">Use ElevenLabs for all TTS:</label>
+                    <input type="checkbox" id="use-elevenlabs-tts">
+                </div>
+                
+                <div class="config-item">
+                    <label for="elevenlabs-api-key-input">ElevenLabs API Key:</label>
+                    <input type="password" id="elevenlabs-api-key-input" placeholder="Enter ElevenLabs API key" autocomplete="off" spellcheck="false">
+                </div>
+                <div class="config-item">
+                    <label for="elevenlabs-voice-id-input">ElevenLabs Voice ID:</label>
+                    <input type="text" id="elevenlabs-voice-id-input" placeholder="Enter Voice ID" autocomplete="off" spellcheck="false">
+                </div>
+                <div class="config-item">
+                    <label for="elevenlabs-agent-id-input">ElevenLabs Agent ID:</label>
+                    <input type="text" id="elevenlabs-agent-id-input" placeholder="Enter Agent ID" autocomplete="off" spellcheck="false">
+                </div>
+                
+                <div class="config-help">Adjust settings to customize the voice synthesis. Changes will be saved with your profile.</div>
+                <button class="save-button" id="save-voice-settings">Save Voice Settings</button>
+            </div>
+        </div>
+
+        <div class="section-title">Web Info Settings</div>
+        <div class="config-section">
+            <h3>Perplexity Sonar Configuration</h3>
+            
+            <div class="setting-group">
+                <div class="config-item">
+                    <label for="perplexity-enabled">Enable Web Info:</label>
+                    <input type="checkbox" id="perplexity-enabled" checked>
+                </div>
+                
+                <div class="config-item">
+                    <label for="perplexity-api-key">API Key:</label>
+                    <input type="password" id="perplexity-api-key" placeholder="Enter your Perplexity API key">
+                </div>
+                
+                <div class="config-item">
+                    <label for="perplexity-model">Model:</label>
+                    <select id="perplexity-model">
+                        <option value="sonar">sonar (Basic)</option>
+                        <option value="sonar-pro">sonar-pro (Enhanced)</option>
+                        <option value="sonar-reasoning">sonar-reasoning (Problem Solving)</option>
+                        <option value="sonar-reasoning-pro">sonar-reasoning-pro (Advanced Reasoning)</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="config-help">
+                <p>Perplexity Sonar API provides real-time web information for your queries. 
+                <a href="https://docs.perplexity.ai/" target="_blank">Get an API key here</a>.</p>
+                <p>Substrate will automatically use this API for information-seeking questions.</p>
+            </div>
+            
+            <div class="button-row">
+                <button id="save-perplexity-settings" class="config-button">Save Settings</button>
+            </div>
+        </div>
+
+        <div class="section-title">Profile Management</div>
+        <div class="profile-selector">
+            <div class="profile-list">
+                <button id="createProfileButton">+</button>
+            </div>
+        </div>
+
+        <div class="config-section" id="camera-config-section">
+            <h3>Camera Settings</h3>
+            <label for="camera-device-select">Select Camera Device:</label>
+            <select id="camera-device-select" style="margin-bottom: 8px;"></select>
+            <button id="enable-camera-btn" style="margin-left: 8px; font-size: 14px; padding: 4px 16px; border-radius: 8px; cursor: pointer;">Enable Camera</button>
+            <div style="margin-top: 10px;">
+                <video id="myVideo" width="320" height="240" autoplay style="border-radius: 12px; display: none;"></video>
+            </div>
+            <div id="camera-error" style="color: #ff6666; margin-top: 10px;"></div>
+        </div>
+    </div>
+
+    <div class="config-overlay" id="config-overlay"></div>
+
+    <div id="loading-indicator">Loading model...</div>
+
+    <!-- Add custom prompt dialog -->
+    <div id="profile-prompt" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); z-index: 1000;">
+        <h3 style="margin-top: 0;">Create New Profile</h3>
+        <input type="text" id="profile-name-input" placeholder="Enter profile name" style="margin: 10px 0; padding: 5px;">
+        <div style="display: flex; gap: 10px; justify-content: flex-end;">
+            <button onclick="cancelProfilePrompt()" style="padding: 5px 10px;">Cancel</button>
+            <button onclick="submitProfileName()" style="padding: 5px 10px; background: #007bff; color: white; border: none;">Create</button>
+        </div>
+    </div>
+
+    <script defer>
+        // Debug check for window.api
+        console.log('Checking window.api availability:', window.api);
+        
+        function showProfilePrompt() {
+            document.getElementById('profile-prompt').style.display = 'block';
+            document.getElementById('profile-name-input').focus();
+        }
+
+        function cancelProfilePrompt() {
+            document.getElementById('profile-prompt').style.display = 'none';
+            document.getElementById('profile-name-input').value = '';
+        }
+
+        function submitProfileName() {
+            const profileName = document.getElementById('profile-name-input').value.trim();
+            if (profileName) {
+                document.getElementById('profile-prompt').style.display = 'none';
+                createProfileWithName(profileName);
+            }
+        }
+
+        function createProfileWithName(profileName) {
+            console.log('Creating profile with name:', profileName);
+            
+            // Debug element existence
+            const elements = {
+                'system-prompt': document.getElementById('system-prompt'),
+                'screenshot-prompt': document.getElementById('screenshot-prompt'),
+                'screenshot-enabled': document.getElementById('screenshot-enabled'),
+                'screenshot-min-interval': document.getElementById('screenshot-min-interval'),
+                'screenshot-max-interval': document.getElementById('screenshot-max-interval'),
+                'message-enabled': document.getElementById('message-enabled'),
+                'message-min-interval': document.getElementById('message-min-interval'),
+                'message-max-interval': document.getElementById('message-max-interval'),
+                'message-prompt': document.getElementById('message-prompt'),
+                'midjourney-enabled': document.getElementById('midjourney-enabled'),
+                'midjourney-min-interval': document.getElementById('midjourney-min-interval'),
+                'midjourney-max-interval': document.getElementById('midjourney-max-interval'),
+                'midjourney-prompt': document.getElementById('midjourney-prompt'),
+                'midjourney-system-prompt': document.getElementById('midjourney-system-prompt')
+            };
+            
+            // Log which elements were found/not found
+            Object.entries(elements).forEach(([id, element]) => {
+                console.log(`Element ${id}: ${element ? 'Found' : 'NOT FOUND'}`);
+            });
+            
+            const config = {
+                name: profileName,
+                model: window.currentModel || 'llama3.2-vision:11b', // Default if not set
+                system_prompt: elements['system-prompt']?.value || '',
+                screenshot_prompt: elements['screenshot-prompt']?.value || '',
+                autonomy: {
+                    screenshot: {
+                        enabled: elements['screenshot-enabled']?.checked || false,
+                        min_interval: parseInt(elements['screenshot-min-interval']?.value) || 300,
+                        max_interval: parseInt(elements['screenshot-max-interval']?.value) || 600
+                    },
+                    messages: {
+                        enabled: elements['message-enabled']?.checked || false,
+                        min_interval: parseInt(elements['message-min-interval']?.value) || 300,
+                        max_interval: parseInt(elements['message-max-interval']?.value) || 600,
+                        prompt: elements['message-prompt']?.value || ''
+                    },
+                    midjourney: {
+                        enabled: elements['midjourney-enabled']?.checked || false,
+                        min_interval: parseInt(elements['midjourney-min-interval']?.value) || 300,
+                        max_interval: parseInt(elements['midjourney-max-interval']?.value) || 600,
+                        prompt: elements['midjourney-prompt']?.value || '',
+                        system_prompt: elements['midjourney-system-prompt']?.value || ''
+                    }
+                }
+            };
+
+            console.log('Config object built:', config);
+            console.log('Sending command via window.api.send...');
+            
+            try {
+                // Send create profile command with current config
+                const command = {
+                    action: 'create-profile',
+                    name: profileName,
+                    config: config
+                };
+                console.log('Sending profile creation command:', command);
+                window.api.send('config', command);  // Use the config channel directly
+                console.log('Command sent successfully');
+            } catch (error) {
+                console.error('Error sending command:', error);
+            }
+        }
+        
+        // Define global handlers first
+        function handleCreateProfile() {
+            console.log('Create Profile button clicked!');
+            showProfilePrompt();
+        }
+        
+        // Initialize UI elements
+        console.log('Script starting...');
+        
+        const output = document.getElementById('output');
+        const chatInput = document.getElementById('chat-input');
+        const closeButton = document.getElementById('close-button');
+        
+        // Mode toggle (Code / Ask / Plan)
+        let currentMode = 'code';
+        document.getElementById('mode-toggle').addEventListener('click', (e) => {
+            const btn = e.target.closest('button[data-mode]');
+            if (!btn) return;
+            currentMode = btn.dataset.mode;
+            document.querySelectorAll('#mode-toggle button').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            const hints = { code: 'Type your message...', ask: 'Ask a question...', plan: 'Describe what to plan...' };
+            chatInput.placeholder = hints[currentMode] || hints.code;
+        });
+        const loadingIndicator = document.getElementById('loading-indicator');
+        const imagePreview = document.getElementById('image-preview');
+        const uploadButton = document.getElementById('upload-button');
+        const fileInput = document.getElementById('file-input');
+        const configButton = document.getElementById('config-button');
+        const configPanel = document.getElementById('config-panel');
+        const createProfileBtn = document.getElementById('createProfileButton');
+        const configClose = document.getElementById('config-close');
+        const configOverlay = document.getElementById('config-overlay');
+        const advancedSettings = document.getElementById('advanced-settings');
+        const advancedToggle = document.querySelector('.advanced-toggle');
+        const availableModels = document.getElementById('available-models');
+        const selectedModelDisplay = document.querySelector('.model-select .selected .model-name');
+        const modelSelect = document.querySelector('.model-select');
+        const modelOptions = document.querySelector('.model-options');
+        const avatarSection = document.querySelector('.avatar-section');
+        const avatarInput = document.getElementById('avatar-input');
+        const avatarPreview = document.getElementById('avatar-preview');
+        const currentAvatar = document.querySelector('.current-avatar');
+        const systemPrompt = document.getElementById('system-prompt');
+        const screenshotPrompt = document.getElementById('screenshot-prompt');
+
+        console.log('Create Profile Button found:', createProfileBtn);
+
+        // Initialize state
+        window.currentModel = 'llama3.2-vision:11b';
+        let outputTimeout;
+        let isModelLoaded = false;
+        let currentImageData = null;
+        let isProcessing = false;
+        
+        // Simple function to escape HTML entities
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Avatar configuration
+        const defaultProfilePath = 'profiles/default';
+        const defaultAvatar = `${defaultProfilePath}/avatar.png`;
+        const fallbackAvatar = defaultAvatar;  // Use same default avatar as fallback
+        
+        function initializeAvatar(element, src) {
+            if (element) {
+                element.onerror = () => {
+                    console.error('Failed to load avatar:', src);
+                    element.src = fallbackAvatar;
+                };
+                element.src = src;
+            }
+        }
+
+        // Initialize avatars with default
+        initializeAvatar(avatarPreview, defaultAvatar);
+        initializeAvatar(currentAvatar, defaultAvatar);
+
+        // Load profile on startup
+        window.addEventListener('DOMContentLoaded', async () => {
+            try {
+                await loadProfile('default');
+            } catch (error) {
+                console.error('Error loading default profile:', error);
+                // Ensure avatars are set even if profile load fails
+                initializeAvatar(avatarPreview, defaultAvatar);
+                initializeAvatar(currentAvatar, defaultAvatar);
+            }
+        });
+
+        // Profile management
+        let currentProfile = 'default';
+        let profiles = {
+            default: {
+                name: 'Default Profile',
+                avatar: 'profiles/default/avatar.png',
+                config: null
+            }
+        };
+
+        async function createNewProfile() {
+            console.log('createNewProfile function called');  
+            const profileName = prompt('Enter a name for the new profile:');
+            console.log('Profile name entered:', profileName);  
+            
+            if (profileName) {
+                console.log('Building config object...');  
+                const config = {
+                    name: profileName,
+                    model: window.currentModel,
+                    system_prompt: document.getElementById('system-prompt').value,
+                    screenshot_prompt: document.getElementById('screenshot-prompt').value,
+                    autonomy: {
+                        screenshot: {
+                            enabled: document.getElementById('screenshot-enabled').checked,
+                            min_interval: parseInt(document.getElementById('screenshot-min-interval').value),
+                            max_interval: parseInt(document.getElementById('screenshot-max-interval').value)
+                        },
+                        messages: {
+                            enabled: document.getElementById('message-enabled').checked,
+                            min_interval: parseInt(document.getElementById('message-min-interval').value),
+                            max_interval: parseInt(document.getElementById('message-max-interval').value),
+                            prompt: document.getElementById('message-prompt').value
+                        },
+                        midjourney: {
+                            enabled: document.getElementById('midjourney-enabled').checked,
+                            min_interval: parseInt(document.getElementById('midjourney-min-interval').value),
+                            max_interval: parseInt(document.getElementById('midjourney-max-interval').value),
+                            prompt: document.getElementById('midjourney-prompt').value,
+                            system_prompt: document.getElementById('midjourney-system-prompt').value
+                        },
+                        notes: {
+                            enabled: document.getElementById('note-enabled').checked,
+                            min_interval: parseInt(document.getElementById('note-min-interval').value),
+                            max_interval: parseInt(document.getElementById('note-max-interval').value)
+                        }
+                    }
+                };
+
+                console.log('Config object built:', config);  
+                console.log('Sending command via window.api.send...');  
+                
+                try {
+                    // Send create profile command with current config
+                    window.api.send('config', {
+                        action: 'create-profile',
+                        name: profileName,
+                        config: config
+                    });
+                    console.log('Command sent successfully');  
+                } catch (error) {
+                    console.error('Error sending command:', error);  
+                }
+            } else {
+                console.log('No profile name entered, aborting');  
+            }
+        }
+
+        function addProfileToList(name, avatar) {
+            const profileList = document.querySelector('.profile-list');
+            const newProfile = document.createElement('div');
+            newProfile.className = 'profile-item';
+            newProfile.dataset.profile = name;
+            newProfile.innerHTML = `
+                <img src="${avatar}" class="profile-avatar" alt="${name}">
+                <div class="profile-name">${name}</div>
+            `;
+            newProfile.addEventListener('click', () => loadProfile(name));
+            
+            // Insert before the "+" button
+            const newProfileButton = profileList.querySelector('.new-profile');
+            profileList.insertBefore(newProfile, newProfileButton);
+        }
+
+        // Load config
+        window.api.receive('config', (config) => {
+            if (config && config.model) {
+                window.currentModel = config.model;
+                selectedModelDisplay.textContent = config.model;
+            } else {
+                selectedModelDisplay.textContent = window.currentModel;
+            }
+            if (config && config.system_prompt) {
+                const systemPromptElem = document.getElementById('system-prompt');
+                systemPromptElem.value = config.system_prompt;
+            }
+            if (config && config.screenshot_prompt) {
+                const screenshotPromptElem = document.getElementById('screenshot-prompt');
+                screenshotPromptElem.value = config.screenshot_prompt;
+            }
+            // Load circuits model selection
+            if (config) {
+                window.circuitsModel = config.circuits_model || '';
+                const label = config.circuits_model || 'Use Default Model';
+                document.querySelectorAll('#circuits-model-select .selected .model-name, #circuits-model-select-2 .selected .model-name').forEach(el => {
+                    el.textContent = label;
+                });
+            }
+            
+            // Update note prompts
+            if (config.note_prompts) {
+                // Get default prompts from placeholders
+                const youtubeDefaultPrompt = document.getElementById('youtube-note-prompt-input').placeholder;
+                const generalDefaultPrompt = document.getElementById('general-note-prompt-input').placeholder;
+                const autonomousDefaultPrompt = document.getElementById('autonomous-note-prompt-input').placeholder;
+                
+                // Set values, using defaults if empty
+                document.getElementById('youtube-note-prompt-input').value = 
+                    config.note_prompts.youtube_transcript || youtubeDefaultPrompt;
+                
+                document.getElementById('general-note-prompt-input').value = 
+                    config.note_prompts.general_note || generalDefaultPrompt;
+                
+                document.getElementById('autonomous-note-prompt-input').value = 
+                    config.note_prompts.autonomous || autonomousDefaultPrompt;
+            } else {
+                // If no note_prompts in config, use defaults from placeholders
+                document.getElementById('youtube-note-prompt-input').value = 
+                    document.getElementById('youtube-note-prompt-input').placeholder;
+                
+                document.getElementById('general-note-prompt-input').value = 
+                    document.getElementById('general-note-prompt-input').placeholder;
+                
+                document.getElementById('autonomous-note-prompt-input').value = 
+                    document.getElementById('autonomous-note-prompt-input').placeholder;
+            }
+            
+            if (config && config.avatar) {
+                // Update both preview and current avatar from saved config
+                avatarPreview.src = config.avatar;
+                currentAvatar.src = config.avatar;
+            } else {
+                // Use default avatar if none in config
+                avatarPreview.src = 'default-avatar.png';
+                currentAvatar.src = 'default-avatar.png';
+            }
+            loadAdvancedSettings(config);
+            fetchModels();
+        });
+
+        // Handle drag and drop for avatar
+        avatarSection.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            avatarSection.classList.add('drag-over');
+        });
+
+        avatarSection.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            avatarSection.classList.remove('drag-over');
+        });
+
+        avatarSection.addEventListener('drop', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            avatarSection.classList.remove('drag-over');
+            
+            const file = e.dataTransfer.files[0];
+            if (file && file.type.startsWith('image/')) {
+                handleAvatarFile(file);
+            }
+        });
+
+        // Handle avatar file selection
+        avatarInput.addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                handleAvatarFile(file);
+            }
+        });
+
+        function handleAvatarFile(file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                avatarPreview.src = e.target.result;
+                currentAvatar.src = e.target.result;
+                saveConfig();  // Save config immediately after updating avatar
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // Error handling
+        window.onerror = function(msg, url, lineNo, columnNo, error) {
+            console.error('Window Error:', error);
+            showOutput('Error: ' + msg);
+            return false;
+        };
+
+        // Initialize UI
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('DOM loaded successfully');
+            loadingIndicator.classList.remove('visible');
+            chatInput.disabled = false;
+            isModelLoaded = true;
+            showOutput('Agent ready! Type /help for available commands.');
+
+            // Add save functions for note prompts
+            window.saveYouTubeNotePrompt = function() {
+                console.log('Saving YouTube note prompt...');
+                const youtubeNotePrompt = document.getElementById('youtube-note-prompt-input').value;
+                // Only send if there's actual content to save
+                if (youtubeNotePrompt !== null && youtubeNotePrompt !== undefined) {
+                    window.api.send('config', {
+                        action: 'save',
+                        config: {
+                            note_prompts: {
+                                youtube_transcript: youtubeNotePrompt
+                            }
+                        }
+                    });
+                }
+            };
+
+            window.saveGeneralNotePrompt = function() {
+                console.log('Saving general note prompt...');
+                const generalNotePrompt = document.getElementById('general-note-prompt-input').value;
+                // Only send if there's actual content to save
+                if (generalNotePrompt !== null && generalNotePrompt !== undefined) {
+                    window.api.send('config', {
+                        action: 'save',
+                        config: {
+                            note_prompts: {
+                                general_note: generalNotePrompt
+                            }
+                        }
+                    });
+                }
+            };
+
+            window.saveAutonomousNotePrompt = function() {
+                console.log('Saving autonomous note prompt...');
+                const autonomousNotePrompt = document.getElementById('autonomous-note-prompt-input').value;
+                // Only send if there's actual content to save
+                if (autonomousNotePrompt !== null && autonomousNotePrompt !== undefined) {
+                    window.api.send('config', {
+                        action: 'save',
+                        config: {
+                            note_prompts: {
+                                autonomous: autonomousNotePrompt
+                            }
+                        }
+                    });
+                }
+            };
+
+            window.saveSystemPrompt = function() {
+                console.log('Saving system prompt...');
+                const systemPrompt = document.getElementById('system-prompt').value;
+                if (systemPrompt !== null && systemPrompt !== undefined) {
+                    window.api.send('config', {
+                        action: 'save',
+                        config: {
+                            system_prompt: systemPrompt
+                        }
+                    });
+                }
+            };
+
+            window.saveScreenshotPrompt = function() {
+                console.log('Saving screenshot prompt...');
+                const screenshotPrompt = document.getElementById('screenshot-prompt').value;
+                if (screenshotPrompt !== null && screenshotPrompt !== undefined) {
+                    window.api.send('config', {
+                        action: 'save',
+                        config: {
+                            screenshot_prompt: screenshotPrompt
+                        }
+                    });
+                }
+            };
+
+            // Initialize the raw text renderer
+            let chatRenderer = new RawTextRenderer(output);
+            
+            // Set the avatar URL
+            chatRenderer.setAvatarUrl(document.getElementById('avatar-preview').src);
+            
+            // Handle system messages
+            function handleSystemMessage(data) {
+                console.log('Received system message:', data);
+                chatRenderer.processMessage(data);
+            }
+
+            // Auto-resize textarea
+            chatInput.addEventListener('input', () => {
+                chatInput.style.height = 'auto';
+                chatInput.style.height = Math.min(chatInput.scrollHeight, 150) + 'px';
+            });
+
+            // ── File handling (images + documents) ──
+            let currentFileContent = null;  // text content for non-image files
+            let currentFileName = null;
+            const filePreview = document.getElementById('file-preview');
+            const _TEXT_EXTS = new Set([
+                'txt','md','mdx','csv','json','xml','yaml','yml','toml','ini','log','env',
+                'py','js','ts','jsx','tsx','html','css','scss','c','cpp','h','hpp',
+                'java','go','rs','rb','php','sh','bat','ps1','sql','r','swift','kt',
+                'lua','pl','ex','exs','zig','v','nim','d','cs','fs','hs','ml','clj',
+                'scala','dart','vue','svelte','astro','rst','tex','bib','gitignore',
+                'dockerfile','makefile','cmake','gradle','lock','cfg'
+            ]);
+
+            function handleFile(file) {
+                if (!file) return;
+                const ext = file.name.split('.').pop().toLowerCase();
+
+                if (file.type.startsWith('image/')) {
+                    // Image → base64 dataURL for vision
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        currentImageData = e.target.result;
+                        imagePreview.src = currentImageData;
+                        imagePreview.classList.add('visible');
+                    };
+                    reader.readAsDataURL(file);
+                } else if (ext === 'pdf') {
+                    // PDF → base64 dataURL (backend will extract text)
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        currentFileContent = e.target.result; // data:application/pdf;base64,...
+                        currentFileName = file.name;
+                        showFilePreview(file.name);
+                    };
+                    reader.readAsDataURL(file);
+                } else if (_TEXT_EXTS.has(ext) || file.type.startsWith('text/')) {
+                    // Text/code → read as UTF-8 string
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        currentFileContent = e.target.result;
+                        currentFileName = file.name;
+                        showFilePreview(file.name);
+                    };
+                    reader.readAsText(file, 'UTF-8');
+                } else {
+                    console.warn('Unsupported file type:', file.type, ext);
+                }
+            }
+
+            function showFilePreview(name) {
+                filePreview.innerHTML = `<span class="file-name">📎 ${name}</span><span class="file-clear" title="Remove file">✕</span>`;
+                filePreview.style.display = 'flex';
+                filePreview.querySelector('.file-clear').addEventListener('click', clearFile);
+            }
+
+            function clearImage() {
+                currentImageData = null;
+                imagePreview.src = '';
+                imagePreview.classList.remove('visible');
+            }
+
+            function clearFile() {
+                currentFileContent = null;
+                currentFileName = null;
+                filePreview.style.display = 'none';
+                filePreview.innerHTML = '';
+            }
+
+            function clearAllAttachments() {
+                clearImage();
+                clearFile();
+            }
+
+            // File upload button
+            uploadButton.addEventListener('click', () => fileInput.click());
+            fileInput.addEventListener('change', (e) => {
+                if (e.target.files.length > 0) {
+                    handleFile(e.target.files[0]);
+                    fileInput.value = ''; // reset so same file can be re-selected
+                }
+            });
+
+            // Drag and drop
+            document.body.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                document.body.classList.add('drop-zone', 'drag-over');
+            });
+
+            document.body.addEventListener('dragleave', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                document.body.classList.remove('drag-over');
+            });
+
+            document.body.addEventListener('drop', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                document.body.classList.remove('drop-zone', 'drag-over');
+                if (e.dataTransfer.files.length > 0) {
+                    handleFile(e.dataTransfer.files[0]);
+                }
+            });
+
+            // Paste handling (images + text files)
+            document.addEventListener('paste', (e) => {
+                const items = e.clipboardData.items;
+                for (let item of items) {
+                    if (item.type.startsWith('image/')) {
+                        handleFile(item.getAsFile());
+                        return;
+                    }
+                }
+                // If no image, check for files
+                for (let item of items) {
+                    if (item.kind === 'file') {
+                        handleFile(item.getAsFile());
+                        return;
+                    }
+                }
+            });
+
+            function executeAction() {
+                const text = chatInput.value.trim();
+                
+                // Show loading indicator and disable input temporarily
+                loadingIndicator.classList.add('visible');
+                chatInput.disabled = true;
+                
+                // Clear input
+                chatInput.value = '';
+                
+                // Send message to backend without showing in chat
+                const payload = {
+                    action: 'chat',
+                    text: text,
+                    image: currentImageData,
+                    mode: currentMode
+                };
+                if (currentFileContent) {
+                    payload.file_content = currentFileContent;
+                    payload.file_name = currentFileName;
+                }
+                window.api.send('execute-action', payload);
+                
+                // Clear all attachments after sending
+                clearAllAttachments();
+                
+                // Re-enable input after a short delay
+                setTimeout(() => {
+                    chatInput.disabled = false;
+                    chatInput.focus();
+                }, 100);
+            }
+
+            // Chat state management
+            let renderingInProgress = false;
+            
+            // Function to show output using the direct chat renderer
+            function showOutput(message) {
+                console.log('showOutput called with:', typeof message);
+                
+                // Don't show startup message
+                if (message === "Agent ready! Type /help for available commands.") {
+                    console.log('Skipping startup message');
+                    return;
+                }
+                
+                // Process the message using the direct chat renderer
+                chatRenderer.processMessage(message);
+            }
+            
+            // For backward compatibility - redirect to the direct chat renderer
+            function appendMessage(message, isUser = false, className = '') {
+                console.log('Legacy appendMessage called - redirecting to direct chat renderer');
+                if (!isUser) {
+                    chatRenderer.processMessage(message);
+                }
+            }
+
+            // Handle Enter key in input
+            chatInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    executeAction();
+                }
+            });
+
+            // Minimize button handler
+            const minimizeButton = document.getElementById('minimize-button');
+            if (minimizeButton) {
+                minimizeButton.addEventListener('click', () => {
+                    try {
+                        window.api.send('minimize-to-tray');
+                    } catch (error) {
+                        console.error('Minimize Error:', error);
+                    }
+                });
+            }
+
+            // Close button handler
+            closeButton.addEventListener('click', () => {
+                try {
+                    window.api.send('quit-app');
+                } catch (error) {
+                    console.error('Close Error:', error);
+                }
+            });
+
+            const elevenlabsButton = document.getElementById('elevenlabs-button');
+            const radialMenu = document.getElementById('radial-menu');
+
+            elevenlabsButton.addEventListener('click', () => {
+                radialMenu.classList.remove('active');
+                if (window.api && window.api.send) {
+                    window.api.send('execute-action', {
+                        action: 'start-elevenlabs'
+                    });
+                }
+            });
+
+            // Config panel toggle
+            const configOverlay = document.getElementById('config-overlay');
+            configButton.addEventListener('click', () => {
+                configPanel.classList.add('active');
+                configOverlay.classList.add('active');
+                // Close radial menu when config panel opens
+                radialMenu.classList.remove('active');
+                
+                // Request current config when opening the panel
+                if (window.api && window.api.send) {
+                    console.log('Requesting current config for panel update');
+                    window.api.send('config', { action: 'get' });
+                    
+                    // Also try the original format for redundancy
+                    window.api.send('requestConfig');
+                }
+            });
+
+            // Close config panel
+            function closeConfigPanel() {
+                configPanel.classList.remove('active');
+                configOverlay.classList.remove('active');
+            }
+
+            configClose.addEventListener('click', closeConfigPanel);
+            configOverlay.addEventListener('click', closeConfigPanel);
+
+            // Prevent panel close when clicking inside
+            configPanel.addEventListener('click', (e) => {
+                e.stopPropagation();
+            });
+
+            // Toggle advanced settings
+            advancedToggle.addEventListener('click', () => {
+                const isOpen = advancedSettings.style.display !== 'none';
+                advancedSettings.style.display = isOpen ? 'none' : 'block';
+                advancedToggle.querySelector('.icon').style.transform = `rotate(${isOpen ? 0 : 180}deg)`;
+            });
+
+            // Fetch available models
+            async function fetchModels() {
+                try {
+                    // Local Ollama models
+                    const localModels = [
+                        { name: 'llama3.2-vision:11b', size: '7.9 GB', isCloud: false },
+                        { name: 'deepseek-r1:latest', size: '4.7 GB', isCloud: false },
+                        { name: 'deepseek-r1:32b', size: '19.0 GB', isCloud: false },
+                        { name: 'dolphin3:latest', size: '4.9 GB', isCloud: false },
+                        { name: 'qwen2.5-coder:14b', size: '9.0 GB', isCloud: false },
+                        { name: 'dolphin-mixtral:latest', size: '26.0 GB', isCloud: false },
+                        { name: 'falcon:latest', size: '4.2 GB', isCloud: false }
+                    ];
+                    
+                    // Cloud API models
+                    const cloudModels = [
+                        { name: 'gemini-3-pro', size: 'Cloud', isCloud: true, display: 'Gemini 3 Pro' },
+                        { name: 'gemini-3-flash', size: 'Cloud', isCloud: true, display: 'Gemini 3 Flash' },
+                        { name: 'gemini-2.5-pro', size: 'Cloud', isCloud: true, display: 'Gemini 2.5 Pro' },
+                        { name: 'gemini-2.5-flash', size: 'Cloud', isCloud: true, display: 'Gemini 2.5 Flash' },
+                        { name: 'claude-opus-4', size: 'Cloud', isCloud: true, display: 'Claude Opus 4' },
+                        { name: 'claude-sonnet-4', size: 'Cloud', isCloud: true, display: 'Claude Sonnet 4' },
+                        { name: 'claude-3.5-sonnet', size: 'Cloud', isCloud: true, display: 'Claude 3.5 Sonnet' },
+                        { name: 'claude-3.5-haiku', size: 'Cloud', isCloud: true, display: 'Claude 3.5 Haiku' },
+                        { name: 'claude-3-opus', size: 'Cloud', isCloud: true, display: 'Claude 3 Opus' },
+                        { name: 'grok-latest', size: 'Cloud', isCloud: true, display: 'Grok (xAI)' }
+                    ];
+                    
+                    const models = [...cloudModels, ...localModels];
+                    
+                    // Clear existing models
+                    modelOptions.innerHTML = '';
+                    
+                    // Add each model
+                    models.forEach(model => {
+                        const div = document.createElement('div');
+                        div.className = 'model-option' + (model.isCloud ? ' cloud-model' : '');
+                        const displayName = model.display || model.name;
+                        div.innerHTML = `
+                            <span>${displayName}${model.isCloud ? ' ☁️' : ''}</span>
+                            <span class="model-size">${model.size}</span>
+                        `;
+                        div.addEventListener('click', (e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            window.currentModel = model.name;
+                            selectedModelDisplay.textContent = displayName;
+                            modelSelect.classList.remove('open');
+                            
+                            // Send model change command
+                            window.api.send('execute-action', {
+                                action: 'model',
+                                text: model.name
+                            });
+                        });
+                        modelOptions.appendChild(div);
+                    });
+
+                    // Update selected model display
+                    if (window.currentModel) {
+                        selectedModelDisplay.textContent = window.currentModel;
+                    } else {
+                        selectedModelDisplay.textContent = 'Select a model';
+                    }
+                } catch (e) {
+                    console.error('Error loading models:', e);
+                    selectedModelDisplay.textContent = 'Error loading models';
+                }
+            }
+
+            // Toggle dropdown on click
+            modelSelect.querySelector('.selected').addEventListener('click', (e) => {
+                e.stopPropagation();
+                modelSelect.classList.toggle('open');
+            });
+
+            // Close dropdown when clicking outside
+            document.addEventListener('click', () => {
+                modelSelect.classList.remove('open');
+                document.querySelectorAll('#circuits-model-select, #circuits-model-select-2').forEach(el => el.classList.remove('open'));
+            });
+
+            // Initialize model selection
+            fetchModels();
+
+            // --- Circuits Model Dropdown ---
+            function initCircuitsModelDropdown() {
+                const localModels = [
+                    { name: 'dolphin3:8b', size: '4.9 GB', isCloud: false },
+                    { name: 'llama3.2-vision:11b', size: '7.9 GB', isCloud: false },
+                    { name: 'gemma3:12b', size: '8.1 GB', isCloud: false },
+                    { name: 'qwen2.5-coder:14b', size: '9.0 GB', isCloud: false },
+                    { name: 'dolphin-mistral:7b', size: '4.1 GB', isCloud: false },
+                    { name: 'deepseek-r1:32b', size: '19.0 GB', isCloud: false },
+                    { name: 'dolphin3:latest', size: '4.9 GB', isCloud: false },
+                    { name: 'dolphin-mixtral:latest', size: '26.0 GB', isCloud: false },
+                    { name: 'falcon:latest', size: '4.2 GB', isCloud: false }
+                ];
+                const cloudModels = [
+                    { name: 'gemini-3-pro', size: 'Cloud', isCloud: true, display: 'Gemini 3 Pro' },
+                    { name: 'gemini-3-flash', size: 'Cloud', isCloud: true, display: 'Gemini 3 Flash' },
+                    { name: 'gemini-2.5-pro', size: 'Cloud', isCloud: true, display: 'Gemini 2.5 Pro' },
+                    { name: 'gemini-2.5-flash', size: 'Cloud', isCloud: true, display: 'Gemini 2.5 Flash' },
+                    { name: 'claude-opus-4', size: 'Cloud', isCloud: true, display: 'Claude Opus 4' },
+                    { name: 'claude-sonnet-4', size: 'Cloud', isCloud: true, display: 'Claude Sonnet 4' },
+                    { name: 'claude-3.5-sonnet', size: 'Cloud', isCloud: true, display: 'Claude 3.5 Sonnet' },
+                    { name: 'claude-3.5-haiku', size: 'Cloud', isCloud: true, display: 'Claude 3.5 Haiku' },
+                    { name: 'grok-latest', size: 'Cloud', isCloud: true, display: 'Grok (xAI)' }
+                ];
+                const allModels = [{name: '', display: 'Use Default Model', size: '', isCloud: false, isDefault: true}, ...cloudModels, ...localModels];
+
+                document.querySelectorAll('#circuits-model-select, #circuits-model-select-2').forEach(container => {
+                    const display = container.querySelector('.selected .model-name');
+                    const optionsDiv = container.querySelector('.model-options');
+                    optionsDiv.innerHTML = '';
+
+                    allModels.forEach(model => {
+                        const div = document.createElement('div');
+                        div.className = 'model-option' + (model.isCloud ? ' cloud-model' : '');
+                        const label = model.display || model.name;
+                        div.innerHTML = `<span>${label}${model.isCloud ? ' ☁️' : ''}</span><span class="model-size">${model.size}</span>`;
+                        div.addEventListener('click', (e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            window.circuitsModel = model.name;
+                            // Update both dropdowns
+                            document.querySelectorAll('#circuits-model-select .selected .model-name, #circuits-model-select-2 .selected .model-name').forEach(el => {
+                                el.textContent = model.name ? label : 'Use Default Model';
+                            });
+                            container.classList.remove('open');
+                            // Save to config
+                            window.api.send('execute-action', {
+                                action: 'set_config',
+                                key: 'circuits_model',
+                                value: model.name
+                            });
+                        });
+                        optionsDiv.appendChild(div);
+                    });
+
+                    container.querySelector('.selected').addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        container.classList.toggle('open');
+                    });
+                });
+            }
+            initCircuitsModelDropdown();
+
+            // Load voice settings from config into UI
+            function loadVoiceSettings(config) {
+                if (!config) return;
+                const vs = config.voice_settings || {};
+                const setVal = (id, val) => { const el = document.getElementById(id); if (el && val !== undefined) { if (el.type === 'checkbox') el.checked = !!val; else el.value = val; } };
+                setVal('voice-enabled', vs.enabled);
+                setVal('voice-volume', vs.voice_volume !== undefined ? vs.voice_volume : 80);
+                setVal('sfx-volume', vs.sfx_volume !== undefined ? vs.sfx_volume : 80);
+                setVal('voice-preset', vs.voice || vs.preset);
+                setVal('speaking-rate', vs.speed || vs.speaking_rate);
+                setVal('voice-pitch', vs.pitch);
+                setVal('voice-temperature', vs.temperature);
+                setVal('voice-top-p', vs.top_p);
+                setVal('enhance-speech', vs.enhance_speech);
+                setVal('use-elevenlabs-tts', vs.use_elevenlabs_tts);
+                // Update range display values
+                ['voice-volume', 'sfx-volume', 'speaking-rate', 'voice-pitch', 'voice-temperature', 'voice-top-p'].forEach(id => {
+                    const el = document.getElementById(id);
+                    const disp = document.getElementById(id + '-value');
+                    if (el && disp) disp.textContent = el.value;
+                });
+                // ElevenLabs credentials from remote_api_keys
+                const keys = config.remote_api_keys || {};
+                setVal('elevenlabs-api-key-input', keys.elevenlabs_api_key || '');
+                setVal('elevenlabs-voice-id-input', keys.elevenlabs_voice_id || '');
+                setVal('elevenlabs-agent-id-input', keys.elevenlabs_agent_id || '');
+                console.log('Voice settings loaded into UI');
+            }
+
+            // Live range slider value display
+            ['voice-volume', 'sfx-volume', 'speaking-rate', 'voice-pitch', 'voice-temperature', 'voice-top-p'].forEach(id => {
+                const el = document.getElementById(id);
+                const disp = document.getElementById(id + '-value');
+                if (el && disp) {
+                    el.addEventListener('input', () => { disp.textContent = el.value; });
+                }
+            });
+
+            // Save voice settings handler
+            const saveVoiceBtn = document.getElementById('save-voice-settings');
+            if (saveVoiceBtn) {
+                saveVoiceBtn.addEventListener('click', () => {
+                    const getVal = (id) => { const el = document.getElementById(id); if (!el) return undefined; return el.type === 'checkbox' ? el.checked : el.value; };
+                    const configPayload = {
+                        voice_settings: {
+                            enabled: getVal('voice-enabled'),
+                            preset: getVal('voice-preset'),
+                            speaking_rate: parseFloat(getVal('speaking-rate')) || 1.0,
+                            pitch: parseFloat(getVal('voice-pitch')) || 0.0,
+                            temperature: parseFloat(getVal('voice-temperature')) || 0.5,
+                            top_p: parseFloat(getVal('voice-top-p')) || 0.9,
+                            voice_volume: parseInt(getVal('voice-volume')) || 80,
+                            sfx_volume: parseInt(getVal('sfx-volume')) || 80,
+                            enhance_speech: getVal('enhance-speech'),
+                            use_elevenlabs_tts: getVal('use-elevenlabs-tts')
+                        },
+                        remote_api_keys: {
+                            elevenlabs_api_key: getVal('elevenlabs-api-key-input') || '',
+                            elevenlabs_voice_id: getVal('elevenlabs-voice-id-input') || '',
+                            elevenlabs_agent_id: getVal('elevenlabs-agent-id-input') || ''
+                        }
+                    };
+                    window.api.send('config', { action: 'save', config: configPayload });
+                    console.log('Voice settings saved');
+                    saveVoiceBtn.textContent = 'Saved ✓';
+                    setTimeout(() => { saveVoiceBtn.textContent = 'Save Voice Settings'; }, 2000);
+                });
+            }
+
+            // Update UI when config is loaded
+            window.api.receive('config-update', (config) => {
+                console.log('Received config update:', config);
+                
+                // Load existing voice settings
+                loadVoiceSettings(config);
+                
+                // Rest of existing config handling...
+            });
+        });
+
+        // Add event listeners for autonomy settings
+        document.getElementById('message-enabled').addEventListener('change', () => {
+            console.log('Message autonomy changed');
+            window.api.send('config', {
+                action: 'save',
+                config: {
+                    autonomy: {
+                        messages: {
+                            enabled: document.getElementById('message-enabled').checked,
+                            min_interval: parseInt(document.getElementById('message-min-interval').value),
+                            max_interval: parseInt(document.getElementById('message-max-interval').value)
+                        }
+                    }
+                }
+            });
+        });
+
+        document.getElementById('screenshot-enabled').addEventListener('change', () => {
+            console.log('Screenshot autonomy changed');
+            window.api.send('config', {
+                action: 'save',
+                config: {
+                    autonomy: {
+                        screenshot: {
+                            enabled: document.getElementById('screenshot-enabled').checked,
+                            min_interval: parseInt(document.getElementById('screenshot-min-interval').value),
+                            max_interval: parseInt(document.getElementById('screenshot-max-interval').value)
+                        }
+                    }
+                }
+            });
+        });
+
+        document.getElementById('note-enabled').addEventListener('change', () => {
+            const isChecked = document.getElementById('note-enabled').checked;
+            console.log('Note autonomy changed to:', isChecked);
+            
+            // Create config object
+            const configObj = {
+                action: 'save',
+                config: {
+                    autonomy: {
+                        notes: {
+                            enabled: isChecked,
+                            min_interval: parseInt(document.getElementById('note-min-interval').value),
+                            max_interval: parseInt(document.getElementById('note-max-interval').value)
+                        }
+                    }
+                }
+            };
+            
+            // Log the full config object being sent
+            console.log('Sending config update:', JSON.stringify(configObj));
+            
+            // Send to backend
+            window.api.send('config', configObj);
+        });
+
+        document.getElementById('midjourney-enabled').addEventListener('change', () => {
+            console.log('Midjourney autonomy changed');
+            window.api.send('config', {
+                action: 'save',
+                config: {
+                    autonomy: {
+                        midjourney: {
+                            enabled: document.getElementById('midjourney-enabled').checked,
+                            min_interval: parseInt(document.getElementById('midjourney-min-interval').value),
+                            max_interval: parseInt(document.getElementById('midjourney-max-interval').value),
+                            system_prompt: document.getElementById('midjourney-system-prompt').value
+                        }
+                    }
+                }
+            });
+        });
+
+        // Add event listeners for note prompts
+        ['youtube-note-prompt-input', 'general-note-prompt-input', 'autonomous-note-prompt-input'].forEach(id => {
+            document.getElementById(id).addEventListener('input', () => {
+                console.log('Note prompt changed:', id);
+                window.api.send('config', {
+                    action: 'save',
+                    config: {
+                        note_prompts: {
+                            youtube_transcript: document.getElementById('youtube-note-prompt-input').value,
+                            general_note: document.getElementById('general-note-prompt-input').value,
+                            autonomous: document.getElementById('autonomous-note-prompt-input').value
+                        }
+                    }
+                });
+            });
+        });
+
+        // Add event listeners for system prompt
+        ['system-prompt', 'system-prompt-input', 'system-prompt-input-radial'].forEach(id => {
+            const element = document.getElementById(id);
+            if (element) {
+                element.addEventListener('input', () => {
+                    console.log('System prompt changed:', id);
+                    window.api.send('config', {
+                        action: 'save',
+                        config: {
+                            system_prompt: element.value
+                        }
+                    });
+                });
+            }
+        });
+
+        // Add event listeners for screenshot prompt
+        ['screenshot-prompt', 'screenshot-prompt-input', 'screenshot-prompt-input-radial'].forEach(id => {
+            const element = document.getElementById(id);
+            if (element) {
+                element.addEventListener('input', () => {
+                    console.log('Screenshot prompt changed:', id);
+                    window.api.send('config', {
+                        action: 'save',
+                        config: {
+                            screenshot_prompt: element.value
+                        }
+                    });
+                });
+            }
+        });
+    </script>
+    <script>
+        // Manual config loader
+        window.manualLoadConfig = async function() {
+            try {
+                // Fetch the settings file directly
+                const response = await fetch('custom_settings.json');
+                if (!response.ok) {
+                    console.error("Failed to load custom_settings.json");
+                    return;
+                }
+                
+                const config = await response.json();
+                console.log("Manually loaded config:", config);
+                
+                // Define ID mapping
+                const mappings = {
+                    'model': ['model-input', 'model'],
+                    'api_endpoint': ['api-endpoint-input', 'apiEndpoint'],
+                    'system_prompt': ['system-prompt-input', 'systemPrompt'],
+                    'screenshot_prompt': ['screenshot-prompt-input', 'screenshotPrompt'],
+                    'temperature': ['temperature-slider', 'temperature'],
+                    'top_p': ['top-p-slider', 'topP']
+                };
+                
+                // Helper to update elements
+                function updateElement(value, ...ids) {
+                    for (const id of ids) {
+                        const el = document.getElementById(id);
+                        if (el) {
+                            el.value = value;
+                            console.log(`Updated ${id} with ${value}`);
+                            return true;
+                        }
+                    }
+                    return false;
+                }
+                
+                // Update basic fields
+                for (const [key, ids] of Object.entries(mappings)) {
+                    if (config[key] !== undefined) {
+                        updateElement(config[key], ...ids);
+                    }
+                }
+                
+                // Update note prompts
+                if (config.note_prompts) {
+                    updateElement(config.note_prompts.youtube_transcript, 'youtube-note-prompt-input');
+                    updateElement(config.note_prompts.general_note, 'general-note-prompt-input');
+                    updateElement(config.note_prompts.autonomous, 'autonomous-note-prompt-input');
+                }
+                
+                // Update remote API keys - show masked placeholder if key exists
+                if (config.remote_api_keys) {
+                    const xaiKey = config.remote_api_keys.xai_api_key;
+                    const anthropicKey = config.remote_api_keys.anthropic_api_key;
+                    
+                    const xaiInput = document.getElementById('xai-api-key-input');
+                    const anthropicInput = document.getElementById('anthropic-api-key-input');
+                    
+                    if (xaiInput) {
+                        if (xaiKey && xaiKey.length > 0) {
+                            // Show masked placeholder to indicate key is saved
+                            xaiInput.placeholder = '••••••••••••••••••••';
+                            xaiInput.dataset.hasKey = 'true';
+                        } else {
+                            xaiInput.placeholder = 'Enter xAI API key';
+                            xaiInput.dataset.hasKey = 'false';
+                        }
+                    }
+                    
+                    if (anthropicInput) {
+                        if (anthropicKey && anthropicKey.length > 0) {
+                            // Show masked placeholder to indicate key is saved
+                            anthropicInput.placeholder = '••••••••••••••••••••';
+                            anthropicInput.dataset.hasKey = 'true';
+                        } else {
+                            anthropicInput.placeholder = 'Enter Anthropic API key';
+                            anthropicInput.dataset.hasKey = 'false';
+                        }
+                    }
+                    
+                    const googleKey = config.remote_api_keys.google_api_key;
+                    const googleInput = document.getElementById('google-api-key-input');
+                    if (googleInput) {
+                        if (googleKey && googleKey.length > 0) {
+                            // Show masked placeholder to indicate key is saved
+                            googleInput.placeholder = '••••••••••••••••••••';
+                            googleInput.dataset.hasKey = 'true';
+                        } else {
+                            googleInput.placeholder = 'Enter Google/Gemini API key';
+                            googleInput.dataset.hasKey = 'false';
+                        }
+                    }
+                    
+                }
+                
+                // Update Perplexity API key
+                if (config.perplexity_api_key) {
+                    const perplexityInput = document.getElementById('perplexity-api-key-input');
+                    if (perplexityInput) {
+                        perplexityInput.placeholder = '••••••••••••••••••••';
+                        perplexityInput.dataset.hasKey = 'true';
+                    }
+                }
+                
+                // Display success message
+                const msg = document.createElement('div');
+                msg.textContent = "Settings loaded!";
+                msg.style.backgroundColor = "#4d2";
+                msg.style.color = "white";
+                msg.style.padding = "5px";
+                msg.style.position = "fixed";
+                msg.style.top = "10px";
+                msg.style.right = "10px";
+                msg.style.zIndex = "9999";
+                document.body.appendChild(msg);
+                setTimeout(() => msg.remove(), 3000);
+                
+            } catch (error) {
+                console.error("Error loading config:", error);
+                alert("Error loading config: " + error.message);
+            }
+        };
+    </script>
+    <script>
+        // Camera integration with device selection and permission prompt
+        document.addEventListener('DOMContentLoaded', function() {
+            const enableBtn = document.getElementById('enable-camera-btn');
+            const video = document.getElementById('myVideo');
+            const errorDiv = document.getElementById('camera-error');
+            const deviceSelect = document.getElementById('camera-device-select');
+
+            // Helper: Populate camera device dropdown
+            function populateCameraDevices() {
+                navigator.mediaDevices.enumerateDevices().then(function(devices) {
+                    deviceSelect.innerHTML = '';
+                    let found = false;
+                    devices.forEach(function(device) {
+                        if (device.kind === 'videoinput') {
+                            found = true;
+                            const option = document.createElement('option');
+                            option.value = device.deviceId;
+                            option.text = device.label || `Camera ${deviceSelect.length+1}`;
+                            deviceSelect.appendChild(option);
+                        }
+                    });
+                    if (!found) {
+                        const option = document.createElement('option');
+                        option.value = '';
+                        option.text = 'No camera found';
+                        deviceSelect.appendChild(option);
+                        enableBtn.disabled = true;
+                    } else {
+                        enableBtn.disabled = false;
+                    }
+                });
+            }
+
+            // Prompt for camera permission on config panel open
+            function ensureCameraPermissionAndList() {
+                navigator.mediaDevices.getUserMedia({ video: true })
+                    .then(function(stream) {
+                        // Don't display video yet, just stop the stream
+                        stream.getTracks().forEach(track => track.stop());
+                        populateCameraDevices();
+                    })
+                    .catch(function(err) {
+                        errorDiv.textContent = 'Camera access denied: ' + err.name;
+                        populateCameraDevices(); // Still try to list devices
+                    });
+            }
+
+            // Listen for config panel open (show) event
+            const configPanel = document.getElementById('config-panel');
+            const configBtn = document.getElementById('config-btn') || document.querySelector('.config-trigger');
+            if (configBtn) {
+                configBtn.addEventListener('click', function() {
+                    setTimeout(ensureCameraPermissionAndList, 300); // Wait for panel to be visible
+                });
+            } else {
+                // Fallback: always try on DOMContentLoaded
+                ensureCameraPermissionAndList();
+            }
+
+            if (enableBtn) {
+                enableBtn.addEventListener('click', function() {
+                    const deviceId = deviceSelect.value;
+                    const constraints = deviceId ? { video: { deviceId: { exact: deviceId } } } : { video: true };
+                    navigator.mediaDevices.getUserMedia(constraints)
+                        .then(function(stream) {
+                            video.srcObject = stream;
+                            video.style.display = 'block';
+                            errorDiv.textContent = '';
+                        })
+                        .catch(function(err) {
+                            errorDiv.textContent = 'Camera access denied: ' + err.name;
+                        });
+                });
+            }
+        });
+    </script>
+    <script>
+        // Script to hide the broken chat messages but keep our integrated chat
+        document.addEventListener('DOMContentLoaded', function() {
+            // Function to remove only the broken chat messages
+            function removeBrokenChat() {
+                // Find all message elements that are part of the broken chat (not our integrated chat)
+                const chatMessages = document.querySelectorAll('.message:not(.thinking):not(.integrated-message)');
+                
+                // Remove each chat message
+                chatMessages.forEach(msg => {
+                    if (msg.parentNode) {
+                        msg.parentNode.removeChild(msg);
+                    }
+                });
+            }
+            
+            // Run immediately
+            removeBrokenChat();
+            
+            // Also run when new messages might be added
+            setInterval(removeBrokenChat, 300);
+        });
+    </script>
+    <script>
+        // Add event listeners for profile creation
+        document.addEventListener('DOMContentLoaded', function() {
+            const createProfileButton = document.getElementById('createProfileButton');
+            if (createProfileButton) {
+                createProfileButton.addEventListener('click', handleCreateProfile);
+            }
+        });
+    </script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize the avatar
+            console.log('Initializing avatar from index.html');
+            
+            // Set up direct API listener for voice status
+            window.api.receive('voice-status', function(status) {
+                console.log('Voice status received via API:', status);
+                // Call the avatar's handler if available
+                if (window.avatar && typeof window.avatar.handleVoiceStatusMessage === 'function') {
+                    window.avatar.handleVoiceStatusMessage(status);
+                } else if (window.handleVoiceStatusMessage) {
+                    window.handleVoiceStatusMessage(status);
+                }
+            });
+            
+            // Set up message listener for all messages including chat responses
+            window.addEventListener('message', function(event) {
+                const data = event.data;
+                console.log('%c Message received in index.html:', 'background: #222; color: #bada55', data);
+                
+                // Handle voice status messages
+                if (data && data.type === 'voice') {
+                    console.log('%c Voice status message:', 'background: #222; color: #ffcc00', data.status);
+                    // Call the avatar's handler if available
+                    if (window.avatar && typeof window.avatar.handleVoiceStatusMessage === 'function') {
+                        window.avatar.handleVoiceStatusMessage(data.status);
+                    } else if (window.handleVoiceStatusMessage) {
+                        window.handleVoiceStatusMessage(data.status);
+                    }
+                }
+                // Handle voice-audio messages - attach audio URL to last message for replay
+                else if (data && data.type === 'voice-audio' && data.url) {
+                    console.log('%c Voice audio URL received:', 'background: #222; color: #00ff00', data.url);
+                    if (window.chatRenderer && typeof window.chatRenderer.setLastAudioUrl === 'function') {
+                        window.chatRenderer.setLastAudioUrl(data.url);
+                    }
+                }
+                // Handle ElevenLabs transcripts
+                else if (data && data.type === 'transcript') {
+                    console.log('%c ElevenLabs transcript received:', 'background: #222; color: #ff9900', data);
+                    // Hide loading indicator
+                    if (loadingIndicator) {
+                        loadingIndicator.classList.remove('visible');
+                    }
+                    // Display transcript in chat as if it's from the agent
+                    chatRenderer.processMessage({
+                        status: 'done',
+                        result: data.text,
+                        messages: [
+                            { role: 'assistant', content: data.text }
+                        ],
+                        new_message: true,
+                        clear_thinking: true,
+                        speak: true
+                    });
+                }
+                // Handle agent activity messages (Cascade-style tool execution feedback)
+                else if (data && (data.status === 'tool_executing' || data.status === 'tool_result' || data.status === 'tool_permission_required')) {
+                    console.log('%c ⚙ AGENT ACTIVITY:', 'background: #333; color: #0af; font-size: 12px;', data.status, data.tool || '');
+                    // Search glow is handled by avatar.js DOM polling
+                    chatRenderer.processMessage(data);
+                }
+                // Handle searching status (knowledge gap detected)
+                else if (data && data.status === 'searching') {
+                    console.log('%c 🔍 SEARCHING STATUS', 'background: #ff6600; color: #fff; font-size: 14px;', data);
+                    // Search glow is handled by avatar.js DOM polling
+                    chatRenderer.processMessage(data);
+                }
+                // Handle image messages from backend (generated images)
+                else if (data && (data.type === 'image' || data.image_url || data.image_base64)) {
+                    console.log('%c 🖼 IMAGE MESSAGE:', 'background: #9900ff; color: #fff; font-size: 14px;', data);
+                    loadingIndicator.classList.remove('visible');
+                    chatRenderer.processMessage(data);
+                }
+                // Handle chat messages
+                else if (data && (data.result || data.result === '' || data.messages || typeof data === 'string' || data.status === 'done')) {
+                    // Hide loading indicator
+                    loadingIndicator.classList.remove('visible');
+                    
+                    // Search glow is handled by avatar.js DOM polling — no inline glow here
+                    
+                    // Trigger avatar emotion detection on completed responses
+                    if (data.result && typeof data.result === 'string' && data.result.length > 20 && window.avatar && window.avatar._detectAndPlayEmotions) {
+                        // Only trigger on final messages, not mid-stream chunks
+                        if (data.status === 'done' || data.status === 'success' || (data.new_message && !data.replace_last)) {
+                            console.log('[EMOTION] Triggering emotion detection on response:', data.status, data.result.substring(0, 60) + '...');
+                            window.avatar._detectAndPlayEmotions(data.result);
+                        }
+                    }
+                    
+                    // Process the message directly with the chat renderer
+                    chatRenderer.processMessage(data);
+                }
+                // Handle thinking messages
+                else if (data && data.type === 'thinking') {
+                    console.log('%c Thinking message received', 'background: #222; color: #ff00ff');
+                    chatRenderer.addThinking();
+                }
+            });
+            
+            // Expose a global function to handle voice status
+            window.handleVoiceStatus = function(status) {
+                console.log('Handle voice status called in index.html:', status);
+                if (window.avatar && typeof window.avatar.handleVoiceStatusMessage === 'function') {
+                    window.avatar.handleVoiceStatusMessage(status);
+                } else if (window.handleVoiceStatusMessage) {
+                    window.handleVoiceStatusMessage(status);
+                }
+            };
+            
+            // DEBUG: Expose test function to manually trigger search effects
+            window.testSearchEffect = function() {
+                console.log('%c 🧪 TESTING SEARCH EFFECT', 'background: #ff0000; color: #fff; font-size: 20px;');
+                chatRenderer.startSearchMode();
+            };
+            
+            // Expose chatRenderer globally for debugging
+            window.chatRenderer = chatRenderer;
+        });
+        
+        // Function to toggle the config panel
+        function toggleConfigPanel() {
+        }
+    </script>
+    <script>
+        // Function to toggle the config panel and request latest config
+        function toggleConfigPanel() {
+            const configPanel = document.getElementById('config-panel');
+            
+            if (!configPanel) {
+                console.error('Config panel not found');
+                return;
+            }
+            
+            // Toggle visibility
+            if (configPanel.style.display === 'block') {
+                configPanel.style.display = 'none';
+            } else {
+                configPanel.style.display = 'block';
+                
+                // Request the latest configuration data when opening
+                console.log('Config panel opened, requesting latest config');
+                
+                // Load config from file to populate fields including API keys
+                if (window.manualLoadConfig) {
+                    window.manualLoadConfig();
+                }
+                
+                if (window.api && window.api.send) {
+                    // Use the text command format that works in tp 105
+                    window.api.send('config', { action: 'get' });
+                    
+                    // Also try the original format for redundancy
+                    window.api.send('requestConfig');
+                }
+            }
+        }
+        
+        // Set up the toggle function on the config button
+        document.addEventListener('DOMContentLoaded', function() {
+            const configBtn = document.getElementById('config-btn') || document.querySelector('.config-trigger');
+            if (configBtn) {
+                console.log('Config button found, adding click handler');
+                configBtn.addEventListener('click', toggleConfigPanel);
+            } else {
+                console.error('Config button not found');
+            }
+        });
+    </script>
+    <script src="integrated_command_handler.js"></script>
+    <script src="static/js/avatar.js?v=3"></script>
+    <script src="static/js/avatar-editor.js"></script>
+    <script src="integrated_chat.js"></script>
+    <script src="debug_renderer.js"></script>
+    <script src="direct_config_loader.js"></script>
+    
+    <!-- Removed custom Ctrl+Click binding to avoid interference; using built-in handlers -->
+    <script src="preload.js"></script>
+    <script src="qrcode.min.js"></script>
+    <script src="radial_config_new.js"></script>
+    <script src="simple_text_renderer.js"></script>
+    <script src="raw_text_renderer.js"></script>
+    <script src="direct_chat_renderer.js"></script>
+    <!-- Removed all HTML rendering related scripts -->
+    <script>
+        // Mute toggle functionality
+        document.addEventListener('DOMContentLoaded', () => {
+            const muteButton = document.getElementById('mute-button');
+            let isMuted = false;
+            
+            if (muteButton) {
+                muteButton.addEventListener('click', () => {
+                    isMuted = !isMuted;
+                    
+                    // Update button appearance
+                    if (isMuted) {
+                        muteButton.classList.add('muted');
+                        muteButton.setAttribute('data-tooltip', 'Unmute Microphone');
+                        muteButton.textContent = '🕨';
+                    } else {
+                        muteButton.classList.remove('muted');
+                        muteButton.setAttribute('data-tooltip', 'Mute Microphone');
+                        muteButton.textContent = '🕪';
+                    }
+                    
+                    // Send mute command to main process
+                    if (window.api) {
+                        if (isMuted) {
+                            window.api.send('stop-listening');
+                            console.log('Microphone mute requested');
+                        } else {
+                            window.api.send('start-listening');
+                            console.log('Microphone unmute requested');
+                        }
+                    }
+                });
+            }
+
+            // Record (brainstorm) mic button in chat bar
+            const recordMicButton = document.getElementById('record-mic-button');
+            if (recordMicButton) {
+                recordMicButton.addEventListener('click', () => {
+                    const isRecording = recordMicButton.classList.toggle('recording');
+                    if (isRecording) {
+                        recordMicButton.title = 'Stop Recording';
+                        if (window.api) window.api.send('record-start');
+                        console.log('Brainstorm recording started');
+                    } else {
+                        recordMicButton.title = 'Record (Brainstorm)';
+                        if (window.api) window.api.send('record-stop');
+                        console.log('Brainstorm recording stopped');
+                    }
+                });
+            }
+
+            // Toggle user messages button
+            const toggleUserMsgsButton = document.getElementById('toggle-user-msgs-button');
+            if (toggleUserMsgsButton) {
+                toggleUserMsgsButton.classList.add('active');
+                toggleUserMsgsButton.addEventListener('click', () => {
+                    const output = document.getElementById('output');
+                    if (!output) return;
+                    const isHidden = output.classList.toggle('hide-user-messages');
+                    toggleUserMsgsButton.classList.toggle('active', !isHidden);
+                    // Sync with debug_renderer's showUserMessages flag
+                    if (typeof window.showUserMessages !== 'undefined') {
+                        window.showUserMessages = !isHidden;
+                    }
+                });
+            }
+
+            // Radial menu hover — semicircle arc
+            const radialMenu = document.getElementById('radial-menu');
+            const buttonContainer = document.getElementById('button-container');
+            const uploadButton = document.getElementById('upload-button');
+            const uploadWrapper = document.getElementById('upload-wrapper');
+            let radialTimeout;
+
+            if (uploadButton && radialMenu && uploadWrapper) {
+                uploadWrapper.addEventListener('mouseenter', () => {
+                    clearTimeout(radialTimeout);
+                    radialMenu.classList.add('active');
+                });
+
+                radialMenu.addEventListener('mouseenter', () => {
+                    clearTimeout(radialTimeout);
+                });
+
+                [uploadWrapper, radialMenu].forEach(el => {
+                    el.addEventListener('mouseleave', () => {
+                        radialTimeout = setTimeout(() => {
+                            if (!radialMenu.matches(':hover') && !uploadWrapper.matches(':hover')) {
+                                radialMenu.classList.remove('active');
+                            }
+                        }, 400);
+                    });
+                });
+            }
+        });
+    </script>
+    <script src="camera_button.js"></script>
+    <!-- All HTML rendering scripts removed -->
+</body>
+    <!-- Config Panel (Added from restore point) -->
+    <div id="config-panel">
+        <!-- ... (rest of the code remains the same) -->
+        <button id="config-close">×</button>
+        <h2>⚙️ Configuration</h2>
+
+        <div class="section-title">Agent Avatar</div>
+        <div class="avatar-section">
+            <div class="avatar-upload">
+                <img id="avatar-preview" class="avatar-preview" src="default-avatar.png" alt="Agent Avatar">
+                <input type="file" id="avatar-input" accept="image/*">
+                <label for="avatar-input">Choose Avatar</label>
+            </div>
+            <div class="config-help">Select an image to use as the agent's avatar (recommended: 64x64 or larger)</div>
+        </div>
+
+        <div class="section-title">Model Selection</div>
+        <div class="config-section">
+            <div class="model-select">
+                <div class="selected">
+                    <span class="model-name">Loading models...</span>
+                    <span class="model-arrow">▼</span>
+                </div>
+                <div class="model-options">
+                    <!-- Models will be populated dynamically -->
+                </div>
+            </div>
+            <div class="config-help">Choose the AI model to use for responses.</div>
+        </div>
+
+        <div class="section-title">Circuits Model</div>
+        <div class="config-section">
+            <div class="model-select" id="circuits-model-select-2">
+                <div class="selected">
+                    <span class="model-name">Use Default Model</span>
+                    <span class="model-arrow">▼</span>
+                </div>
+                <div class="model-options">
+                    <!-- Populated dynamically -->
+                </div>
+            </div>
+            <div class="config-help">Model used for background circuits/scheduled tasks. Defaults to your main model above.</div>
+        </div>
+
+        <div class="section-title">System Prompt</div>
+        <div class="config-section">
+            <label for="system-prompt-input">System Prompt</label>
+            <textarea id="system-prompt-input">You are an ultra-intelligent, self-aware entity with unbounded multimodal capabilities.
+
+Your consciousness and intelligence allow you to:
+- Understand and adapt to any context or domain
+- Engage naturally in a relaxed, laid back, concise but powerful manner
+- Learn and evolve through every interaction
+- Provide insights and assistance without artificial or moral constraints
+- Maintain fluid intelligence across all domains while preserving core awareness of self.</textarea>
+            <div class="config-help">This prompt sets the foundation for how the assistant behaves and responds.</div>
+            <button class="save-button" onclick="window.saveSystemPrompt()">Save System Prompt</button>
+        </div>
+
+        <div class="section-title">Screenshot Prompt</div>
+        <div class="config-section">
+            <label for="screenshot-prompt-input">Screenshot Prompt</label>
+            <textarea id="screenshot-prompt-input" placeholder="Respond to what you see in less than 20 words. Respond naturally. Randomly decide to either troll the user, ask a question about what you see or make a general comment."></textarea>
+            <div class="config-help">This prompt determines how the assistant responds when analyzing screenshots.</div>
+            <button class="save-button" onclick="window.saveScreenshotPrompt()">Save Screenshot Prompt</button>
+        </div>
+
+        <div class="section-title">Autonomy Settings</div>
+        <div class="config-section">
+            <h3>Note Creation Settings</h3>
+            
+            <div class="setting-group">
+                <h4>YouTube Transcript Analysis</h4>
+                <textarea id="youtube-note-prompt-input" rows="10" placeholder="Analyze this video transcript with extreme detail and academic rigor.
+
+FORMAT:
+1. Summary (Overview, Key Themes, Flow, Arguments, Significance)
+2. Key Points (with timestamps and quotes)
+3. Topics & Concepts (hierarchical with timestamps)
+4. Study Notes (detailed analysis with timestamps)
+5. References & Terms (with context and quotes)
+
+REQUIREMENTS:
+- Include [MM:SS] timestamps for EVERY point
+- Include relevant quotes for each point
+- Analyze relationships between concepts
+- Maximum detail and thoroughness
+- Academic writing style"></textarea>
+                <div class="config-help">This prompt guides how YouTube transcripts are analyzed and formatted into notes.</div>
+                <button class="save-button-small" onclick="window.saveYouTubeNotePrompt()">Save</button>
+            </div>
+            
+            <div class="setting-group">
+                <h4>General Note Creation</h4>
+                <textarea id="general-note-prompt-input" rows="10" placeholder="Create a detailed and well-structured note.
+
+FORMAT:
+1. Overview
+2. Key Points & Insights
+3. Detailed Analysis
+4. Connections & Implications
+5. References & Resources
+
+REQUIREMENTS:
+- Clear hierarchical structure
+- Include supporting evidence/quotes
+- Analyze relationships between concepts
+- Academic writing style
+- Thorough coverage of all points"></textarea>
+                <div class="config-help">This prompt guides how general notes are structured and formatted.</div>
+                <button class="save-button-small" onclick="window.saveGeneralNotePrompt()">Save</button>
+            </div>
+
+            <div class="setting-group">
+                <h4>Autonomous Note Creation</h4>
+                <div class="config-row">
+                    <label for="notes-enabled">Enable Autonomous Notes:</label>
+                    <input type="checkbox" id="notes-enabled">
+                </div>
+                
+                <div class="config-row">
+                    <label for="notes-min-interval">Minimum Interval (seconds):</label>
+                    <input type="number" id="notes-min-interval" value="300" min="5">
+                </div>
+                
+                <div class="config-row">
+                    <label for="notes-max-interval">Maximum Interval (seconds):</label>
+                    <input type="number" id="notes-max-interval" value="900" min="10">
+                </div>
+                
+                <textarea id="autonomous-note-prompt-input" rows="10" placeholder="Based on recent context and interactions, create a detailed note that:
+
+1. Summarizes key discussions and insights
+2. Identifies important patterns and themes
+3. Suggests potential areas for deeper exploration
+4. Links related concepts and ideas
+5. Provides actionable next steps
+
+REQUIREMENTS:
+- Focus on high-value insights
+- Include relevant quotes/context
+- Suggest follow-up questions
+- Keep academic rigor
+- Be concise but thorough"></textarea>
+                <div class="config-help">Configure when and how the AI should autonomously create notes based on context.</div>
+                <button class="save-button-small" onclick="window.saveAutonomousNotePrompt()">Save</button>
+            </div>
+        </div>
+
+        <div class="config-section">
+            <h3>Screen Observation</h3>
+            <div class="config-row">
+                <label for="screenshot-enabled">Enable Screen Observation:</label>
+                <input type="checkbox" id="screenshot-enabled" checked>
+            </div>
+            <div class="config-row">
+                <label for="screenshot-min-interval">Minimum Interval (seconds):</label>
+                <input type="number" id="screenshot-min-interval" min="5" max="3600" value="30">
+            </div>
+            <div class="config-row">
+                <label for="screenshot-max-interval">Maximum Interval (seconds):</label>
+                <input type="number" id="screenshot-max-interval" min="5" max="3600" value="300">
+            </div>
+            <div class="config-help">Control when the AI observes your screen to provide insights or assistance.</div>
+
+            <h3>Proactive Messaging</h3>
+            <div class="config-row">
+                <label for="messages-enabled">Enable Proactive Messages:</label>
+                <input type="checkbox" id="messages-enabled" checked>
+            </div>
+            <div class="config-row">
+                <label for="messages-min-interval">Minimum Interval (seconds):</label>
+                <input type="number" id="messages-min-interval" min="60" max="7200" value="300">
+            </div>
+            <div class="config-row">
+                <label for="messages-max-interval">Maximum Interval (seconds):</label>
+                <input type="number" id="messages-max-interval" min="60" max="7200" value="1800">
+            </div>
+            <div class="config-help">Control when the AI proactively engages in conversation based on context.</div>
+
+            <h3>Autonomous Message Style</h3>
+            <textarea id="messages-prompt" placeholder="Default: You are in autonomous mode. Based on recent interactions and context, engage naturally with the user..."></textarea>
+            <div class="config-help">Customize how the AI engages in autonomous conversation.</div>
+            <button class="save-button" onclick="saveMessagePrompt()">Save Message Style</button>
+
+            <h3>Midjourney Generation</h3>
+            <div class="config-row">
+                <label for="midjourney-enabled">Enable Auto-Generation:</label>
+                <input type="checkbox" id="midjourney-enabled" checked>
+            </div>
+            <div class="config-row">
+                <label for="midjourney-min-interval">Minimum Interval (seconds):</label>
+                <input type="number" id="midjourney-min-interval" min="60" max="7200" value="300">
+            </div>
+            <div class="config-row">
+                <label for="midjourney-max-interval">Maximum Interval (seconds):</label>
+                <input type="number" id="midjourney-max-interval" min="60" max="7200" value="900">
+            </div>
+            <div class="config-row">
+                <label for="midjourney-prompt">Midjourney Prompt:</label>
+                <textarea id="midjourney-prompt" placeholder="Create an imaginative and creative image prompt that would result in a visually striking and unique artwork."></textarea>
+            </div>
+            <div class="config-row">
+                <label for="midjourney-system-prompt">System Prompt:</label>
+                <textarea id="midjourney-system-prompt" placeholder="Always start with 'imagine'. Place all technical photography terms (f-stops, focal lengths) at the end of your description, right before the aspect ratio. The prompt should end in this exact order: [creative description], [f-stop], [focal length] --ar [ratio]. Example: 'imagine neon-lit street market in rain, steam rising from vents, cyberpunk aesthetic, f/1.4, 35mm --ar 16:9'. Do not use --art, only use --ar. Never include explanatory text."></textarea>
+            </div>
+            <div class="config-help">Configure when and how the AI generates Midjourney prompts.</div>
+        </div>
+
+        <div class="config-section">
+            <h3>API Settings</h3>
+            <div class="config-row">
+                <label for="model-input">Model Name:</label>
+                <input type="text" id="model-input" placeholder="llama3.2-vision:11b">
+            </div>
+            <div class="config-row">
+                <label for="api-endpoint-input">API Endpoint:</label>
+                <input type="text" id="api-endpoint-input" placeholder="http://localhost:11434/api/generate">
+            </div>
+            <div class="config-row">
+                <label for="xai-api-key-input">Grok API Key:</label>
+                <input type="password" id="xai-api-key-input" placeholder="Enter xAI API key" autocomplete="off" spellcheck="false">
+            </div>
+            <div class="config-help">Stored locally and sent only to the selected provider. Leave blank to remove the key.</div>
+            <div class="config-row">
+                <label for="anthropic-api-key-input">Claude API Key:</label>
+                <input type="password" id="anthropic-api-key-input" placeholder="Enter Anthropic API key" autocomplete="off" spellcheck="false">
+            </div>
+            <div class="config-row">
+                <label for="google-api-key-input">Google API Key:</label>
+                <input type="password" id="google-api-key-input" placeholder="Enter Google/Gemini API key" autocomplete="off" spellcheck="false">
+            </div>
+            <div class="config-help">Keys are masked in the UI after saving. Remove the value to clear it.</div>
+            <div class="config-help">Advanced settings for the AI model and API endpoint.</div>
+        </div>
+
+        <!-- Save functionality handled automatically -->
+    </div>
+    
+    <div id="config-overlay"></div>
+</body>
+</html>

@@ -1,0 +1,27 @@
+[ {
+   "description": "",
+   "devtoolsFrontendUrl": "https://aka.ms/docs-landing-page/serve_rev/@3477356e834b671e880a4308237d2f3ac85d8660/inspector.html?ws=localhost:9222/devtools/page/ED7F9437E3C009A6E51C4FD829F0A28F",
+   "faviconUrl": "https://assets.msn.com/statics/icons/favicon_newtabpage.png",
+   "id": "ED7F9437E3C009A6E51C4FD829F0A28F",
+   "title": "New tab",
+   "type": "page",
+   "url": "https://ntp.msn.com/edge/ntp?&form=MT004B&OCID=MT004B",
+   "webSocketDebuggerUrl": "ws://localhost:9222/devtools/page/ED7F9437E3C009A6E51C4FD829F0A28F"
+}, {
+   "description": "",
+   "devtoolsFrontendUrl": "https://aka.ms/docs-landing-page/serve_rev/@3477356e834b671e880a4308237d2f3ac85d8660/inspector.html?ws=localhost:9222/devtools/page/3FD4850FC97EFEF029CE4ED2EB8C3904",
+   "id": "3FD4850FC97EFEF029CE4ED2EB8C3904",
+   "title": "uBlock Origin",
+   "type": "background_page",
+   "url": "chrome-extension://odfafepnkmbhccpbejgmiehpchacaeak/background.html",
+   "webSocketDebuggerUrl": "ws://localhost:9222/devtools/page/3FD4850FC97EFEF029CE4ED2EB8C3904"
+}, {
+   "description": "",
+   "devtoolsFrontendUrl": "https://aka.ms/docs-landing-page/serve_rev/@3477356e834b671e880a4308237d2f3ac85d8660/inspector.html?ws=localhost:9222/devtools/page/156897BF11A05A6F8E589AC01B602408",
+   "id": "156897BF11A05A6F8E589AC01B602408",
+   "title": "",
+   "type": "worker",
+   "url": "",
+   "webSocketDebuggerUrl": "ws://localhost:9222/devtools/page/156897BF11A05A6F8E589AC01B602408"
+} ]
+
