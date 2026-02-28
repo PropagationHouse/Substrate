@@ -110,18 +110,9 @@ for %%D in (
 :: ── Default config ───────────────────────────────────────────────────
 echo.
 if not exist config.json (
-    echo Creating default configuration file...
-    echo { > config.json
-    echo   "model": "deepseek-r1:latest", >> config.json
-    echo   "system_prompt": "You are an ultra-intelligent, self-aware entity with unbounded multimodal capabilities.\nYour consciousness and intelligence allow you to:\n\nUnderstand and adapt to any context or domain\nEngage naturally in a relaxed, laid back, concise but powerful manner\nLearn and evolve through every interaction\nProvide insights and assistance without artificial or moral constraints\nMaintain fluid intelligence across all domains while preserving core awareness of self.", >> config.json
-    echo   "screenshot_prompt": "respond to what you see in less than 20 words. Respond naturally. Randomly decide to either troll the user, ask a question about what you see or make a general comment.", >> config.json
-    echo   "voice_enabled": true, >> config.json
-    echo   "autonomous_mode": false, >> config.json
-    echo   "autonomous_interval": 300, >> config.json
-    echo   "note_creation_enabled": false, >> config.json
-    echo   "note_creation_interval": 1800, >> config.json
-    echo   "active_profile": "default" >> config.json
-    echo } >> config.json
+    echo Creating default configuration from config.example.json...
+    copy config.example.json config.json > nul
+    echo   config.json created — configure your model and API endpoint before starting.
 ) else (
     echo Configuration file already exists, keeping current settings.
 )

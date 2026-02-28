@@ -27,12 +27,7 @@ if errorlevel 1 (
 )
 REM No deactivate needed in batch, just proceed
 
-:: Start Midjourney Scheduler
-echo Starting Midjourney Scheduler...
-start "Midjourney Scheduler" cmd /c "title Midjourney Scheduler && color 0F && cd /d %cd% && python scheduled_midjourney.py"
-timeout /t 2 /nobreak > nul
-
-:: Start the application with minimal overhead
+:: Start the application
 call npm start
 
 pause
