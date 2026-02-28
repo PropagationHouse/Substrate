@@ -38,8 +38,15 @@ visual_memory/
 *.lock
 *.lnk
 
-# Generated TTS audio
+# Generated TTS / recorded audio
 src/voice/temp/*.wav
+XGO_Audio_Bridge/xgo_audio/*.wav
+
+# Speech models (too large for git)
+speech_components/vosk-model-*/
+
+# Workspace artifacts
+workspace/screenshot.png
 
 # Temp / debug / cruft
 startup_debug.log
