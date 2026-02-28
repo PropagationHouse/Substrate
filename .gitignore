@@ -38,6 +38,9 @@ visual_memory/
 *.lock
 *.lnk
 
+# Generated TTS audio
+src/voice/temp/*.wav
+
 # Temp / debug / cruft
 startup_debug.log
 weather.json
