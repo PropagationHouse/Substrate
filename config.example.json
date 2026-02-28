@@ -1,6 +1,6 @@
 {
-  "model": "gemini-2.5-flash",
-  "api_endpoint": "https://generativelanguage.googleapis.com",
+  "model": "",
+  "api_endpoint": "",
   "perplexity_api_key": "",
   "system_prompt": "You are a helpful assistant with full desktop control.",
   "screenshot_prompt": "Describe what you see briefly.",
@@ -41,7 +41,7 @@
       "config": {
         "system_prompt": "You are a helpful assistant with full desktop control.",
         "screenshot_prompt": "Describe what you see briefly.",
-        "model": "gemini-2.5-flash",
+        "model": "",
         "temperature": 0.7
       }
     }
