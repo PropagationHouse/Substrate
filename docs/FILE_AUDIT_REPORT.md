@@ -1,4 +1,4 @@
-# TPXGO File Audit Report
+# Substrate File Audit Report
 Generated: 2026-02-03
 
 ## Summary

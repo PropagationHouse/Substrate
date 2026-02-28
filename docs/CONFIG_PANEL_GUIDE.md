@@ -1,12 +1,12 @@
-# Tiny Pirate Configuration Panel Guide
+# Substrate Configuration Panel Guide
 
-This guide explains how to use Tiny Pirate's radial configuration panel to customize your agent's behavior, appearance, and capabilities.
+This guide explains how to use Substrate's radial configuration panel to customize your agent's behavior, appearance, and capabilities.
 
 ## Accessing the Config Panel
 
 To open the configuration panel:
 
-1. Click the **Settings** icon in the top-right corner of the Tiny Pirate interface
+1. Click the **Settings** icon in the top-right corner of the Substrate interface
 2. The futuristic radial menu will appear with multiple configuration sections
 
 ## Navigating the Config Panel
@@ -22,7 +22,7 @@ The config panel uses a 3D radial interface with multiple navigation methods:
 
 ## Configuration Sections
 
-The config panel contains six main sections, each controlling different aspects of Tiny Pirate:
+The config panel contains six main sections, each controlling different aspects of Substrate:
 
 ### 1. Agent & Model
 
@@ -59,7 +59,7 @@ This section determines how the agent responds when analyzing screenshots.
 
 ### 4. Note Creation
 
-This section controls how Tiny Pirate creates and formats notes.
+This section controls how Substrate creates and formats notes.
 
 #### YouTube Transcript Analysis
 - **Analysis Prompt**: Configure how YouTube transcripts are analyzed and formatted into notes

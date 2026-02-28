@@ -1,6 +1,6 @@
-# Tiny Pirate Profile Management System
+# Substrate Profile Management System
 
-This document details the profile management system in Tiny Pirate, which allows users to create and manage multiple configurations and personalized experiences.
+This document details the profile management system in Substrate, which allows users to create and manage multiple configurations and personalized experiences.
 
 > **Note**: For user instructions on managing profiles through the configuration panel, see the [Config Panel Guide](CONFIG_PANEL_GUIDE.md).
 

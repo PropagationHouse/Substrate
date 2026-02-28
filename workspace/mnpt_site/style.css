@@ -1,0 +1,377 @@
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap');
+
+:root {
+    --bg-color: #f0f2f5; /* Light gray background */
+    --text-color: #333; /* Darker text for contrast */
+    --accent-color: #007bff; /* A vibrant blue for accents */
+    --secondary-accent: #28a745; /* A complementary green */
+    --font-stack: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; /* Modern sans-serif */
+    --code-font-stack: 'Fira Code', 'Cascadia Code', monospace; /* Dedicated code font */
+}
+
+body {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    font-family: var(--font-stack);
+    line-height: 1.6;
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    position: relative;
+    z-index: 1;
+}
+
+#data-viz-bottom {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 200px; /* Adjust height as needed */
+    display: flex;
+    justify-content: space-around;
+    align-items: flex-end;
+    overflow: hidden;
+    z-index: 0; /* Ensure it's in the background but above body pseudo-element */
+    pointer-events: none; /* Allow clicks to pass through */
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.2), transparent); /* Subtle gradient */
+}
+
+.viz-text {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 5rem; /* Larger text */
+    color: rgba(0, 255, 255, 0.3); /* Cyan, more visible */
+    white-space: nowrap;
+    position: absolute;
+    animation: dataStream 10s linear infinite; /* Faster animation */
+    transform: translateY(100%); /* Start off-screen */
+}
+
+.viz-text.viz-1 { animation-delay: 0s; left: 5%; font-size: 5rem; color: rgba(0, 255, 255, 0.3); }
+.viz-text.viz-2 { animation-delay: 1s; left: 15%; font-size: 4.5rem; color: rgba(0, 255, 255, 0.4); }
+.viz-text.viz-3 { animation-delay: 2s; left: 25%; font-size: 5.2rem; color: rgba(0, 255, 255, 0.35); }
+.viz-text.viz-4 { animation-delay: 3s; left: 35%; font-size: 4.8rem; color: rgba(0, 255, 255, 0.45); }
+.viz-text.viz-5 { animation-delay: 4s; left: 45%; font-size: 5.5rem; color: rgba(0, 255, 255, 0.3); }
+.viz-text.viz-6 { animation-delay: 5s; left: 55%; font-size: 4.7rem; color: rgba(0, 255, 255, 0.4); }
+.viz-text.viz-7 { animation-delay: 6s; left: 65%; font-size: 5.1rem; color: rgba(0, 255, 255, 0.35); }
+.viz-text.viz-8 { animation-delay: 7s; left: 75%; font-size: 4.9rem; color: rgba(0, 255, 255, 0.45); }
+
+@keyframes dataStream {
+    0% {
+        transform: translateY(150%) scale(0.5);
+        opacity: 0;
+    }
+    20% {
+        opacity: 0.7;
+    }
+    60% {
+        transform: translateY(-20%) scale(1.2);
+        opacity: 1;
+    }
+    80% {
+        opacity: 0.7;
+    }
+    100% {
+        transform: translateY(-150%) scale(0.5);
+        opacity: 0;
+    }
+}
+
+
+body::before {
+    content: '';
+    position: fixed;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle at 25% 25%, rgba(0, 200, 255, 0.15), transparent 50%),
+                radial-gradient(circle at 75% 75%, rgba(100, 255, 0, 0.15), transparent 50%);
+    background-size: 100% 100%;
+    animation: amorphous-bg 30s infinite alternate ease-in-out;
+    z-index: -1;
+    filter: blur(120px); /* More pronounced, ethereal blur */
+}
+
+@keyframes amorphous-bg {
+    0% {
+        transform: scale(1) translate(0, 0) rotate(0deg);
+        opacity: 0.7;
+    }
+    33% {
+        transform: scale(1.1) translate(15%, -15%) rotate(10deg);
+        opacity: 0.5;
+    }
+    66% {
+        transform: scale(0.9) translate(-10%, 10%) rotate(-10deg);
+        opacity: 0.6;
+    }
+    100% {
+        transform: scale(1) translate(0, 0) rotate(0deg);
+        opacity: 0.7;
+    }
+}
+
+.container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 2rem;
+}
+
+header {
+    text-align: center;
+    padding: 4rem 0;
+    border-bottom: 1px solid #e0e0e0; /* Lighter border */
+}
+
+h1 {
+    font-size: 4rem;
+    margin: 0;
+    letter-spacing: -2px;
+}
+
+h2 {
+    font-size: 2rem;
+    margin-top: 3rem;
+    border-bottom: 1px solid #e0e0e0; /* Lighter border */
+    padding-bottom: 0.5rem;
+}
+
+.mnpt-block {
+    margin: 2rem 0;
+    padding: 1rem;
+    border-left: 4px solid rgba(0, 123, 255, 0.3); /* Softer accent */
+    border-radius: 8px; /* More rounded for glass effect */
+    transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+    cursor: pointer;
+    background-color: rgba(255, 255, 255, 0.1); /* Semi-transparent white */
+    backdrop-filter: blur(10px); /* Glassmorphism effect */
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1); /* Softer, more diffused shadow */
+    position: relative;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.2); /* Subtle border */
+}
+
+.mnpt-block:hover {
+    background-color: rgba(255, 255, 255, 0.2); /* Slightly more opaque on hover */
+    transform: translateY(-5px) scale(1.01); /* Subtle lift and slight scale */
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15); /* More pronounced, softer shadow */
+}
+
+.mnpt-block:active {
+    transform: translateY(-2px) scale(1); /* Slight press down effect */
+    box-shadow: 0 5px 10px rgba(0, 0, 0, 0.1);
+}
+
+.mnpt-text {
+    font-size: 1.1rem;
+    transition: opacity 0.4s ease, transform 0.4s ease;
+}
+
+.mnpt-block:hover .mnpt-text {
+    transform: translateX(5px); /* Slight shift on hover */
+}
+
+.mnpt-compressed {
+    font-family: var(--code-font-stack); /* Use dedicated code font */
+    color: var(--secondary-accent); /* Use secondary accent for compressed text */
+    font-weight: bold;
+    display: none; /* Hidden by default, toggled via JS */
+}
+
+/* Playground */
+.playground {
+    background-color: #fff; /* White background */
+    padding: 2rem;
+    border-radius: 8px; /* Slightly more rounded */
+    margin-top: 3rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08); /* Soft shadow */
+}
+
+textarea {
+    width: 100%;
+    height: 100px;
+    background-color: #f8f9fa; /* Light gray background */
+    color: var(--text-color);
+    border: 1px solid #ced4da; /* Lighter border */
+    padding: 1rem;
+    font-family: var(--co
+
+/* Data Visualization at Bottom */
+#data-viz-bottom {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 250px; /* Adjust height as needed */
+    overflow: hidden;
+    pointer-events: none; /* Allow interaction with elements above */
+    z-index: 0; /* Below content, above background */
+    display: flex;
+    justify-content: space-around;
+    align-items: flex-end;
+    padding-bottom: 20px;
+    box-sizing: border-box;
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.1) 0%, transparent 100%); /* Subtle gradient fade */
+    backdrop-filter: blur(5px); /* Light glassmorphism */
+}
+
+.viz-text {
+    font-family: 'Orbitron', sans-serif; /* A futuristic font */
+    font-size: 3rem;
+    color: rgba(0, 255, 255, 0.15); /* Cyan-like, very transparent */
+    text-shadow: 0 0 10px rgba(0, 255, 255, 0.3);
+    white-space: nowrap;
+    position: absolute;
+    animation: dataStream 20s linear infinite;
+    opacity: 0;
+    transform: translateY(100px) scale(0.8);
+    letter-spacing: 2px;
+}
+
+@keyframes dataStream {
+    0% {
+        transform: translateY(100px) scale(0.8);
+        opacity: 0;
+    }
+    10% {
+        opacity: 0.5;
+    }
+    50% {
+        transform: translateY(-50px) scale(1.1);
+        opacity: 0.8;
+    }
+    90% {
+        opacity: 0.3;
+    }
+    100% {
+        transform: translateY(-100px) scale(0.7);
+        opacity: 0;
+    }
+}
+
+.viz-1 { left: 5%; animation-delay: 0s; animation-duration: 22s; }
+.viz-2 { left: 15%; animation-delay: 2s; animation-duration: 25s; font-size: 2.5rem; }
+.viz-3 { left: 30%; animation-delay: 4s; animation-duration: 20s; color: rgba(0, 255, 150, 0.15); }
+.viz-4 { left: 50%; animation-delay: 6s; animation-duration: 23s; font-size: 3.2rem; }
+.viz-5 { left: 70%; animation-delay: 8s; animation-duration: 18s; color: rgba(255, 0, 255, 0.15); }
+.viz-6 { left: 85%; animation-delay: 10s; animation-duration: 26s; font-size: 2.8rem; }
+.viz-7 { left: 20%; animation-delay: 12s; animation-duration: 21s; }
+.viz-8 { left: 60%; animation-delay: 14s; animation-duration: 24s; color: rgba(255, 255, 0, 0.15); }de-font-stack); /* Use code font */
+    font-size: 0.95rem; /* Slightly smaller font */
+    resize: vertical;
+    border-radius: 4px;
+}
+
+/* Background Streaming Text - Layers for "AI Visual Data Graph" */
+.background-text-layer {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    overflow: hidden;
+    z-index: -2; /* Below the main content and amorphous blur */
+}
+
+.background-text-layer span {
+    position: absolute;
+    color: rgba(0, 255, 255, 0.05); /* Neon cyan, very transparent */
+    font-size: clamp(3rem, 8vw, 10rem); /* Large, responsive text */
+    white-space: nowrap;
+    animation: text-stream-1 linear infinite;
+    transform: translateX(100%);
+    opacity: 0;
+}
+
+.background-text-layer.layer-2 span {
+    color: rgba(150, 255, 0, 0.04); /* Neon green, slightly different opacity */
+    font-size: clamp(2rem, 6vw, 8rem);
+    animation: text-stream-2 linear infinite;
+}
+
+.background-text-layer.layer-3 span {
+    color: rgba(255, 0, 255, 0.03); /* Neon magenta, even lower opacity */
+    font-size: clamp(4rem, 10vw, 12rem);
+    animation: text-stream-3 linear infinite;
+}
+
+@keyframes text-stream-1 {
+    0% { transform: translateX(100%); opacity: 0; }
+    5% { opacity: 1; }
+    95% { opacity: 1; }
+    100% { transform: translateX(-150%); opacity: 0; }
+}
+
+@keyframes text-stream-2 {
+    0% { transform: translateX(-100%); opacity: 0; }
+    5% { opacity: 1; }
+    95% { opacity: 1; }
+    100% { transform: translateX(150%); opacity: 0; }
+}
+
+@keyframes text-stream-3 {
+    0% { transform: translateX(120%); opacity: 0; }
+    5% { opacity: 1; }
+    95% { opacity: 1; }
+    100% { transform: translateX(-180%); opacity: 0; }
+}
+
+/* Geometric Shapes for Data Graph Effect */
+.geometric-shape {
+    position: fixed;
+    background-color: rgba(0, 255, 255, 0.08); /* Neon cyan */
+    border-radius: 50%;
+    opacity: 0;
+    animation: shape-animate linear infinite;
+    z-index: -3; /* Farthest back */
+}
+
+.geometric-shape.line {
+    background-color: transparent;
+    border: 1px solid rgba(150, 255, 0, 0.08); /* Neon green */
+    width: 100px;
+    height: 1px;
+    transform-origin: left center;
+    animation: line-animate linear infinite;
+}
+
+@keyframes shape-animate {
+    0% {
+        transform: translate(var(--x), var(--y)) scale(0);
+        opacity: 0;
+    }
+    20% {
+        transform: translate(var(--x), var(--y)) scale(1);
+        opacity: 0.3;
+    }
+    80% {
+        transform: translate(var(--x-end), var(--y-end)) scale(0.8);
+        opacity: 0.1;
+    }
+    100% {
+        transform: translate(var(--x-end), var(--y-end)) scale(0);
+        opacity: 0;
+    }
+}
+
+@keyframes line-animate {
+    0% {
+        transform: translate(var(--x), var(--y)) rotate(var(--rotate)) scaleX(0);
+        opacity: 0;
+    }
+    20% {
+        transform: translate(var(--x), var(--y)) rotate(var(--rotate)) scaleX(1);
+        opacity: 0.2;
+    }
+    80% {
+        transform: translate(var(--x-end), var(--y-end)) rotate(var(--rotate)) scaleX(0.5);
+        opacity: 0.05;
+    }
+    100% {
+        transform: translate(var(--x-end), var(--y-end)) rotate(var(--rotate)) scaleX(0);
+        opacity: 0;
+    }
+}

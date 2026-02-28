@@ -1,10 +1,10 @@
-# Tiny Pirate Prompt System
+# Substrate Prompt System
 
-This document provides a comprehensive overview of the prompt system used in Tiny Pirate, including all system and sub-prompts, their hierarchy, and how they are used throughout the application.
+This document provides a comprehensive overview of the prompt system used in Substrate, including all system and sub-prompts, their hierarchy, and how they are used throughout the application.
 
 ## Prompt Hierarchy Overview
 
-The Tiny Pirate prompt system is organized in a hierarchical structure with several categories of prompts that serve different purposes:
+The Substrate prompt system is organized in a hierarchical structure with several categories of prompts that serve different purposes:
 
 1. **Main System Prompt**: The foundational prompt that defines the agent's personality and capabilities
 2. **Specialized System Prompts**: Task-specific system prompts for different features
@@ -14,7 +14,7 @@ The Tiny Pirate prompt system is organized in a hierarchical structure with seve
 
 ## Main System Prompt
 
-The main system prompt defines the core personality and capabilities of the Tiny Pirate agent.
+The main system prompt defines the core personality and capabilities of the Substrate agent.
 
 **Location**: `proxy_server.py` (line ~330)
 **Config Key**: `system_prompt`

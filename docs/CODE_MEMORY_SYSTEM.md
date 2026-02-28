@@ -1,6 +1,6 @@
 # Code Memory System Documentation
 
-This document provides a comprehensive overview of the Code Memory system implemented in Tiny Pirate, which enables the AI assistant to analyze and reference its own codebase.
+This document provides a comprehensive overview of the Code Memory system implemented in Substrate, which enables the AI assistant to analyze and reference its own codebase.
 
 ## Overview
 
@@ -22,7 +22,7 @@ The Code Memory system consists of three main components:
 ## File Structure
 
 ```
-Tiny Pirate/
+Substrate/
 ├── src/
 │   └── memory/
 │       ├── memory_manager.py   # Core memory system

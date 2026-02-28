@@ -1,10 +1,10 @@
-# XGO Audio Integration for Tiny Pirate
+# XGO Audio Integration for Substrate
 
-This document provides comprehensive information about the XGO device audio integration with the Tiny Pirate system, including setup, configuration, and troubleshooting.
+This document provides comprehensive information about the XGO device audio integration with the Substrate system, including setup, configuration, and troubleshooting.
 
 ## Overview
 
-The XGO audio integration enables remote voice interaction with Tiny Pirate through the XGO robot device. The system captures audio on the XGO device, sends it to the PC for processing, and integrates with the main Tiny Pirate voice processing pipeline.
+The XGO audio integration enables remote voice interaction with Substrate through the XGO robot device. The system captures audio on the XGO device, sends it to the PC for processing, and integrates with the main Substrate voice processing pipeline.
 
 ## Architecture
 

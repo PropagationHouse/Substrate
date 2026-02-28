@@ -233,7 +233,7 @@ document.addEventListener('DOMContentLoaded', () => {
 ## Testing Plan
 
 1. **Test UI Toggle**
-   - Enable remote mode in TPXGO UI
+   - Enable remote mode in Substrate UI
    - Verify the Python script starts
    - Check logs for successful initialization
 

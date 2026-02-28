@@ -1,12 +1,12 @@
-# Tiny Pirate Voice Synthesis System
+# Substrate Voice Synthesis System
 
-This document provides a detailed overview of the voice synthesis system used in Tiny Pirate.
+This document provides a detailed overview of the voice synthesis system used in Substrate.
 
 > **Note**: For detailed information about the XGO device integration that uses this voice system, see the [XGO Integration Documentation](../XGO_INTEGRATION_README.md).
 
 ## Overview
 
-The voice synthesis system enables Tiny Pirate to communicate verbally with users through text-to-speech capabilities. It uses the Kokoro-82M model for high-quality voice generation and supports bidirectional audio communication with XGO devices.
+The voice synthesis system enables Substrate to communicate verbally with users through text-to-speech capabilities. It uses the Kokoro-82M model for high-quality voice generation and supports bidirectional audio communication with XGO devices.
 
 ## Components
 

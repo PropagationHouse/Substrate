@@ -1,10 +1,10 @@
 # Midjourney Automation Testing Guide
 
-This guide provides step-by-step instructions for testing the Midjourney automation feature in the Tiny Pirate 9-3 system.
+This guide provides step-by-step instructions for testing the Midjourney automation feature in the Substrate 9-3 system.
 
 ## Prerequisites
 
-1. Ensure the Tiny Pirate 9-3 application is running
+1. Ensure the Substrate 9-3 application is running
 2. Microsoft Edge browser is installed
 3. PyAutoGUI is installed and working properly
 4. You have an active internet connection

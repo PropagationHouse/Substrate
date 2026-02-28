@@ -1,4 +1,4 @@
-# HTML Visualization Examples for Tiny Pirate
+# HTML Visualization Examples for Substrate
 
 These examples can be used with the new HTML rendering capability in the chat interface. Simply copy and paste these examples into the chat to see them rendered.
 

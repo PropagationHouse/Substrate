@@ -1,7 +1,7 @@
-# Tiny Pirate - Intelligent System Agent
+# Substrate - Intelligent System Agent
 
 ## Project Overview
-An intelligent agent capable of both chat and system control, built on top of the existing Tiny Pirate chat interface. The agent will understand and execute system commands, learn from interactions, and provide autonomous assistance while maintaining a conversational interface.
+An intelligent agent capable of both chat and system control, built on top of the existing Substrate chat interface. The agent will understand and execute system commands, learn from interactions, and provide autonomous assistance while maintaining a conversational interface.
 
 ## Architecture
 

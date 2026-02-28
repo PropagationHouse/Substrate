@@ -1,6 +1,6 @@
 # Aurora Forecast Functionality
 
-This document details the Aurora Forecast functionality in Tiny Pirate, which is the only weather-related feature that remains in the application.
+This document details the Aurora Forecast functionality in Substrate, which is the only weather-related feature that remains in the application.
 
 ## Overview
 

@@ -9,11 +9,24 @@ const remote = require('@electron/remote/main');
 remote.initialize();
 
 // File-based debug logging for diagnosing startup issues
-const _debugLogPath = path.join(__dirname, 'startup_debug.log');
+// Use userData dir so logs are writable even in installed app
+let _debugLogPath = null;
 function debugLog(msg) {
     const ts = new Date().toISOString();
-    try { fs.appendFileSync(_debugLogPath, `[${ts}] ${msg}\n`); } catch(_) {}
+    try {
+        if (!_debugLogPath) _debugLogPath = path.join(app.getPath('userData'), 'startup_debug.log');
+        fs.appendFileSync(_debugLogPath, `[${ts}] ${msg}\n`);
+    } catch(_) {}
     console.log(`[DEBUG] ${msg}`);
+}
+
+// Writable venv location — app install dir is read-only on Windows,
+// so we place the venv inside the per-user data folder instead.
+function getVenvDir() {
+    return path.join(app.getPath('userData'), 'venv');
+}
+function getVenvPython() {
+    return path.join(getVenvDir(), 'Scripts', 'python.exe');
 }
 
 let mainWindow;
@@ -812,7 +825,7 @@ ipcMain.on('execute-action', (event, data) => {
         console.log('Launching XGO Vision Client');
         
         // Construct the path to the Python script
-        const pythonPath = path.join(__dirname, 'venv', 'Scripts', 'python.exe');
+        const pythonPath = getVenvPython();
         
         // Use the reference implementation instead
         const scriptPath = path.join(__dirname, 'xgo_vision_client_reference.py');
@@ -883,7 +896,7 @@ function killPortHolders() {
 }
 
 async function runFirstRunCheck() {
-    const markerPath = path.join(__dirname, '.deps_installed');
+    const markerPath = path.join(app.getPath('userData'), '.deps_installed');
     const reqPath = path.join(__dirname, 'requirements.txt');
     const pkgPath = path.join(__dirname, 'package.json');
 
@@ -932,8 +945,12 @@ async function runFirstRunCheck() {
     }
 
     // 2. Find Python — prefer local venv, fall back to system
-    const venvPython = path.join(__dirname, 'venv', 'Scripts', 'python.exe');
-    let pythonExe = fs.existsSync(venvPython) ? venvPython : null;
+    const venvDir = getVenvDir();
+    const pyvenvCfg = path.join(venvDir, 'pyvenv.cfg');
+    const venvPython = getVenvPython();
+    
+    // Only use local venv if it's fully intact
+    let pythonExe = (fs.existsSync(venvPython) && fs.existsSync(pyvenvCfg)) ? venvPython : null;
     if (!pythonExe) {
         // Try common Python names
         for (const cmd of ['python', 'python3', 'py']) {
@@ -1032,11 +1049,11 @@ async function runFirstRunCheck() {
     };
 
     try {
-        // Step 1: Create venv if needed
-        const venvDir = path.join(__dirname, 'venv');
-        if (!fs.existsSync(venvDir)) {
+        // Step 1: Create venv if needed (and clear if broken)
+        if (!fs.existsSync(venvPython) || !fs.existsSync(pyvenvCfg)) {
             updateSetup('Creating Python environment...', 10);
-            await runAsync(pythonExe, ['-m', 'venv', venvDir], 'venv creation');
+            // Use --clear to overwrite any broken/partial venv state
+            await runAsync(pythonExe, ['-m', 'venv', '--clear', venvDir], 'venv creation');
             pythonExe = venvPython;
         } else {
             pythonExe = venvPython;
@@ -1087,7 +1104,7 @@ async function runFirstRunCheck() {
         console.log('[FirstRun] Ollama found');
     } catch (e) {
         console.log('[FirstRun] Ollama not found');
-        if (!fs.existsSync(path.join(__dirname, '.ollama_warned'))) {
+        if (!fs.existsSync(path.join(app.getPath('userData'), '.ollama_warned'))) {
             const ollamaChoice = dialog.showMessageBoxSync(mainWindow || null, {
                 type: 'info',
                 title: 'Ollama Not Found',
@@ -1099,7 +1116,7 @@ async function runFirstRunCheck() {
             if (ollamaChoice === 0) {
                 shell.openExternal('https://ollama.com/download');
             }
-            fs.writeFileSync(path.join(__dirname, '.ollama_warned'), 'ok');
+            fs.writeFileSync(path.join(app.getPath('userData'), '.ollama_warned'), 'ok');
         }
     }
 
@@ -1108,7 +1125,7 @@ async function runFirstRunCheck() {
 
 function startPythonBackend() {
     try {
-        const pythonPath = path.join(__dirname, 'venv', 'Scripts', 'python.exe');
+        const pythonPath = getVenvPython();
         debugLog(`startPythonBackend: pythonPath=${pythonPath}`);
         debugLog(`startPythonBackend: exists=${fs.existsSync(pythonPath)}`);
         debugLog(`startPythonBackend: __dirname=${__dirname}`);
@@ -1694,7 +1711,7 @@ function startSpeechRecognition() {
     isListening = true;  // Default to listening; mute button toggles off
     
     // Path to the Python executable in the virtual environment
-    const pythonPath = path.join(__dirname, 'venv', 'Scripts', 'python.exe');
+    const pythonPath = getVenvPython();
     if (!fs.existsSync(pythonPath)) {
         console.error('[Speech] venv python not found at', pythonPath, '— skipping start');
         return;

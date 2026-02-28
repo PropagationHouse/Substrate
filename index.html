@@ -1935,7 +1935,7 @@ REQUIREMENTS:
             <h3>Screen Observation</h3>
             <div class="config-row">
                 <label for="screenshot-enabled">Enable Screen Observation:</label>
-                <input type="checkbox" id="screenshot-enabled" checked>
+                <input type="checkbox" id="screenshot-enabled">
             </div>
             <div class="config-row">
                 <label for="screenshot-min-interval">Minimum Interval (seconds):</label>
@@ -1950,7 +1950,7 @@ REQUIREMENTS:
             <h3>Proactive Messaging</h3>
             <div class="config-row">
                 <label for="message-enabled">Enable Proactive Messages:</label>
-                <input type="checkbox" id="message-enabled" checked>
+                <input type="checkbox" id="message-enabled">
             </div>
             <div class="config-row">
                 <label for="message-min-interval">Minimum Interval (seconds):</label>
@@ -1970,7 +1970,7 @@ REQUIREMENTS:
             <h3>Midjourney Generation</h3>
             <div class="config-row">
                 <label for="midjourney-enabled">Enable Auto-Generation:</label>
-                <input type="checkbox" id="midjourney-enabled" checked>
+                <input type="checkbox" id="midjourney-enabled">
             </div>
             <div class="config-row">
                 <label for="midjourney-min-interval">Minimum Interval (seconds):</label>
@@ -2373,7 +2373,7 @@ REQUIREMENTS:
 
         // Avatar configuration
         const defaultProfilePath = 'profiles/default';
-        const defaultAvatar = `${defaultProfilePath}/avatar.png`;
+        const defaultAvatar = 'default-avatar.png';
         const fallbackAvatar = defaultAvatar;  // Use same default avatar as fallback
         
         function initializeAvatar(element, src) {
@@ -2411,6 +2411,19 @@ REQUIREMENTS:
                 config: null
             }
         };
+
+        async function loadProfile(name) {
+            console.log('Loading profile:', name);
+            currentProfile = name;
+            if (profiles[name] && profiles[name].avatar) {
+                initializeAvatar(avatarPreview, profiles[name].avatar);
+                initializeAvatar(currentAvatar, profiles[name].avatar);
+            } else {
+                initializeAvatar(avatarPreview, defaultAvatar);
+                initializeAvatar(currentAvatar, defaultAvatar);
+            }
+            // Send request to load config for this profile if needed, but for now we just keep the default
+        }
 
         async function createNewProfile() {
             console.log('createNewProfile function called');  
@@ -2543,10 +2556,25 @@ REQUIREMENTS:
                 // Update both preview and current avatar from saved config
                 avatarPreview.src = config.avatar;
                 currentAvatar.src = config.avatar;
+                
+                // Sync with radial config panel and localStorage
+                const radialAvatar = document.getElementById('avatar-preview-radial');
+                if (radialAvatar) {
+                    radialAvatar.src = config.avatar;
+                }
+                if (!config.avatar.includes('default-avatar.png')) {
+                    localStorage.setItem('agent-avatar', config.avatar);
+                }
             } else {
                 // Use default avatar if none in config
                 avatarPreview.src = 'default-avatar.png';
                 currentAvatar.src = 'default-avatar.png';
+                
+                // Sync with radial config panel
+                const radialAvatar = document.getElementById('avatar-preview-radial');
+                if (radialAvatar) {
+                    radialAvatar.src = 'default-avatar.png';
+                }
             }
             loadAdvancedSettings(config);
             fetchModels();
@@ -2589,6 +2617,14 @@ REQUIREMENTS:
             reader.onload = function(e) {
                 avatarPreview.src = e.target.result;
                 currentAvatar.src = e.target.result;
+                
+                // Sync with radial config panel and localStorage
+                const radialAvatar = document.getElementById('avatar-preview-radial');
+                if (radialAvatar) {
+                    radialAvatar.src = e.target.result;
+                }
+                localStorage.setItem('agent-avatar', e.target.result);
+                
                 saveConfig();  // Save config immediately after updating avatar
             };
             reader.readAsDataURL(file);
@@ -3984,7 +4020,7 @@ REQUIREMENTS:
             <h3>Screen Observation</h3>
             <div class="config-row">
                 <label for="screenshot-enabled">Enable Screen Observation:</label>
-                <input type="checkbox" id="screenshot-enabled" checked>
+                <input type="checkbox" id="screenshot-enabled">
             </div>
             <div class="config-row">
                 <label for="screenshot-min-interval">Minimum Interval (seconds):</label>
@@ -3999,7 +4035,7 @@ REQUIREMENTS:
             <h3>Proactive Messaging</h3>
             <div class="config-row">
                 <label for="messages-enabled">Enable Proactive Messages:</label>
-                <input type="checkbox" id="messages-enabled" checked>
+                <input type="checkbox" id="messages-enabled">
             </div>
             <div class="config-row">
                 <label for="messages-min-interval">Minimum Interval (seconds):</label>
@@ -4019,7 +4055,7 @@ REQUIREMENTS:
             <h3>Midjourney Generation</h3>
             <div class="config-row">
                 <label for="midjourney-enabled">Enable Auto-Generation:</label>
-                <input type="checkbox" id="midjourney-enabled" checked>
+                <input type="checkbox" id="midjourney-enabled">
             </div>
             <div class="config-row">
                 <label for="midjourney-min-interval">Minimum Interval (seconds):</label>

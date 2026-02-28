@@ -1,6 +1,6 @@
-# Tiny Pirate Documentation
+# Substrate Documentation
 
-Welcome to the Tiny Pirate documentation. This guide provides comprehensive information about all aspects of the Tiny Pirate system.
+Welcome to the Substrate documentation. This guide provides comprehensive information about all aspects of the Substrate system.
 
 ## Core Documentation
 
@@ -18,7 +18,7 @@ Welcome to the Tiny Pirate documentation. This guide provides comprehensive info
 
 ## Architecture
 
-Tiny Pirate uses a hybrid architecture combining:
+Substrate uses a hybrid architecture combining:
 
 1. **Electron Frontend**: 
    - Renders the UI and avatar
@@ -78,7 +78,7 @@ tiny-pirate/
 - **Voice**: Kokoro-82M
 - **IPC**: Electron IPC, stdin/stdout
 
-### Extending Tiny Pirate
+### Extending Substrate
 
 When extending the system:
 
@@ -93,7 +93,7 @@ For common issues and solutions, refer to the [Troubleshooting section](../READM
 
 ## Contributing
 
-When contributing to Tiny Pirate:
+When contributing to Substrate:
 
 1. Follow the existing code style and patterns
 2. Document new features thoroughly

@@ -1,10 +1,10 @@
 # Config Panel Developer Guide
 
-This document provides a comprehensive guide for developers who want to extend or customize the Tiny Pirate config panel system.
+This document provides a comprehensive guide for developers who want to extend or customize the Substrate config panel system.
 
 ## Overview
 
-The Tiny Pirate config panel uses a modern radial interface design implemented in `radial_config_new.js`. This design transforms the traditional form-based config panel into an interactive, 3D radial menu with multiple sections that can be navigated through rotation.
+The Substrate config panel uses a modern radial interface design implemented in `radial_config_new.js`. This design transforms the traditional form-based config panel into an interactive, 3D radial menu with multiple sections that can be navigated through rotation.
 
 ## Architecture
 
@@ -19,7 +19,7 @@ The Tiny Pirate config panel uses a modern radial interface design implemented i
 ### File Structure
 
 ```
-TPXGO/
+Substrate/
 ├── radial_config_new.js   # Main implementation of the radial config panel
 ├── index.html             # Contains the original config panel that gets transformed
 └── css/

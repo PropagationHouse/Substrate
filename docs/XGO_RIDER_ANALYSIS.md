@@ -87,7 +87,7 @@ def press_a_long(self, duration=2.0):
 ```
 
 ### Option 2: Create a New Low-Power Toggle Script
-File: `c:\Users\Bl0ck\Desktop\TPXGO\xgo_low_power_toggle.py`
+File: `c:\Users\Bl0ck\Desktop\Substrate\xgo_low_power_toggle.py`
 
 ```python
 #!/usr/bin/env python3
@@ -128,11 +128,11 @@ while True:
 
 ---
 
-## Integration with Tiny Pirate
+## Integration with Substrate
 
-To integrate with the Tiny Pirate system on the XGO Rider:
+To integrate with the Substrate system on the XGO Rider:
 
-1. **Copy `key.py` to TPXGO** (if not already present)
+1. **Copy `key.py` to Substrate** (if not already present)
 2. **Create `xgo_low_power_toggle.py`** as a background service
 3. **Wire into `proxy_server.py`** or run as a separate daemon that listens to buttons
 4. **Add UI toggle** in `index.html` to reflect low-power state
@@ -158,5 +158,5 @@ To integrate with the Tiny Pirate system on the XGO Rider:
 1. **Confirm button physical layout** (which GPIO maps to which corner)
 2. **Test `dog.perform(0)` and `dog.perform(1)`** to verify low-power behavior
 3. **Implement button listener** (either modify `key.py` or create standalone script)
-4. **Integrate with Tiny Pirate** (add to startup or wire into voice handler)
-5. **Add UI indicator** to show low-power state in Tiny Pirate chat/avatar
+4. **Integrate with Substrate** (add to startup or wire into voice handler)
+5. **Add UI indicator** to show low-power state in Substrate chat/avatar

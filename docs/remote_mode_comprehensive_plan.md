@@ -1,8 +1,8 @@
-# TPXGO Remote Mode Implementation - Comprehensive Plan
+# Substrate Remote Mode Implementation - Comprehensive Plan
 
 ## Overview
 
-This document outlines the implementation plan for adding a remote mode feature to the TPXGO application. The remote mode will allow the XGO device to capture audio and send it to the Tower Desk PC for processing.
+This document outlines the implementation plan for adding a remote mode feature to the Substrate application. The remote mode will allow the XGO device to capture audio and send it to the Tower Desk PC for processing.
 
 ## Current State Analysis
 
@@ -31,7 +31,7 @@ This document outlines the implementation plan for adding a remote mode feature 
    - Runs on port 8766
    - Has a `/transcribe` endpoint
    - Saves audio to `xgo_audio_input` directory
-   - Sends transcriptions to Tiny Pirate API
+   - Sends transcriptions to Substrate API
 
 4. **ZeroTier Network**
    - Already set up and connecting both devices
@@ -39,7 +39,7 @@ This document outlines the implementation plan for adding a remote mode feature 
 
 ### UI Structure
 
-The TPXGO UI uses a radial configuration panel (`radial_config_new.js`) with sections for different settings:
+The Substrate UI uses a radial configuration panel (`radial_config_new.js`) with sections for different settings:
 - Agent & Model
 - System Prompt
 - Screenshot Prompt
@@ -371,7 +371,7 @@ The server component is already implemented in `pc_audio_receiver_server.py`. To
 ## Testing Plan
 
 ### 1. Test Remote Mode Toggle
-- Enable remote mode in TPXGO UI
+- Enable remote mode in Substrate UI
 - Verify the Python script starts
 - Check logs for successful initialization
 

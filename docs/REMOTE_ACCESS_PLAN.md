@@ -1,10 +1,10 @@
-# Tiny Pirate Remote Access Implementation Plan
+# Substrate Remote Access Implementation Plan
 
-This document outlines the step-by-step plan for implementing remote access to the Tiny Pirate agent using ZeroTier.
+This document outlines the step-by-step plan for implementing remote access to the Substrate agent using ZeroTier.
 
 ## Overview
 
-The goal is to create a web-based interface that allows accessing the Tiny Pirate agent from a mobile device over ZeroTier, with eventual integration with XGO for full remote functionality.
+The goal is to create a web-based interface that allows accessing the Substrate agent from a mobile device over ZeroTier, with eventual integration with XGO for full remote functionality.
 
 ## Phase 1: Basic Connectivity Test
 
@@ -31,7 +31,7 @@ The goal is to create a web-based interface that allows accessing the Tiny Pirat
 - **Success Criteria**: Can send and receive messages through the web UI
 
 ### Step 2: Integrate with ChatAgent
-- **Purpose**: Connect the web UI to the actual Tiny Pirate agent
+- **Purpose**: Connect the web UI to the actual Substrate agent
 - **Success Criteria**: Agent responds to messages sent through the web UI
 
 ### Implementation Steps:

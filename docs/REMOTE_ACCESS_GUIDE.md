@@ -1,12 +1,12 @@
-# Tiny Pirate Remote Access Guide
+# Substrate Remote Access Guide
 
-This guide explains how to access your Tiny Pirate agent remotely using ZeroTier and how to integrate with XGO.
+This guide explains how to access your Substrate agent remotely using ZeroTier and how to integrate with XGO.
 
 ## Overview
 
 The remote access system allows you to:
 
-1. Chat with your Tiny Pirate agent from any device connected to your ZeroTier network
+1. Chat with your Substrate agent from any device connected to your ZeroTier network
 2. Forward voice responses to your XGO device
 3. Access your agent securely without exposing it to the public internet
 
@@ -16,7 +16,7 @@ The remote access system allows you to:
 
 - ZeroTier installed and configured on both your home computer and mobile device
 - Both devices connected to the same ZeroTier network
-- Tiny Pirate installed and working on your home computer
+- Substrate installed and working on your home computer
 - (Optional) XGO device connected to the same network
 
 ### Starting the Remote Server
@@ -42,7 +42,7 @@ The remote access system allows you to:
    ```
    Replace `<zerotier-ip>` with your home computer's ZeroTier IP address
 
-4. You should see the Tiny Pirate Remote interface
+4. You should see the Substrate Remote interface
 
 ## Using the Remote Interface
 

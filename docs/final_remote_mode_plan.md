@@ -1,7 +1,7 @@
-# TPXGO Remote Mode Implementation Plan
+# Substrate Remote Mode Implementation Plan
 
 ## Overview
-This plan leverages your existing `xgo_remote_mic.py` script to implement a remote mode toggle in the TPXGO interface.
+This plan leverages your existing `xgo_remote_mic.py` script to implement a remote mode toggle in the Substrate interface.
 
 ## Implementation Steps
 
@@ -391,7 +391,7 @@ app.listen(PORT, HOST, () => {
 ## Testing Plan
 
 ### 1. Test Remote Mode Toggle
-- Enable remote mode in TPXGO UI
+- Enable remote mode in Substrate UI
 - Verify the Python script starts
 - Check logs for successful initialization
 

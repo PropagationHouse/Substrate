@@ -1,6 +1,6 @@
-# Tiny Pirate Remote Command Integration
+# Substrate Remote Command Integration
 
-This document explains how to integrate the remote command system with your main Tiny Pirate application to ensure commands are executed properly.
+This document explains how to integrate the remote command system with your main Substrate application to ensure commands are executed properly.
 
 ## The Problem
 
@@ -12,7 +12,7 @@ When sending commands from the web UI, you get chat responses but the commands d
 
 ## The Solution: Command Pipe
 
-We've implemented a named pipe communication system that allows the remote bridge to send commands directly to your main Tiny Pirate application. This ensures that commands are executed in the same process and context as your main app.
+We've implemented a named pipe communication system that allows the remote bridge to send commands directly to your main Substrate application. This ensures that commands are executed in the same process and context as your main app.
 
 ## Integration Steps
 
@@ -26,7 +26,7 @@ install_dependencies.bat
 
 ### 2. Integrate with Main App
 
-Add the following code to your main Tiny Pirate application (`proxy_server.py`):
+Add the following code to your main Substrate application (`proxy_server.py`):
 
 ```python
 # At the top of the file
@@ -60,7 +60,7 @@ This ensures that commands are executed in the same process and context as your 
 
 If commands still aren't triggering on your PC:
 
-1. Make sure your main Tiny Pirate application is running
+1. Make sure your main Substrate application is running
 2. Make sure you've added the integration code to your main app
 3. Check the logs in the command server window for any errors
 4. Try restarting both your main app and the remote bridge system

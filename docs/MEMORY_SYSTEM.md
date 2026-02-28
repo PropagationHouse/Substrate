@@ -1,6 +1,6 @@
 # Memory System Documentation
 
-This document provides a comprehensive overview of the memory system implemented in Tiny Pirate.
+This document provides a comprehensive overview of the memory system implemented in Substrate.
 
 ## Architecture Overview
 
@@ -13,7 +13,7 @@ The memory system is designed with a multi-layered approach to store, retrieve, 
 ## File Structure and Storage Locations
 
 ```
-Tiny Pirate/
+Substrate/
 ├── src/
 │   └── memory/
 │       └── memory_manager.py   # Core memory system implementation

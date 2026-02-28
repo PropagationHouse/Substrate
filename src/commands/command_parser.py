@@ -15,16 +15,24 @@ class CommandParser:
         # Load macro triggers from macros/ directory for fast-path matching
         self._macro_triggers = self._load_macro_triggers()
 
-        # Load command patterns from knowledge base
+        # Load command patterns from knowledge base (graceful fallback if files missing)
         base_path = os.path.dirname(os.path.abspath(__file__))
         windows_path = os.path.join(base_path, '..', '..', 'knowledge', 'windows', 'cmd_commands.json')
         edge_path = os.path.join(base_path, '..', '..', 'knowledge', 'shortcuts', 'app_specific', 'browsers', 'edge.json')
 
-        with open(windows_path, 'r') as file:
-            self.command_patterns = json.load(file)['commands']
+        self.command_patterns = []
+        self.shortcut_patterns = []
+        try:
+            with open(windows_path, 'r') as file:
+                self.command_patterns = json.load(file).get('commands', [])
+        except (FileNotFoundError, json.JSONDecodeError) as e:
+            print(f"[CommandParser] Warning: Could not load {windows_path}: {e}")
 
-        with open(edge_path, 'r') as file:
-            self.shortcut_patterns = json.load(file)['shortcuts']
+        try:
+            with open(edge_path, 'r') as file:
+                self.shortcut_patterns = json.load(file).get('shortcuts', [])
+        except (FileNotFoundError, json.JSONDecodeError) as e:
+            print(f"[CommandParser] Warning: Could not load {edge_path}: {e}")
 
         # Note creation patterns
         self.note_patterns = [

@@ -1,4 +1,4 @@
-# Tiny Pirate Installation Guide 
+# Substrate Installation Guide 
  
 ## Installation 
  
@@ -9,7 +9,7 @@
  
 ## First Run 
  
-When you first run Tiny Pirate: 
+When you first run Substrate: 
  
 1. The application will automatically install required Python dependencies. 
 2. You'll be prompted to configure your settings. 

@@ -397,7 +397,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on submitting issues, pull
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE).
+This project is licensed under the [Business Source License 1.1](LICENSE). Free for non-commercial use (personal, educational, research). Commercial use requires a separate license — contact phsds@proton.me. On February 1, 2029, the license automatically converts to Apache License 2.0.
 
 ---
 

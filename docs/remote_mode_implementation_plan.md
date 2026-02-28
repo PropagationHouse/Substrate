@@ -1,12 +1,12 @@
-# TPXGO Remote Mode Implementation Plan
+# Substrate Remote Mode Implementation Plan
 
 ## Project Overview
-This plan outlines the steps to implement remote audio processing for TPXGO, allowing it to connect to the main Tower Desk PC over ZeroTier when away from home.
+This plan outlines the steps to implement remote audio processing for Substrate, allowing it to connect to the main Tower Desk PC over ZeroTier when away from home.
 
 ## Prerequisites
 - ZeroTier network already configured on both devices
   - Tower Desk PC: 10.147.17.235
-  - TPXGO: 10.147.17.147
+  - Substrate: 10.147.17.147
 - Node.js installed on Tower Desk PC
 - Existing audio processing pipeline on main PC
 
@@ -17,8 +17,8 @@ This plan outlines the steps to implement remote audio processing for TPXGO, all
 #### Step 1.1: Create Server Project
 ```bash
 # Create project directory
-mkdir C:\Users\Bl0ck\Desktop\tpxgo-remote-server
-cd C:\Users\Bl0ck\Desktop\tpxgo-remote-server
+mkdir C:\Users\Bl0ck\Desktop\Substrate-remote-server
+cd C:\Users\Bl0ck\Desktop\Substrate-remote-server
 
 # Initialize Node.js project
 npm init -y
@@ -56,13 +56,13 @@ app.listen(PORT, HOST, () => {
 
 **Testing**: 
 1. Start server: `node server.js`
-2. From TPXGO, run: `curl http://10.147.17.235:3000/ping`
+2. From Substrate, run: `curl http://10.147.17.235:3000/ping`
 3. Should receive: `{"status":"ok","message":"Server is running"}`
 
 #### Step 1.3: Implement Audio Processing Endpoint
 Add to `server.js`:
 ```javascript
-// Endpoint to receive audio from TPXGO
+// Endpoint to receive audio from Substrate
 app.post('/process-audio', async (req, res) => {
   try {
     console.log('Received audio processing request');
@@ -84,7 +84,7 @@ app.post('/process-audio', async (req, res) => {
       timestamp: new Date().toISOString()
     };
     
-    // Return response to TPXGO
+    // Return response to Substrate
     res.json({
       success: true,
       response: mockResponse
@@ -106,7 +106,7 @@ curl -X POST http://10.147.17.235:3000/process-audio \
 ```
 3. Should receive JSON response with mock data
 
-### Phase 2: TPXGO Client Implementation
+### Phase 2: Substrate Client Implementation
 
 #### Step 2.1: Add Remote Mode Configuration
 Add to `radial_config_new.js`:
@@ -156,7 +156,7 @@ cardsHTML += createSectionCard("remote-mode", "Remote Mode", getRemoteModeConten
 #### Step 2.2: Create Remote Connection Module
 Create new file `remote_connection.js`:
 ```javascript
-// Remote connection handler for TPXGO
+// Remote connection handler for Substrate
 const remoteConfig = {
     enabled: false,
     serverAddress: '10.147.17.235:3000'
@@ -424,7 +424,7 @@ async function testConnection() {
 
 #### Step 3.3: Full System Testing
 1. Start Tower Desk server
-2. Enable remote mode on TPXGO
+2. Enable remote mode on Substrate
 3. Capture and send audio
 4. Verify processing and response
 
@@ -434,7 +434,7 @@ async function testConnection() {
 - **Symptom**: Cannot connect to Tower Desk server
 - **Check**:
   1. Verify both devices are connected to ZeroTier network
-  2. Ping Tower Desk from TPXGO: `ping 10.147.17.235`
+  2. Ping Tower Desk from Substrate: `ping 10.147.17.235`
   3. Check server is running: `curl http://10.147.17.235:3000/ping`
   4. Verify no firewall blocking connections
 
@@ -455,7 +455,7 @@ async function testConnection() {
 
 ## Deployment Checklist
 - [ ] Server starts automatically on Tower Desk boot
-- [ ] Remote mode settings persist across TPXGO restarts
+- [ ] Remote mode settings persist across Substrate restarts
 - [ ] Connection status updates correctly
 - [ ] Audio processing works reliably
 - [ ] Error handling and fallback mechanisms work properly

@@ -59,6 +59,24 @@ workspace/temp/
 workspace/output/
 workspace/recordings/
 
+# Config (contains personal settings)
+config.json
+
+# Binaries
+*.exe
+
+# Legacy / duplicate
+python_scripts/
+test_venv/
+test_venv2/
+
+# Dev experiments / old branding
+reddit_debug.py
+reddit_poster.py
+reddit_poster_pyautogui.py
+tiny_pirate.jpg
+cleanup_unused_files.ps1
+
 # OS
 Thumbs.db
 .DS_Store

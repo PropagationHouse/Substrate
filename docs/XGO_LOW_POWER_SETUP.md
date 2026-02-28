@@ -148,7 +148,7 @@ sudo systemctl daemon-reload
 
 ## Notes
 
-- The script runs independently of Tiny Pirate
+- The script runs independently of Substrate
 - Button press is debounced by the `Button` class
 - Graceful shutdown on `Ctrl+C` (exits low-power mode first)
 - Auto-restart on crash (if running as service)

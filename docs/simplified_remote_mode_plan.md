@@ -1,4 +1,4 @@
-# Simplified TPXGO Remote Mode Implementation
+# Simplified Substrate Remote Mode Implementation
 
 ## Overview
 This simplified approach focuses on using the XGO's microphone to capture audio and send it to the main app over the existing ZeroTier connection.
@@ -7,7 +7,7 @@ This simplified approach focuses on using the XGO's microphone to capture audio 
 
 ### 1. Access XGO Microphone
 ```javascript
-// In TPXGO app
+// In Substrate app
 function setupMicrophone() {
     navigator.mediaDevices.getUserMedia({ audio: true })
         .then(stream => {

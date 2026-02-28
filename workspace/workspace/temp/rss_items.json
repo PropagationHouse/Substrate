@@ -1,0 +1,492 @@
+[
+  {
+    "source": "https://research.google/blog/rss",
+    "title": "Teaching AI to read a map",
+    "link": "https://research.google/blog/teaching-ai-to-read-a-map/",
+    "description": "Machine Perception",
+    "pubDate": "Tue, 17 Feb 2026 21:37:00 +0000"
+  },
+  {
+    "source": "https://research.google/blog/rss",
+    "title": "Scheduling in a changing world: Maximizing throughput with time-varying capacity",
+    "link": "https://research.google/blog/scheduling-in-a-changing-world-maximizing-throughput-with-time-varying-capacity/",
+    "description": "Algorithms & Theory",
+    "pubDate": "Wed, 11 Feb 2026 10:34:00 +0000"
+  },
+  {
+    "source": "https://research.google/blog/rss",
+    "title": "Beyond one-on-one: Authoring, simulating, and testing dynamic human-AI group conversations",
+    "link": "https://research.google/blog/beyond-one-on-one-authoring-simulating-and-testing-dynamic-human-ai-group-conversations/",
+    "description": "Human-Computer Interaction and Visualization",
+    "pubDate": "Tue, 10 Feb 2026 18:30:00 +0000"
+  },
+  {
+    "source": "https://research.google/blog/rss",
+    "title": "How AI trained on birds is surfacing underwater mysteries",
+    "link": "https://research.google/blog/how-ai-trained-on-birds-is-surfacing-underwater-mysteries/",
+    "description": "Climate & Sustainability",
+    "pubDate": "Mon, 09 Feb 2026 18:38:00 +0000"
+  },
+  {
+    "source": "https://research.google/blog/rss",
+    "title": "How AI tools can redefine universal design to increase accessibility",
+    "link": "https://research.google/blog/how-ai-agents-can-redefine-universal-design-to-increase-accessibility/",
+    "description": "Education Innovation",
+    "pubDate": "Thu, 05 Feb 2026 08:28:00 +0000"
+  },
+  {
+    "source": "https://blogs.nvidia.com/feed/",
+    "title": "From Radiology to Drug Discovery, Survey Reveals AI Is Delivering Clear Return on Investment in Healthcare",
+    "link": "https://blogs.nvidia.com/blog/ai-in-healthcare-survey-2026/",
+    "description": "AI is accelerating every aspect of healthcare \u2014 from radiology and drug discovery to medical device manufacturing and new treatment methods enabled by digital twins of the human body. NVIDIA&#8217;s second annual \u201cState of AI in Healthcare and Life Sciences\u201d survey report reveals how the industry is moving from AI experimentation to execution, reaping return\t<a class=\"read-more\" href=\"https://blogs.nvidia.com/blog/ai-in-healthcare-survey-2026/\">\n\t\tRead Article\t\t<span data-icon=\"y\"></span>\n\t</a>\n...",
+    "pubDate": "Tue, 24 Feb 2026 14:00:34 +0000"
+  },
+  {
+    "source": "https://blogs.nvidia.com/feed/",
+    "title": "NVIDIA Brings AI-Powered Cybersecurity to World\u2019s Critical Infrastructure",
+    "link": "https://blogs.nvidia.com/blog/ai-cybersecurity-operational-technology-industrial-control-systems/",
+    "description": "As technologies and systems become more digitalized and connected across the world, operational technology (OT) environments and industrial control systems (ICS) \u2014 from energy and manufacturing to transportation and utilities \u2014 are increasingly depending on enterprise networks and the cloud. This expands OT and ICS capabilities \u2014 but also their exposure to cyber threats. Unlike\t<a class=\"read-more\" href=\"https://blogs.nvidia.com/blog/ai-cybersecurity-operational-technology-industrial-control-sys...",
+    "pubDate": "Mon, 23 Feb 2026 16:00:57 +0000"
+  },
+  {
+    "source": "https://blogs.nvidia.com/feed/",
+    "title": "Survey Reveals AI Advances in Telecom: Networks and Automation in Driver\u2019s Seat as Return on Investment Climbs",
+    "link": "https://blogs.nvidia.com/blog/ai-in-telco-survey-2026/",
+    "description": "AI is accelerating the telecommunications industry\u2019s transformation, becoming the backbone of autonomous networks and AI-native wireless infrastructure. At the same time, the technology is unlocking new business and revenue opportunities, as telecom operators accelerate AI adoption across consumers, enterprises and nations. NVIDIA\u2019s fourth annual \u201cState of AI in Telecommunications\u201d survey report unpacks these trends, underscoring\t<a class=\"read-more\" href=\"https://blogs.nvidia.com/blog/ai-in-tel...",
+    "pubDate": "Thu, 19 Feb 2026 14:00:45 +0000"
+  },
+  {
+    "source": "https://blogs.nvidia.com/feed/",
+    "title": "All About the Games: Play Over 4,500 Titles With GeForce NOW",
+    "link": "https://blogs.nvidia.com/blog/geforce-now-thursday-battlefield-season-2/",
+    "description": "The GeForce NOW anniversary celebration keeps on rolling, and this week is all about the games that make it possible. With more than 4,500 titles supported in the cloud \u2014 plus 12 new games this week \u2014 there\u2019s always something new to stream, share and discover. The #6YearsofGFN fun continues with a community giveaway hosted\t<a class=\"read-more\" href=\"https://blogs.nvidia.com/blog/geforce-now-thursday-battlefield-season-2/\">\n\t\tRead Article\t\t<span data-icon=\"y\"></span>\n\t</a>\n\t",
+    "pubDate": "Thu, 19 Feb 2026 14:00:35 +0000"
+  },
+  {
+    "source": "https://blogs.nvidia.com/feed/",
+    "title": "India Fuels Its AI Mission With NVIDIA",
+    "link": "https://blogs.nvidia.com/blog/india-ai-mission-infrastructure-models/",
+    "description": "From AI infrastructure leaders to frontier model developers, India is teaming with NVIDIA to drive AI transformation across the nation.",
+    "pubDate": "Wed, 18 Feb 2026 00:30:49 +0000"
+  },
+  {
+    "source": "https://arxiv.org/rss/cs.LG",
+    "title": "Latent Context Compilation: Distilling Long Context into Compact Portable Memory",
+    "link": "https://arxiv.org/abs/2602.21221",
+    "description": "arXiv:2602.21221v1 Announce Type: new \nAbstract: Efficient long-context LLM deployment is stalled by a dichotomy between amortized compression, which struggles with out-of-distribution generalization, and Test-Time Training, which incurs prohibitive synthetic data costs and requires modifying model weights, creating stateful parameters that complicate concurrent serving. We propose Latent Context Compilation, a framework that fundamentally shifts context processing from adaptation to compilation...",
+    "pubDate": "Thu, 26 Feb 2026 00:00:00 -0500"
+  },
+  {
+    "source": "https://arxiv.org/rss/cs.LG",
+    "title": "ACAR: Adaptive Complexity Routing for Multi-Model Ensembles with Auditable Decision Traces",
+    "link": "https://arxiv.org/abs/2602.21231",
+    "description": "arXiv:2602.21231v1 Announce Type: new \nAbstract: We present ACAR (Adaptive Complexity and Attribution Routing), a measurement framework for studying multi-model orchestration under auditable conditions. ACAR uses self-consistency variance (sigma) computed from N=3 probe samples to route tasks across single-model, two-model, and three-model execution modes. The system is implemented on top of TEAMLLM, a deterministic execution substrate with immutable artifacts and complete decision traces. We ev...",
+    "pubDate": "Thu, 26 Feb 2026 00:00:00 -0500"
+  },
+  {
+    "source": "https://arxiv.org/rss/cs.LG",
+    "title": "Urban Vibrancy Embedding and Application on Traffic Prediction",
+    "link": "https://arxiv.org/abs/2602.21232",
+    "description": "arXiv:2602.21232v1 Announce Type: new \nAbstract: Urban vibrancy reflects the dynamic human activity within urban spaces and is often measured using mobile data that captures floating population trends. This study proposes a novel approach to derive Urban Vibrancy embeddings from real-time floating population data to enhance traffic prediction models. Specifically, we utilize variational autoencoders (VAE) to compress this data into actionable embeddings, which are then integrated with long short...",
+    "pubDate": "Thu, 26 Feb 2026 00:00:00 -0500"
+  },
+  {
+    "source": "https://arxiv.org/rss/cs.LG",
+    "title": "AngelSlim: A more accessible, comprehensive, and efficient toolkit for large model compression",
+    "link": "https://arxiv.org/abs/2602.21233",
+    "description": "arXiv:2602.21233v1 Announce Type: new \nAbstract: This technical report introduces AngelSlim, a comprehensive and versatile toolkit for large model compression developed by the Tencent Hunyuan team. By consolidating cutting-edge algorithms, including quantization, speculative decoding, token pruning, and distillation. AngelSlim provides a unified pipeline that streamlines the transition from model compression to industrial-scale deployment. To facilitate efficient acceleration, we integrate state...",
+    "pubDate": "Thu, 26 Feb 2026 00:00:00 -0500"
+  },
+  {
+    "source": "https://arxiv.org/rss/cs.LG",
+    "title": "Group Orthogonalized Policy Optimization:Group Policy Optimization as Orthogonal Projection in Hilbert Space",
+    "link": "https://arxiv.org/abs/2602.21269",
+    "description": "arXiv:2602.21269v1 Announce Type: new \nAbstract: We present Group Orthogonalized Policy Optimization (GOPO), a new alignment algorithm for large language models derived from the geometry of Hilbert function spaces. Instead of optimizing on the probability simplex and inheriting the exponential curvature of Kullback-Leibler divergence, GOPO lifts alignment into the Hilbert space L2(pi_k) of square-integrable functions with respect to the reference policy. Within this space, the simplex constraint...",
+    "pubDate": "Thu, 26 Feb 2026 00:00:00 -0500"
+  },
+  {
+    "source": "https://dev.to/feed",
+    "title": "Appends for AI apps: Stream into a single message with Ably AI Transport",
+    "link": "https://dev.to/ablyblog/appends-for-ai-apps-stream-into-a-single-message-with-ably-ai-transport-398a",
+    "description": "<p>Streaming tokens is easy. Resuming cleanly is not. A user refreshes mid-response, another client joins late, a mobile connection drops for 10 seconds, and suddenly your \"one answer\" is 600 tiny messages that your UI has to stitch back together. Message history turns into fragments. You start building a side store just to reconstruct \"the response so far\".</p>\n\n<p>This is not a model problem. It's a delivery problem</p>\n\n<p>That's why we developed message appends for <a href=\"https://ably.com/...",
+    "pubDate": "Thu, 26 Feb 2026 12:05:30 +0000"
+  },
+  {
+    "source": "https://dev.to/feed",
+    "title": "Node.js Application with CI/CD GitLab Pipeline on AWS EC2",
+    "link": "https://dev.to/addwebsolutionpvtltd/nodejs-application-with-cicd-gitlab-pipeline-on-aws-ec2-2kk9",
+    "description": "<blockquote>\n<p>\u201cAutomation is the key to speed and reliability in modern software development.\u201d</p>\n</blockquote>\n\n<h2>\n  \n  \n  Table of Contents\n</h2>\n\n<ol>\n<li>Introduction</li>\n<li>Architecture Overview</li>\n<li>Prerequisites</li>\n<li>CI/CD Workflow (Step-by-Step)</li>\n<li>GitLab Pipeline Configuration</li>\n<li>Deployment Process on AWS EC2</li>\n<li>Security Best Practices</li>\n<li>Interesting Facts &amp; Statistics</li>\n<li>FAQs</li>\n<li>Key Takeaways</li>\n<li>Conclusion</li>\n</ol>\n\n<h2>\n  ...",
+    "pubDate": "Thu, 26 Feb 2026 12:01:06 +0000"
+  },
+  {
+    "source": "https://dev.to/feed",
+    "title": "The \u00a320 Billion Handshake",
+    "link": "https://dev.to/rawveg/the-ps20-billion-handshake-2mmk",
+    "description": "<p>The smartphone in your pocket contains a curious paradox. Apple, one of the world's most valuable companies, builds its own chips, designs its own operating system, and controls every aspect of its ecosystem with obsessive precision. Yet when you tap Safari's search bar, you're not using an Apple search engine. You're using Google. And Google pays Apple a staggering $20 billion every year to keep it that way.</p>\n\n<p>This colossal payment, revealed during the US Department of Justice's antitr...",
+    "pubDate": "Thu, 26 Feb 2026 12:00:00 +0000"
+  },
+  {
+    "source": "https://dev.to/feed",
+    "title": "Kubernetes'te StorageClass Nedir?",
+    "link": "https://dev.to/tarikanafarta/kuberneteste-storageclass-nedir-dha",
+    "description": "<h2>\n  \n  \n  PV, PVC ve Veri Ger\u00e7ekten Nerede Saklan\u0131yor?\n</h2>\n\n<p>Bu yaz\u0131da \u015fu konular\u0131 inceleyece\u011fim:</p>\n\n<ol>\n<li>PV (Persistent Volume) nedir?</li>\n<li>PVC (Persistent Volume Claim) nedir?</li>\n<li>StorageClass ne i\u015fe yarar?</li>\n<li>Static vs Dynamic provisioning fark\u0131 nedir?</li>\n<li>MariaDB / PostgreSQL gibi uygulamalarda disk nerede?</li>\n</ol>\n\n\n\n\n<h2>\n  \n  \n  Storage Ak\u0131\u015f\u0131n\u0131n Mant\u0131\u011f\u0131\n</h2>\n\n<p>\u00d6ncelikle Kubernetes'te storage zinciri \u015fu \u015fekildedir:</p>\n\n<blockquote>\n<p>Pod -&gt; PVC -...",
+    "pubDate": "Thu, 26 Feb 2026 11:49:45 +0000"
+  },
+  {
+    "source": "https://dev.to/feed",
+    "title": "Why is cdk.out (Cloud Assembly) Necessary in AWS CDK?",
+    "link": "https://dev.to/aws-heroes/why-is-cdkout-cloud-assembly-necessary-in-aws-cdk-n5f",
+    "description": "<h2>\n  \n  \n  What is cdk.out\n</h2>\n\n<p>cdk.out is a directory that stores a collection of files called the cloud assembly.</p>\n\n<p>When you run the cdk synth command or the cdk deploy command, the cloud assembly is generated from your CDK code and stored in the cdk.out directory.</p>\n\n\n\n\n<h2>\n  \n  \n  What is the Cloud Assembly\n</h2>\n\n<p>The cloud assembly is a collection of files generated by the synthesis of a CDK application (CDK code). The CDK CLI references this information to deploy resourc...",
+    "pubDate": "Thu, 26 Feb 2026 11:45:47 +0000"
+  },
+  {
+    "source": "https://www.creativebloq.com/rss",
+    "title": " My 15 steps for creating concept art that feels real ",
+    "link": "https://www.creativebloq.com/art/digital-art/my-15-steps-for-creating-concept-art-that-feels-real",
+    "description": "\n                             Cheri Wang walks us through her process for building a fantastical yet believable world filled with detail and beauty. \n                                                                                                            ",
+    "pubDate": "Thu, 26 Feb 2026 12:00:00 +0000"
+  },
+  {
+    "source": "https://www.creativebloq.com/rss",
+    "title": " The importance of saying no, according to creative pros ",
+    "link": "https://www.creativebloq.com/professional-development/creative-careers/the-importance-of-saying-no-according-to-creative-pros",
+    "description": "\n                             How managing your time effectively often comes down to just one word. \n                                                                                                            ",
+    "pubDate": "Thu, 26 Feb 2026 11:00:00 +0000"
+  },
+  {
+    "source": "https://www.creativebloq.com/rss",
+    "title": " How a childhood dinosaur obsession became a creature design career ",
+    "link": "https://www.creativebloq.com/3d/3d-art/how-a-childhood-dinosaur-obsession-became-a-creature-design-career",
+    "description": "\n                             Exposure to films like Jurassic Park sparked Michael Michera's love of design as a concept artist. \n                                                                                                            ",
+    "pubDate": "Thu, 26 Feb 2026 10:00:00 +0000"
+  },
+  {
+    "source": "https://www.creativebloq.com/rss",
+    "title": " How to save up to $900 on your Samsung S26 preorder ",
+    "link": "https://www.creativebloq.com/tech/phones-tablets/how-to-save-up-to-usd900-on-your-samsung-s26-preorder",
+    "description": "\n                             I've got all the discount codes you need. \n                                                                                                            ",
+    "pubDate": "Thu, 26 Feb 2026 09:00:00 +0000"
+  },
+  {
+    "source": "https://www.creativebloq.com/rss",
+    "title": " I tried the new Acer Chromebook 311, and it just keeps on going (even if a little slowly) ",
+    "link": "https://www.creativebloq.com/tech/laptops/i-tried-the-new-acer-chromebook-311-and-it-just-keeps-on-going-even-if-a-little-slowly",
+    "description": "\n                             The Acer Chromebook 311 struggles for CPU power but excels in battery performance. \n                                                                                                            ",
+    "pubDate": "Thu, 26 Feb 2026 08:00:00 +0000"
+  },
+  {
+    "source": "https://abduzeedo.com/rss.xml",
+    "title": "Vibe Coding Lettrix: Building a Game at the Speed of Thought",
+    "link": "https://abduzeedo.com/vibe-coding-lettrix-building-game-speed-thought",
+    "description": "<span class=\"field field--name-title field--type-string field--label-hidden\">Vibe Coding Lettrix: Building a Game at the Speed of Thought</span>\n\n                    <a href=\"https://abduzeedo.com/vibe-coding-lettrix-building-game-speed-thought\" hreflang=\"en\"><img loading=\"lazy\" src=\"https://abduzeedo.com/sites/default/files/originals/hero_lettrix_0.png\" width=\"1600\" height=\"1600\" alt=\"Vibe Coding Lettrix: Building a Game at the Speed of Thought\" title=\"Vibe Coding Lettrix: Building a Game at th...",
+    "pubDate": "Thu, 26 Feb 2026 05:58:54 +0000"
+  },
+  {
+    "source": "https://abduzeedo.com/rss.xml",
+    "title": "BLOK: Luxury \u00c9clair Branding as Architectural Art",
+    "link": "https://abduzeedo.com/blok-luxury-eclair-branding-architectural-art",
+    "description": "<span class=\"field field--name-title field--type-string field--label-hidden\">BLOK: Luxury \u00c9clair Branding as Architectural Art</span>\n\n                    <a href=\"https://abduzeedo.com/blok-luxury-eclair-branding-architectural-art\" hreflang=\"en\"><img loading=\"lazy\" src=\"https://abduzeedo.com/sites/default/files/originals/hero_blok.jpg\" width=\"1600\" height=\"1600\" alt=\"BLOK: Luxury \u00c9clair Branding as Architectural Art\" title=\"BLOK: Luxury \u00c9clair Branding as Architectural Art\">\n</a>\n\n             ...",
+    "pubDate": "Thu, 26 Feb 2026 05:27:16 +0000"
+  },
+  {
+    "source": "https://abduzeedo.com/rss.xml",
+    "title": "TrustedHousesitters Introduces Design-Led Campaign About Pet Comfort",
+    "link": "https://abduzeedo.com/trustedhousesitters-introduces-design-led-campaign-about-pet-comfort",
+    "description": "<span class=\"field field--name-title field--type-string field--label-hidden\">TrustedHousesitters Introduces Design-Led Campaign About Pet Comfort</span>\n\n                    <a href=\"https://abduzeedo.com/trustedhousesitters-introduces-design-led-campaign-about-pet-comfort\" hreflang=\"en\"><img loading=\"lazy\" src=\"https://abduzeedo.com/sites/default/files/originals/Hero%20Image%20for%20Abduzeedo%20%281600%20x%201600%20px%29.jpg\" width=\"1600\" height=\"1600\" alt=\"TrustedHousesitters Introduces Design...",
+    "pubDate": "Mon, 23 Feb 2026 17:51:55 +0000"
+  },
+  {
+    "source": "https://abduzeedo.com/rss.xml",
+    "title": "Vibe Coding: Learning AI by Building my Personal Photo Editor",
+    "link": "https://abduzeedo.com/vibe-coding-learning-ai-building-my-personal-photo-editor",
+    "description": "<span class=\"field field--name-title field--type-string field--label-hidden\">Vibe Coding: Learning AI by Building my Personal Photo Editor</span>\n\n                    <a href=\"https://abduzeedo.com/vibe-coding-learning-ai-building-my-personal-photo-editor\" hreflang=\"en\"><img loading=\"lazy\" src=\"https://abduzeedo.com/sites/default/files/originals/hero_photo-editor-vibe.jpg\" width=\"1600\" height=\"1600\" alt=\"Vibe Coding: Learning AI by Building my Personal Photo Editor\" title=\"Vibe Coding: Learning ...",
+    "pubDate": "Mon, 23 Feb 2026 17:26:29 +0000"
+  },
+  {
+    "source": "https://abduzeedo.com/rss.xml",
+    "title": "Street Photography in Bangalore: A Study in Contrast",
+    "link": "https://abduzeedo.com/street-photography-bangalore-study-contrast",
+    "description": "<span class=\"field field--name-title field--type-string field--label-hidden\">Street Photography in Bangalore: A Study in Contrast</span>\n\n                    <a href=\"https://abduzeedo.com/street-photography-bangalore-study-contrast\" hreflang=\"en\"><img loading=\"lazy\" src=\"https://abduzeedo.com/sites/default/files/originals/hero_india_0.jpg\" width=\"1600\" height=\"1600\" alt=\"Street Photography in Bangalore: A Study in Contrast\" title=\"Street Photography in Bangalore: A Study in Contrast\">\n</a>\n\n   ...",
+    "pubDate": "Sun, 22 Feb 2026 16:32:40 +0000"
+  },
+  {
+    "source": "https://techcrunch.com/feed/",
+    "title": "Instagram now alerts parents if their teen searches for suicide or self-harm content",
+    "link": "https://techcrunch.com/2026/02/26/instagram-now-alerts-parents-if-their-teen-searches-for-suicide-or-self-harm-content/",
+    "description": "Parents will be informed if their teen searches for suicide or self-harm content and offered resources.",
+    "pubDate": "Thu, 26 Feb 2026 12:00:00 +0000"
+  },
+  {
+    "source": "https://techcrunch.com/feed/",
+    "title": "Salesforce CEO Marc Benioff: This isn\u2019t our first SaaSpocalypse",
+    "link": "https://techcrunch.com/2026/02/25/salesforce-ceo-marc-benioff-this-isnt-our-first-saaspocalypse/",
+    "description": "Salesforce reported a solid year-end earnings and then pulled out all the stops to ward off more talk of the death of its business to AI.",
+    "pubDate": "Thu, 26 Feb 2026 01:59:12 +0000"
+  },
+  {
+    "source": "https://techcrunch.com/feed/",
+    "title": "Gushwork bets on AI search for customer leads \u2014 and early results are emerging",
+    "link": "https://techcrunch.com/2026/02/25/gushwork-bets-on-ai-search-for-customer-leads-and-early-results-are-emerging/",
+    "description": "Gushwork has raised $9 million in a seed round led by SIG and Lightspeed. The startup has seen early customer traction from AI search tools like ChatGPT.",
+    "pubDate": "Thu, 26 Feb 2026 00:00:00 +0000"
+  },
+  {
+    "source": "https://techcrunch.com/feed/",
+    "title": "Anthropic acquires computer-use AI startup Vercept after Meta poached one of its founders",
+    "link": "https://techcrunch.com/2026/02/25/anthropic-acquires-vercept-ai-startup-agents-computer-use-founders-investors/",
+    "description": "Seattle-based Vercept developed complex agentic tools, including a computer-use agent that could complete tasks inside applications like a person with a laptop would.",
+    "pubDate": "Wed, 25 Feb 2026 23:49:19 +0000"
+  },
+  {
+    "source": "https://techcrunch.com/feed/",
+    "title": "Nvidia has another record quarter amid record capex spends",
+    "link": "https://techcrunch.com/2026/02/25/nvidia-earnings-record-capex-spend-ai/",
+    "description": "\"The demand for tokens in the world has gone completely exponential,\" Nvidia CEO Jensen Huang said about the company's earnings.",
+    "pubDate": "Wed, 25 Feb 2026 23:04:42 +0000"
+  },
+  {
+    "source": "https://feeds.arstechnica.com/arstechnica/index",
+    "title": "Musk has no proof OpenAI stole xAI trade secrets, judge rules, tossing lawsuit",
+    "link": "https://arstechnica.com/tech-policy/2026/02/judge-xai-cant-claim-openai-stole-trade-secrets-just-by-hiring-ex-staffers/",
+    "description": "\n                        Even twisting an ex-employee's text to favor xAI's reading fails to sway judge.\n                    ",
+    "pubDate": "Wed, 25 Feb 2026 22:09:21 +0000"
+  },
+  {
+    "source": "https://feeds.arstechnica.com/arstechnica/index",
+    "title": "The Galaxy S26 is faster, more expensive, and even more chock-full of AI",
+    "link": "https://arstechnica.com/gadgets/2026/02/samsung-reveals-galaxy-s26-lineup-with-privacy-display-and-exclusive-gemini-smarts/",
+    "description": "\n                        Samsung's Galaxy S26 series is available for preorder today and ships on March 11.\n                    ",
+    "pubDate": "Wed, 25 Feb 2026 21:41:27 +0000"
+  },
+  {
+    "source": "https://feeds.arstechnica.com/arstechnica/index",
+    "title": "Judge doesn't trust DOJ with search of devices seized from Wash. Post reporter",
+    "link": "https://arstechnica.com/tech-policy/2026/02/judge-doesnt-trust-doj-with-search-of-devices-seized-from-wash-post-reporter/",
+    "description": "\n                        Court to search devices itself instead of letting government have full access.\n                    ",
+    "pubDate": "Wed, 25 Feb 2026 20:53:54 +0000"
+  },
+  {
+    "source": "https://feeds.arstechnica.com/arstechnica/index",
+    "title": "Could a vaccine prevent dementia? Shingles shot data only getting stronger.",
+    "link": "https://arstechnica.com/health/2026/02/could-a-vaccine-prevent-dementia-shingles-shot-data-only-getting-stronger/",
+    "description": "\n                        Latest data hints that benefits seen so far could be underestimates.\n                    ",
+    "pubDate": "Wed, 25 Feb 2026 19:29:50 +0000"
+  },
+  {
+    "source": "https://feeds.arstechnica.com/arstechnica/index",
+    "title": "2026 Lexus RZ 550e review: Likable, but it needs improvement",
+    "link": "https://arstechnica.com/cars/2026/02/2026-lexus-rz-550e-review-likable-but-it-needs-improvement/",
+    "description": "\n                        It's not very efficient, and the synthetic gearshifts aren't great, but I liked it?\n                    ",
+    "pubDate": "Wed, 25 Feb 2026 18:27:27 +0000"
+  },
+  {
+    "source": "https://www.wired.com/feed/rss",
+    "title": "Who\u2019s Your Daddy? A Chatbot",
+    "link": "https://www.wired.com/story/whos-your-daddy-a-chatbot/",
+    "description": "More people are turning to AI to explore their BDSM fantasies, but some in the community feel it\u2019s a cop-out.",
+    "pubDate": "Thu, 26 Feb 2026 12:00:00 +0000"
+  },
+  {
+    "source": "https://www.wired.com/feed/rss",
+    "title": "The Best Headphones I\u2019ve Tried (and Why I'd Buy Them All)",
+    "link": "https://www.wired.com/story/best-headphones/",
+    "description": "The portable listening revolution is fully underway. From open earbuds to noise cancelers and wired headphones, I can find a reason to love them all.",
+    "pubDate": "Thu, 26 Feb 2026 11:30:00 +0000"
+  },
+  {
+    "source": "https://www.wired.com/feed/rss",
+    "title": "Why Sierra the Supercomputer Had to Die",
+    "link": "https://www.wired.com/story/why-sierra-the-supercomputer-had-to-die/",
+    "description": "For seven years, she ran high-security nuclear simulations for the US government. Now, this famous supercomputer is being put to death.",
+    "pubDate": "Thu, 26 Feb 2026 11:00:00 +0000"
+  },
+  {
+    "source": "https://www.wired.com/feed/rss",
+    "title": "Factor Offers High Protein Meal Delivery Options (2026)",
+    "link": "https://www.wired.com/story/factor-meal-delivery-service-2026/",
+    "description": "Even if you're incredibly busy, you can maintain your gains by eating the equivalent of the microwaveable chicken in The Fifth Element.",
+    "pubDate": "Thu, 26 Feb 2026 10:30:00 +0000"
+  },
+  {
+    "source": "https://www.wired.com/feed/rss",
+    "title": "TurboTax Service Codes: Up to 20% Off | February 2026",
+    "link": "https://www.wired.com/story/turbotax-coupon/",
+    "description": "Tax season doesn\u2019t have to be stressful. Save up to 20% on federal tax filings, $40 off Expert Assist, and more exclusive TurboTax discount codes on WIRED.",
+    "pubDate": "Thu, 26 Feb 2026 06:05:00 +0000"
+  },
+  {
+    "source": "https://www.technologyreview.com/feed/",
+    "title": "This company claims a battery breakthrough. Now they need to prove it.",
+    "link": "https://www.technologyreview.com/2026/02/26/1133722/solid-state-batteries-donut-lab/",
+    "description": "When a company claims to have created what\u2019s essentially the holy grail of batteries, there are bound to be some questions. Interest has been swirling since Donut Lab, a Finnish company, announced last month that it had a new solid-state battery technology, one that was ready for large-scale production. The company said its batteries can&#8230;",
+    "pubDate": "Thu, 26 Feb 2026 11:00:00 +0000"
+  },
+  {
+    "source": "https://www.technologyreview.com/feed/",
+    "title": "America was winning the race to find Martian life. Then China jumped in.",
+    "link": "https://www.technologyreview.com/2026/02/26/1133584/america-china-mars-sample-return-space-race-nasa/",
+    "description": "To most people, rocks are just rocks. To geologists, they are much, much more: crystal-filled time capsules with the power to reveal the state of the planet at the very moment they were forged.&#160; For decades, NASA had been on a time capsule hunt like none other\u2014one across Mars. Its rovers have journeyed around a&#8230;",
+    "pubDate": "Thu, 26 Feb 2026 10:00:00 +0000"
+  },
+  {
+    "source": "https://www.technologyreview.com/feed/",
+    "title": "Roundtables: Why 2026 Is the Year for Sodium-Ion Batteries",
+    "link": "https://www.technologyreview.com/2026/02/25/1132873/roundtables-why-2026-is-the-year-for-sodium-ion-batteries/",
+    "description": "Listen to the session or watch below Sodium-based batteries could be a cheaper, safer alternative to lithium-ion, and the technology is finally making its way into cars\u2014and energy storage arrays on the grid. Sodium-ion batteries are one of MIT Technology Review&#8217;s 10 Breakthrough Technologies of 2026 list, and this subscriber-only discussion explains why. Watch a&#8230;",
+    "pubDate": "Wed, 25 Feb 2026 21:15:27 +0000"
+  },
+  {
+    "source": "https://www.technologyreview.com/feed/",
+    "title": "The Download: introducing the Crime issue",
+    "link": "https://www.technologyreview.com/2026/02/25/1133653/the-download-introducing-the-crime-issue/",
+    "description": "This is today&#8217;s edition of\u00a0The Download,\u00a0our weekday newsletter that provides a daily dose of what&#8217;s going on in the world of technology. Introducing: the Crime issue Technology has long made crime and its prosecution a game of cat and mouse. But those same new technologies that have allowed crime to outpace law have also reenergized&#8230;",
+    "pubDate": "Wed, 25 Feb 2026 13:10:00 +0000"
+  },
+  {
+    "source": "https://www.technologyreview.com/feed/",
+    "title": "Listen to Earth\u2019s rumbling, secret soundtrack",
+    "link": "https://www.technologyreview.com/2026/02/25/1132829/listen-earths-rumbling-secret-soundtrack/",
+    "description": "The boom of a calving glacier. The crackling rumble of a wildfire. The roar of a surging storm front. They\u2019re the noises of the living Earth, music of this one particular sphere and clues to the true nature of these dramatic events. But as loud as all these things are, they emit even more acoustic&#8230;",
+    "pubDate": "Wed, 25 Feb 2026 11:00:00 +0000"
+  },
+  {
+    "source": "https://feed.infoq.com/",
+    "title": "ASP.NET Core in .NET 11 Preview 1 Brings New Blazor Components, Improved Navigation, and WebAssembly",
+    "link": "https://www.infoq.com/news/2026/02/asp-net-core-11-preview1/?utm_campaign=infoq_content&utm_source=infoq&utm_medium=feed&utm_term=global",
+    "description": "<img src=\"https://www.infoq.com/styles/static/images/logo/logo_bigger.jpg\"/><p>Microsoft has released ASP.NET Core in .NET 11 Preview 1, introducing new Blazor components like EnvironmentBoundary, Label, and DisplayName, along with relative URI navigation, QuickGrid row click events, IHostedService support in WebAssembly, environment variable configuration, OpenAPI binary file response schemas, and automatic dev certificate trust in WSL.</p> <i>By Almir Vuk</i>",
+    "pubDate": "Thu, 26 Feb 2026 12:00:00 GMT"
+  },
+  {
+    "source": "https://feed.infoq.com/",
+    "title": "Lessons from Growing a Software Leadership Team",
+    "link": "https://www.infoq.com/news/2026/02/software-leadership-team/?utm_campaign=infoq_content&utm_source=infoq&utm_medium=feed&utm_term=global",
+    "description": "<img src=\"https://res.infoq.com/news/2026/02/software-leadership-team/en/headerimage/generatedHeaderImage-1771757368300.jpg\"/><p>Thiago Ghisi explained how he guided managers and senior ICs to build a resilient leadership group beneath him in his talk Lessons from Growing Engineering Organizations at QCon London. Regular syncs, expectation calibration, and alignment on broader goals made leaders multipliers of culture and performance. Culture is what you do, not what you say.</p> <i>By Ben Linde...",
+    "pubDate": "Thu, 26 Feb 2026 11:03:00 GMT"
+  },
+  {
+    "source": "https://feed.infoq.com/",
+    "title": "Article: Borrowing from Kotlin/Android to Architect Scalable iOS Apps in SwiftUI",
+    "link": "https://www.infoq.com/articles/kotlin-scalable-swiftui-patterns/?utm_campaign=infoq_content&utm_source=infoq&utm_medium=feed&utm_term=global",
+    "description": "<img src=\"https://res.infoq.com/articles/kotlin-scalable-swiftui-patterns/en/headerimage/header-kotlin-scalable-swiftui-patterns-1771922819056.jpg\"/><p>Building iOS apps can feel like stitching together guidance from blog posts and Apple samples, which are rarely representative of how production architectures grow and survive. In contrast, the Kotlin/Android ecosystem has converged on well-documented, real-world patterns. This article explores how those approaches can be translated into Swift/Sw...",
+    "pubDate": "Thu, 26 Feb 2026 09:00:00 GMT"
+  },
+  {
+    "source": "https://feed.infoq.com/",
+    "title": "Microsoft Agent Framework RC Simplifies Agentic Development in .NET and Python",
+    "link": "https://www.infoq.com/news/2026/02/ms-agent-framework-rc/?utm_campaign=infoq_content&utm_source=infoq&utm_medium=feed&utm_term=global",
+    "description": "<img src=\"https://res.infoq.com/news/2026/02/ms-agent-framework-rc/en/headerimage/header-1670341892423-1771955508187.jpg\"/><p>Microsoft has announced that the Microsoft Agent Framework has reached Release Candidate status for both .NET and Python. This milestone indicates that the API surface is stable and feature-complete for what is planned in version 1.0, setting the stage for an upcoming general availability release.</p> <i>By Edin Kapi\u0107</i>",
+    "pubDate": "Thu, 26 Feb 2026 08:00:00 GMT"
+  },
+  {
+    "source": "https://feed.infoq.com/",
+    "title": "Cilium at Ten Years: Stronger Encryption, Safer Policies, and Clearer Visibility for Large Clusters",
+    "link": "https://www.infoq.com/news/2026/02/cilium-119/?utm_campaign=infoq_content&utm_source=infoq&utm_medium=feed&utm_term=global",
+    "description": "<img src=\"https://res.infoq.com/news/2026/02/cilium-119/en/headerimage/generatedHeaderImage-1772059002483.jpg\"/><p>Cilium 1.19 has been released, marking ten years of development for the eBPF-based networking and security project. There isn\u2019t a flagship feature in this release; instead, it focuses on security hardening, tightening encryption, refining network policy behaviour, and improving scalability for large Kubernetes clusters.</p> <i>By Matt Saunders</i>",
+    "pubDate": "Wed, 25 Feb 2026 23:00:00 GMT"
+  },
+  {
+    "source": "https://www.theverge.com/rss/index.xml",
+    "title": "Instagram will alert parents if their kids &#8216;repeatedly&#8217; search for self-harm topics",
+    "link": "https://www.theverge.com/tech/885110/meta-instagram-parent-alert-teen-self-harm-suicide",
+    "description": "Starting next week, Instagram will notify parents to check on their teen searching for terms related to self-harm or suicide. Meta says a similar alert system for its AI chatbots is coming later this year. The new Instagram feature sends parents an alert when their child \"repeatedly tries to search for terms clearly associated with [&#8230;]",
+    "pubDate": "2026-02-26T07:09:43-05:00"
+  },
+  {
+    "source": "https://www.theverge.com/rss/index.xml",
+    "title": "Google takes control of \u2018Android of robotics\u2019 project in quest for physical AI",
+    "link": "https://www.theverge.com/tech/885113/google-swallows-ai-robotics-moonshot-intrinsic",
+    "description": "Google is folding Alphabet's AI robotics \"moonshot,\" Intrinsic, into the company after five years as an independent unit. The move marks a strategic shift as Google doubles down on physical AI and pulls experimental projects closer to its core business. Intrinsic \"graduated\" into an independent company inside Alphabet's Other Bets division in 2021, a portfolio [&#8230;]",
+    "pubDate": "2026-02-26T06:06:33-05:00"
+  },
+  {
+    "source": "https://www.theverge.com/rss/index.xml",
+    "title": "New York sues Valve, alleging its loot boxes are \u2018quintessential gambling\u2019",
+    "link": "https://www.theverge.com/games/884978/valve-lawsuit-loot-boxes-new-york-attorney-general-lawsuit",
+    "description": "New York Attorney General Letitia James is suing Valve for \"illegally promoting gambling\" through the loot box systems it has built for video games like Counter-Strike 2, Team Fortress 2, and Dota 2, according to a press release. The attorney general seeks to \"permanently stop Valve from promoting gambling features in its games, disgorge all [&#8230;]",
+    "pubDate": "2026-02-26T05:28:13-05:00"
+  },
+  {
+    "source": "https://www.theverge.com/rss/index.xml",
+    "title": "How the new Galaxy S26 phones compare",
+    "link": "https://www.theverge.com/gadgets/883733/samsung-galaxy-s26-vs-plus-ultra-specs-features-hardware-comparison",
+    "description": "Samsung has just announced its new Galaxy S26 lineup, which includes the S26, S26 Plus, and S26 Ultra. While they aren't radical departures from last year's models, they bring a handful of notable upgrades. All three run on Qualcomm's Galaxy-centric Snapdragon 8 Elite Gen 5, which delivers improved performance and powers a slew of new [&#8230;]",
+    "pubDate": "2026-02-26T03:39:53-05:00"
+  },
+  {
+    "source": "https://www.theverge.com/rss/index.xml",
+    "title": "Corsair is halting Drop sales after March 25th",
+    "link": "https://www.theverge.com/news/884824/corsair-ending-drop-shopping-site",
+    "description": "The Drop store, which was acquired by gaming gear giant Corsair in 2023, was a haven for mechanical keyboard enthusiasts and audiophiles to discover and buy hard-to-find gear - sometimes at surprisingly good prices. The company will cease sales after March 25th at 11:59PM PT, which is also the cut off to redeem Drop Rewards. [&#8230;]",
+    "pubDate": "2026-02-25T18:24:55-05:00"
+  },
+  {
+    "source": "https://www.pcworld.com/feed",
+    "title": "Block Google\u2019s AI summaries with this easy search trick",
+    "link": "https://www.pcworld.com/article/3069288/block-googles-ai-summaries-with-this-easy-search-trick.html",
+    "description": "\n<div id=\"link_wrapped_content\">\n<body><section class=\"wp-block-bigbite-multi-title\"><div class=\"container\"></div></section>\n\n\n\n<p>I\u2019m in the minority when it comes to AI summaries. I hate them.</p>\n\n\n\n<p>I\u2019ll save the reasons for another time\u2014I\u2019m here to share how to see your search results faster. (In this, I know I\u2019m not alone.) It takes just a quick addition to every search query.</p>\n\n\n\n<p>Just type: <code>-ai</code></p>\n\n\n\n<p>This instruction tells Google to remove the AI summary. It\u2019s cal...",
+    "pubDate": "Thu, 26 Feb 2026 11:30:00 +0000"
+  },
+  {
+    "source": "https://www.pcworld.com/feed",
+    "title": "MSI Prestige Flip 14 AI+ review: 30+ hours (!!!) of battery life",
+    "link": "https://www.pcworld.com/article/3069793/msi-prestige-flip-14-ai-review.html",
+    "description": "\n<div id=\"link_wrapped_content\">\n<body><section class=\"wp-block-bigbite-multi-title\"><div class=\"container\"></div></section>\n\n\n<div id=\"review-body\" class=\"review\"><h4 class=\"review-title\" id=\"at-a-glance\">At a glance</h4><h3 class=\"review-subTitle\" id=\"experts-rating\">Expert's Rating</h3><div class=\"starRating\" style=\"--rating: 4;\" aria-label=\"Rating of this product is 4 out of 5.\" role=\"img\"></div>\n<div><div class=\"review-columns\">\n<div class=\"review-column\"><h3 class=\"review-subTitle\" id=\"pro...",
+    "pubDate": "Thu, 26 Feb 2026 11:30:00 +0000"
+  },
+  {
+    "source": "https://www.pcworld.com/feed",
+    "title": "Refresh your computer with Windows 11 Pro for $13",
+    "link": "https://www.pcworld.com/article/3068120/refresh-your-computer-with-windows-11-pro-for-13.html",
+    "description": "\n<div id=\"link_wrapped_content\">\n<body><section class=\"wp-block-bigbite-multi-title\"><div class=\"container\"></div></section>\n\n\n\n<p><strong>TL:DR:</strong>\u00a0Sometimes a faster computer is just an OS upgrade away \u2014\u00a0<a href=\"https://shop.pcworld.com/sales/microsoft-windows-11-pro-7?utm_source=pcworld.com&#038;utm_content=PS-12594&#038;utm_medium=Referral&#038;utm_campaign=microsoft-windows-11-pro-2026-02-19&#038;utm_term=SALE-327609\" target=\"_blank\" rel=\"noreferrer noopener\">get Windows 11 Pro</a>\u00a0f...",
+    "pubDate": "Thu, 26 Feb 2026 08:00:00 +0000"
+  },
+  {
+    "source": "https://www.pcworld.com/feed",
+    "title": "Perplexity\u2019s new tool deploys teams of AI agents",
+    "link": "https://www.pcworld.com/article/3071595/perplexitys-new-tool-deploys-teams-of-ai-agents.html",
+    "description": "\n<div id=\"link_wrapped_content\">\n<body><section class=\"wp-block-bigbite-multi-title\"><div class=\"container\"></div></section>\n\n\n\n<p>The viral OpenClaw AI tool has already spawned dozens of imitators on GitHub and has spurred pivots from major AI players like Meta. Now Perplexity is throwing its hat into the personal AI agent arena, with a new tool that can put teams of sub-agents under your command.</p>\n\n\n\n<p>Unveiled on Wednesday, Computer is being billed as a \u201cgeneral-purpose digital worker tha...",
+    "pubDate": "Wed, 25 Feb 2026 20:48:51 +0000"
+  },
+  {
+    "source": "https://www.pcworld.com/feed",
+    "title": "Alexa\u2019s new AI personalities are cringe",
+    "link": "https://www.pcworld.com/article/3071273/alexas-new-ai-personalities-are-cringe.html",
+    "description": "\n<div id=\"link_wrapped_content\">\n<body><section class=\"wp-block-bigbite-multi-title\"><div class=\"container\"></div></section>\n\n\n\n<p>Alexa has long offered options for different voices and, at one time, you could even make the assistant sound like a celebrity. But now Amazon is going beyond voices by rolling out the choice of three new Alexa+ personalities. They\u2019re, um, not for everybody.</p>\n\n\n\n<p>The three new personalities\u2013Brief, Sweet, and Chill\u2013are now available on compatible Echo speakers an...",
+    "pubDate": "Wed, 25 Feb 2026 20:27:28 +0000"
+  },
+  {
+    "source": "https://www.theregister.com/headlines.rss",
+    "title": "Five Eyes warn: Patch your Cisco SD-WAN or risk root takeover",
+    "link": "https://go.theregister.com/feed/www.theregister.com/2026/02/26/five_eyes_cisco_sdwan/",
+    "description": "<h4>A rare joint alert from all five spy agencies means serious business</h4>\n<p>The Five Eyes intelligence alliance is urgently warning defenders to patch two Cisco Catalyst SD-WAN vulnerabilities used in attacks.\u2026</p>",
+    "pubDate": "Thu, 26 Feb 2026 11:39:55 GMT"
+  },
+  {
+    "source": "https://www.theregister.com/headlines.rss",
+    "title": "Say goodbye to budget PCs and smartphones \u2013 memory is too expensive now",
+    "link": "https://go.theregister.com/feed/www.theregister.com/2026/02/26/memory_price_hikes/",
+    "description": "<h4>Analyst warns soaring DRAM and NAND costs could push entry-level devices out of reach</h4>\n<p>Ballooning memory prices are forecast to kill off entry-level PCs, leading to a decline in global shipments this year - and a similar effect is going to hit smartphones.\u2026</p>",
+    "pubDate": "Thu, 26 Feb 2026 11:25:27 GMT"
+  },
+  {
+    "source": "https://www.theregister.com/headlines.rss",
+    "title": "Debian 14 will drop Gtk2 \u2013 unless Ardour rides to the rescue",
+    "link": "https://go.theregister.com/feed/www.theregister.com/2026/02/26/debian_14_will_drop_gtk2/",
+    "description": "<h4>Many dependent apps, including FreePascal and Lazarus, face the chop</h4>\n<p>Version 2 of the widely used Gtk toolkit will be dropped from the next Debian release. The problem is that many things still need it, including FreePascal and its Lazarus IDE.\u2026</p>",
+    "pubDate": "Thu, 26 Feb 2026 11:11:13 GMT"
+  },
+  {
+    "source": "https://www.theregister.com/headlines.rss",
+    "title": "Moon's mighty magnetic field was a 5,000-year titanium blip",
+    "link": "https://go.theregister.com/feed/www.theregister.com/2026/02/26/moon_magnetic_field/",
+    "description": "<h4>So say Oxford boffins who found 'bias' related to Apollo rock samples created false impression</h4>\n<p>Scientists at the University of Oxford say they may have cracked the puzzle of the Moon's magnetic field and settled a debate that has raged since the Apollo missions returned with rock samples.\u2026</p><!--#include virtual='/data_centre/_whitepaper_textlinks_top.html' -->\n",
+    "pubDate": "Thu, 26 Feb 2026 10:37:11 GMT"
+  },
+  {
+    "source": "https://www.theregister.com/headlines.rss",
+    "title": "GCHQ dangles up to \u00a3130K for a CISO to fight the world's most capable adversaries",
+    "link": "https://go.theregister.com/feed/www.theregister.com/2026/02/26/gchq_ciso_job/",
+    "description": "<h4>No pressure</h4>\n<p>GCHQ is looking to recruit a chief information security officer (CISO), a job it describes as \"one of the most influential cybersecurity leadership roles in the UK,\" at a salary of \u00a396,981 to \u00a3130,000.\u2026</p>",
+    "pubDate": "Thu, 26 Feb 2026 10:13:59 GMT"
+  }
+]

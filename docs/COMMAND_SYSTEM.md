@@ -1,6 +1,6 @@
-# Tiny Pirate Command System
+# Substrate Command System
 
-This document details the command system that enables Tiny Pirate to interpret and execute user commands.
+This document details the command system that enables Substrate to interpret and execute user commands.
 
 ## Overview
 

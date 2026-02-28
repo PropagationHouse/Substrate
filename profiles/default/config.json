@@ -1,4 +1,5 @@
 {
+    "avatar": "profiles/default/avatar.png",
     "model": "llama3.2-vision:11b",
     "api_endpoint": "http://localhost:11434/api/generate",
     "perplexity_api_key": "",

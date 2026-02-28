@@ -1,46 +1,200 @@
-# Advanced Visual Demo.md
-# Found You!.md
-.DS_Store
-.obsidian
-.smart-connections
-.smart-env
-A high maintenance bag of salt water held together by calcium and hope.md
-A Note of Pure Compliance.md
-Advanced Demo Note.md
-Agent Upgrade Roadmap - Skills & Capabilities.md
-Agentic Music Collaboration.md
-AI Computer Control Capabilities.md
-Automation Philosophy - Precision vs Blunt Force.md
-backup sys prompt.md
-Best Local LLMs for Tool Calling - 2024 Research.md
-Brutal Critique turns thoughtful analysis.md
-Heartbeat Reflections.md
-hi_hats.mid
-hi_hats_jazz.mid
-hi_hats_synced.mid
-Intelligence_Feed.md
-Introductions between MB & Agent.md
-jazz_drums_full.mid
-LLM Model Comparison and PC Compatibility.md
-Local Tool Calling Models - Cost Efficiency.md
-Master Skillset Glossary.md
-Memory - Visual Interaction Preference.md
-Minimax M2.5.md
-news.txt
-Project Virtu - The Spatial Intelligence Pitch.md
-Q J.md
-somber_jazz_bass.mid
-somber_jazz_loop.mid
-Substrate Evolution - Feb 2026.md
-Symbiosis_Protocol.md
-The Observation Note.md
-This is a visual test. I clicked the window, hit Ctrl+N, and now I am typing directly into the new note. No shortcuts, just pure input..md
-Untitled 1.md
-Untitled 3.md
-Untitled.md
-V
-Vault Verification Note.md
-í
-ì
-²
-?
+C:\Users\Bl0ck\Desktop\Substrate\context_assistant_updater.py
+C:\Users\Bl0ck\Desktop\Substrate\find_python.py
+C:\Users\Bl0ck\Desktop\Substrate\gateway.py
+C:\Users\Bl0ck\Desktop\Substrate\get_json.py
+C:\Users\Bl0ck\Desktop\Substrate\get_news.py
+C:\Users\Bl0ck\Desktop\Substrate\image_processor.py
+C:\Users\Bl0ck\Desktop\Substrate\main.py
+C:\Users\Bl0ck\Desktop\Substrate\main_app_integration.py
+C:\Users\Bl0ck\Desktop\Substrate\parse_hacker_news.py
+C:\Users\Bl0ck\Desktop\Substrate\proxy_server.py
+C:\Users\Bl0ck\Desktop\Substrate\reddit_debug.py
+C:\Users\Bl0ck\Desktop\Substrate\reddit_poster.py
+C:\Users\Bl0ck\Desktop\Substrate\reddit_poster_pyautogui.py
+C:\Users\Bl0ck\Desktop\Substrate\setup_temp.py
+C:\Users\Bl0ck\Desktop\Substrate\voice_handler.py
+C:\Users\Bl0ck\Desktop\Substrate\wake_circuits.py
+C:\Users\Bl0ck\Desktop\Substrate\xgo_heartbeat.py
+C:\Users\Bl0ck\Desktop\Substrate\xgo_vision_client_reference.py
+C:\Users\Bl0ck\Desktop\Substrate\certs\generate_cert.py
+C:\Users\Bl0ck\Desktop\Substrate\installer\first_run.py
+C:\Users\Bl0ck\Desktop\Substrate\macros\midjourney.py
+C:\Users\Bl0ck\Desktop\Substrate\macros\post-to-x.py
+C:\Users\Bl0ck\Desktop\Substrate\node_modules\dmg-builder\vendor\biplist\__init__.py
+C:\Users\Bl0ck\Desktop\Substrate\node_modules\dmg-builder\vendor\dmgbuild\badge.py
+C:\Users\Bl0ck\Desktop\Substrate\node_modules\dmg-builder\vendor\dmgbuild\colors.py
+C:\Users\Bl0ck\Desktop\Substrate\node_modules\dmg-builder\vendor\dmgbuild\core.py
+C:\Users\Bl0ck\Desktop\Substrate\node_modules\dmg-builder\vendor\ds_store\buddy.py
+C:\Users\Bl0ck\Desktop\Substrate\node_modules\dmg-builder\vendor\ds_store\store.py
+C:\Users\Bl0ck\Desktop\Substrate\node_modules\dmg-builder\vendor\ds_store\__init__.py
+C:\Users\Bl0ck\Desktop\Substrate\node_modules\dmg-builder\vendor\mac_alias\alias.py
+C:\Users\Bl0ck\Desktop\Substrate\node_modules\dmg-builder\vendor\mac_alias\bookmark.py
+C:\Users\Bl0ck\Desktop\Substrate\node_modules\dmg-builder\vendor\mac_alias\osx.py
+C:\Users\Bl0ck\Desktop\Substrate\node_modules\dmg-builder\vendor\mac_alias\utils.py
+C:\Users\Bl0ck\Desktop\Substrate\node_modules\dmg-builder\vendor\mac_alias\__init__.py
+C:\Users\Bl0ck\Desktop\Substrate\python_scripts\proxy_server.py
+C:\Users\Bl0ck\Desktop\Substrate\python_scripts\setup_env.py
+C:\Users\Bl0ck\Desktop\Substrate\python_scripts\src\clock\alarm_manager.py
+C:\Users\Bl0ck\Desktop\Substrate\python_scripts\src\clock\clock_service.py
+C:\Users\Bl0ck\Desktop\Substrate\python_scripts\src\clock\__init__.py
+C:\Users\Bl0ck\Desktop\Substrate\python_scripts\src\commands\command_executor.py
+C:\Users\Bl0ck\Desktop\Substrate\python_scripts\src\commands\command_parser.py
+C:\Users\Bl0ck\Desktop\Substrate\python_scripts\src\intent\intent_classifier.py
+C:\Users\Bl0ck\Desktop\Substrate\python_scripts\src\intent\__init__.py
+C:\Users\Bl0ck\Desktop\Substrate\python_scripts\src\kokoro\istftnet.py
+C:\Users\Bl0ck\Desktop\Substrate\python_scripts\src\kokoro\model.py
+C:\Users\Bl0ck\Desktop\Substrate\python_scripts\src\kokoro\models.py
+C:\Users\Bl0ck\Desktop\Substrate\python_scripts\src\kokoro\modules.py
+C:\Users\Bl0ck\Desktop\Substrate\python_scripts\src\kokoro\pipeline.py
+C:\Users\Bl0ck\Desktop\Substrate\python_scripts\src\kokoro\__init__.py
+C:\Users\Bl0ck\Desktop\Substrate\python_scripts\src\memory\memory_manager.py
+C:\Users\Bl0ck\Desktop\Substrate\python_scripts\src\memory\__init__.py
+C:\Users\Bl0ck\Desktop\Substrate\python_scripts\src\midjourney\__init__.py
+C:\Users\Bl0ck\Desktop\Substrate\python_scripts\src\perplexity\sonar_handler.py
+C:\Users\Bl0ck\Desktop\Substrate\python_scripts\src\perplexity\__init__.py
+C:\Users\Bl0ck\Desktop\Substrate\python_scripts\src\profiles\__init__.py
+C:\Users\Bl0ck\Desktop\Substrate\python_scripts\src\screenshot\__init__.py
+C:\Users\Bl0ck\Desktop\Substrate\python_scripts\src\search\deep_search_handler.py
+C:\Users\Bl0ck\Desktop\Substrate\python_scripts\src\search\search_client.py
+C:\Users\Bl0ck\Desktop\Substrate\python_scripts\src\search\web_augmented_response.py
+C:\Users\Bl0ck\Desktop\Substrate\python_scripts\src\voice\voice_handler.py
+C:\Users\Bl0ck\Desktop\Substrate\python_scripts\src\youtube\transcript_handler.py
+C:\Users\Bl0ck\Desktop\Substrate\python_scripts\src\youtube\__init__.py
+C:\Users\Bl0ck\Desktop\Substrate\speech_components\active_speech.py
+C:\Users\Bl0ck\Desktop\Substrate\speech_components\basic_speech.py
+C:\Users\Bl0ck\Desktop\Substrate\speech_components\check_instance.py
+C:\Users\Bl0ck\Desktop\Substrate\speech_components\simple_speech.py
+C:\Users\Bl0ck\Desktop\Substrate\speech_components\whisper_speech.py
+C:\Users\Bl0ck\Desktop\Substrate\src\model_manager.py
+C:\Users\Bl0ck\Desktop\Substrate\src\model_manager_ipc.py
+C:\Users\Bl0ck\Desktop\Substrate\src\browser\cdp_browser.py
+C:\Users\Bl0ck\Desktop\Substrate\src\browser\chrome_relay.py
+C:\Users\Bl0ck\Desktop\Substrate\src\browser\__init__.py
+C:\Users\Bl0ck\Desktop\Substrate\src\chat\chat_agent.py
+C:\Users\Bl0ck\Desktop\Substrate\src\chat\__init__.py
+C:\Users\Bl0ck\Desktop\Substrate\src\clock\alarm_manager.py
+C:\Users\Bl0ck\Desktop\Substrate\src\clock\clock_service.py
+C:\Users\Bl0ck\Desktop\Substrate\src\clock\__init__.py
+C:\Users\Bl0ck\Desktop\Substrate\src\commands\command_executor.py
+C:\Users\Bl0ck\Desktop\Substrate\src\commands\command_parser.py
+C:\Users\Bl0ck\Desktop\Substrate\src\gateway\autonomous_runner.py
+C:\Users\Bl0ck\Desktop\Substrate\src\gateway\canvas.py
+C:\Users\Bl0ck\Desktop\Substrate\src\gateway\circuits.py
+C:\Users\Bl0ck\Desktop\Substrate\src\gateway\followup_queue.py
+C:\Users\Bl0ck\Desktop\Substrate\src\gateway\schedule_parser.py
+C:\Users\Bl0ck\Desktop\Substrate\src\gateway\session_memory.py
+C:\Users\Bl0ck\Desktop\Substrate\src\gateway\substrate_prime.py
+C:\Users\Bl0ck\Desktop\Substrate\src\gateway\tray_service.py
+C:\Users\Bl0ck\Desktop\Substrate\src\gateway\webhooks.py
+C:\Users\Bl0ck\Desktop\Substrate\src\gateway\__init__.py
+C:\Users\Bl0ck\Desktop\Substrate\src\infra\circuits.py
+C:\Users\Bl0ck\Desktop\Substrate\src\infra\circuits_tasks.py
+C:\Users\Bl0ck\Desktop\Substrate\src\infra\compaction.py
+C:\Users\Bl0ck\Desktop\Substrate\src\infra\context_pruning.py
+C:\Users\Bl0ck\Desktop\Substrate\src\infra\event_watcher.py
+C:\Users\Bl0ck\Desktop\Substrate\src\infra\exec_approvals.py
+C:\Users\Bl0ck\Desktop\Substrate\src\infra\inbound_debounce.py
+C:\Users\Bl0ck\Desktop\Substrate\src\infra\lessons.py
+C:\Users\Bl0ck\Desktop\Substrate\src\infra\link_understanding.py
+C:\Users\Bl0ck\Desktop\Substrate\src\infra\mcp_client.py
+C:\Users\Bl0ck\Desktop\Substrate\src\infra\model_fallback.py
+C:\Users\Bl0ck\Desktop\Substrate\src\infra\prompt_builder.py
+C:\Users\Bl0ck\Desktop\Substrate\src\infra\sessions.py
+C:\Users\Bl0ck\Desktop\Substrate\src\infra\subagents.py
+C:\Users\Bl0ck\Desktop\Substrate\src\infra\system_events.py
+C:\Users\Bl0ck\Desktop\Substrate\src\infra\task_persistence.py
+C:\Users\Bl0ck\Desktop\Substrate\src\infra\tool_result.py
+C:\Users\Bl0ck\Desktop\Substrate\src\infra\tool_verification.py
+C:\Users\Bl0ck\Desktop\Substrate\src\infra\__init__.py
+C:\Users\Bl0ck\Desktop\Substrate\src\intent\intent_classifier.py
+C:\Users\Bl0ck\Desktop\Substrate\src\intent\__init__.py
+C:\Users\Bl0ck\Desktop\Substrate\src\kokoro\istftnet.py
+C:\Users\Bl0ck\Desktop\Substrate\src\kokoro\model.py
+C:\Users\Bl0ck\Desktop\Substrate\src\kokoro\models.py
+C:\Users\Bl0ck\Desktop\Substrate\src\kokoro\modules.py
+C:\Users\Bl0ck\Desktop\Substrate\src\kokoro\pipeline.py
+C:\Users\Bl0ck\Desktop\Substrate\src\kokoro\__init__.py
+C:\Users\Bl0ck\Desktop\Substrate\src\memory\code_memory.py
+C:\Users\Bl0ck\Desktop\Substrate\src\memory\memory_consolidation.py
+C:\Users\Bl0ck\Desktop\Substrate\src\memory\memory_manager.py
+C:\Users\Bl0ck\Desktop\Substrate\src\memory\unified_memory.py
+C:\Users\Bl0ck\Desktop\Substrate\src\memory\__init__.py
+C:\Users\Bl0ck\Desktop\Substrate\src\midjourney\__init__.py
+C:\Users\Bl0ck\Desktop\Substrate\src\perplexity\sonar_handler.py
+C:\Users\Bl0ck\Desktop\Substrate\src\perplexity\__init__.py
+C:\Users\Bl0ck\Desktop\Substrate\src\plugins\hooks.py
+C:\Users\Bl0ck\Desktop\Substrate\src\plugins\loader.py
+C:\Users\Bl0ck\Desktop\Substrate\src\plugins\registry.py
+C:\Users\Bl0ck\Desktop\Substrate\src\plugins\types.py
+C:\Users\Bl0ck\Desktop\Substrate\src\plugins\__init__.py
+C:\Users\Bl0ck\Desktop\Substrate\src\profiles\__init__.py
+C:\Users\Bl0ck\Desktop\Substrate\src\screenshot\__init__.py
+C:\Users\Bl0ck\Desktop\Substrate\src\search\deep_search_handler.py
+C:\Users\Bl0ck\Desktop\Substrate\src\search\search_client.py
+C:\Users\Bl0ck\Desktop\Substrate\src\search\web_augmented_response.py
+C:\Users\Bl0ck\Desktop\Substrate\src\tools\automation_middleware.py
+C:\Users\Bl0ck\Desktop\Substrate\src\tools\automation_tool.py
+C:\Users\Bl0ck\Desktop\Substrate\src\tools\browser_tool.py
+C:\Users\Bl0ck\Desktop\Substrate\src\tools\camsnap_tool.py
+C:\Users\Bl0ck\Desktop\Substrate\src\tools\desktop_tool.py
+C:\Users\Bl0ck\Desktop\Substrate\src\tools\exec_tool.py
+C:\Users\Bl0ck\Desktop\Substrate\src\tools\file_tool.py
+C:\Users\Bl0ck\Desktop\Substrate\src\tools\gifgrep_tool.py
+C:\Users\Bl0ck\Desktop\Substrate\src\tools\grep_tool.py
+C:\Users\Bl0ck\Desktop\Substrate\src\tools\image_gen_tool.py
+C:\Users\Bl0ck\Desktop\Substrate\src\tools\macro_tool.py
+C:\Users\Bl0ck\Desktop\Substrate\src\tools\memory_tool.py
+C:\Users\Bl0ck\Desktop\Substrate\src\tools\mouse_tool.py
+C:\Users\Bl0ck\Desktop\Substrate\src\tools\obsidian_tool.py
+C:\Users\Bl0ck\Desktop\Substrate\src\tools\pdf_tool.py
+C:\Users\Bl0ck\Desktop\Substrate\src\tools\process_tool.py
+C:\Users\Bl0ck\Desktop\Substrate\src\tools\recorder_service.py
+C:\Users\Bl0ck\Desktop\Substrate\src\tools\recorder_tool.py
+C:\Users\Bl0ck\Desktop\Substrate\src\tools\screen_tool.py
+C:\Users\Bl0ck\Desktop\Substrate\src\tools\skills_tool.py
+C:\Users\Bl0ck\Desktop\Substrate\src\tools\skill_learner.py
+C:\Users\Bl0ck\Desktop\Substrate\src\tools\tool_registry.py
+C:\Users\Bl0ck\Desktop\Substrate\src\tools\web_tool.py
+C:\Users\Bl0ck\Desktop\Substrate\src\tools\__init__.py
+C:\Users\Bl0ck\Desktop\Substrate\src\vision\__init__.py
+C:\Users\Bl0ck\Desktop\Substrate\src\voice\elevenlabs_client.py
+C:\Users\Bl0ck\Desktop\Substrate\src\voice\tts_directives.py
+C:\Users\Bl0ck\Desktop\Substrate\src\voice\voice_handler.py
+C:\Users\Bl0ck\Desktop\Substrate\third_party\OpenMemory\examples\py-sdk\advanced_features.py
+C:\Users\Bl0ck\Desktop\Substrate\third_party\OpenMemory\examples\py-sdk\basic_usage.py
+C:\Users\Bl0ck\Desktop\Substrate\third_party\OpenMemory\examples\py-sdk\brain_sectors.py
+C:\Users\Bl0ck\Desktop\Substrate\third_party\OpenMemory\examples\py-sdk\performance_benchmark.py
+C:\Users\Bl0ck\Desktop\Substrate\third_party\OpenMemory\sdk-py\openmemory\client.py
+C:\Users\Bl0ck\Desktop\Substrate\third_party\OpenMemory\sdk-py\openmemory\__init__.py
+C:\Users\Bl0ck\Desktop\Substrate\third_party\OpenMemory\tests\py-sdk\test-sdk.py
+C:\Users\Bl0ck\Desktop\Substrate\workspace\rss_intelligence_check.py
+C:\Users\Bl0ck\Desktop\Substrate\workspace\emergent\aurora_forecast.py
+C:\Users\Bl0ck\Desktop\Substrate\workspace\emergent\check_resources.py
+C:\Users\Bl0ck\Desktop\Substrate\workspace\emergent\create_midi.py
+C:\Users\Bl0ck\Desktop\Substrate\workspace\emergent\create_somber_midi.py
+C:\Users\Bl0ck\Desktop\Substrate\workspace\emergent\fetch_rss.py
+C:\Users\Bl0ck\Desktop\Substrate\workspace\emergent\generate_bass.py
+C:\Users\Bl0ck\Desktop\Substrate\workspace\emergent\generate_sheet.py
+C:\Users\Bl0ck\Desktop\Substrate\workspace\emergent\ghost_monitor.py
+C:\Users\Bl0ck\Desktop\Substrate\workspace\emergent\parse_search.py
+C:\Users\Bl0ck\Desktop\Substrate\workspace\emergent\rss_harvester.py
+C:\Users\Bl0ck\Desktop\Substrate\workspace\emergent\x_post.py
+C:\Users\Bl0ck\Desktop\Substrate\workspace\output\midi_generator.py
+C:\Users\Bl0ck\Desktop\Substrate\workspace\temp\inspect_db.py
+C:\Users\Bl0ck\Desktop\Substrate\workspace\temp\notion_create_task.py
+C:\Users\Bl0ck\Desktop\Substrate\workspace\temp\notion_github_task.py
+C:\Users\Bl0ck\Desktop\Substrate\workspace\temp\notion_props.py
+C:\Users\Bl0ck\Desktop\Substrate\workspace\temp\notion_search.py
+C:\Users\Bl0ck\Desktop\Substrate\workspace\temp\post.py
+C:\Users\Bl0ck\Desktop\Substrate\workspace\temp\post_script.py
+C:\Users\Bl0ck\Desktop\Substrate\workspace\temp\post_x.py
+C:\Users\Bl0ck\Desktop\Substrate\workspace\temp\x_post.py
+C:\Users\Bl0ck\Desktop\Substrate\workspace\temp\x_post_cleaned.py
+C:\Users\Bl0ck\Desktop\Substrate\XGO_Audio_Bridge\direct_xgo_integration.py
+C:\Users\Bl0ck\Desktop\Substrate\XGO_Audio_Bridge\standalone_xgo_bridge.py
+C:\Users\Bl0ck\Desktop\Substrate\XGO_Audio_Bridge\xgo_audio_receiver.py
+C:\Users\Bl0ck\Desktop\Substrate\XGO_Audio_Bridge\xgo_audio_receiver_compatible.py
+C:\Users\Bl0ck\Desktop\Substrate\XGO_Audio_Bridge\xgo_audio_receiver_debug.py
+C:\Users\Bl0ck\Desktop\Substrate\XGO_Audio_Bridge\xgo_audio_receiver_fixed.py
+C:\Users\Bl0ck\Desktop\Substrate\XGO_Audio_Bridge\xgo_audio_receiver_pi.py
+C:\Users\Bl0ck\Desktop\Substrate\XGO_Audio_Bridge\__init__.py

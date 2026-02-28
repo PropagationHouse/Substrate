@@ -2378,7 +2378,7 @@ class ChatAgent:
         """Load configuration from file or create with defaults if not exists."""
         # Default configuration
         default_config = {
-            "model": "llama3.2-vision:11b",
+            "model": "",
             "api_endpoint": "http://localhost:11434/api/generate",
             "temperature": 0.7,
             "vision_fallback_model": "gemini-2.5-flash",
@@ -2394,7 +2394,7 @@ class ChatAgent:
             "note_prompts": DEFAULT_NOTE_PROMPTS,
             "autonomy": {
                 "messages": {
-                    "enabled": True,
+                    "enabled": False,
                     "min_interval": 60,
                     "max_interval": 300,
                     "prompt": "Comment on our conversation in a helpful way."
@@ -2406,7 +2406,7 @@ class ChatAgent:
                     "prompt": DEFAULT_SCREENSHOT_PROMPT
                 },
                 "midjourney": {
-                    "enabled": True,
+                    "enabled": False,
                     "min_interval": 300,
                     "max_interval": 900,
                     "prompt": "Generate a Midjourney image prompt in response to our conversation.",
@@ -2419,7 +2419,7 @@ class ChatAgent:
                     "prompt": "Create a detailed note summarizing key points from our recent conversation."
                 },
                 "camera": {
-                    "enabled": True,
+                    "enabled": False,
                     "min_interval": 30,
                     "max_interval": 120,
                     "silent_chance": 50,
@@ -2445,7 +2445,7 @@ class ChatAgent:
                     "config": {
                         "system_prompt": DEFAULT_SYSTEM_PROMPT,
                         "screenshot_prompt": DEFAULT_SCREENSHOT_PROMPT,
-                        "model": "llama3.2-vision:11b",
+                        "model": "",
                         "temperature": 0.7
                     }
                 }

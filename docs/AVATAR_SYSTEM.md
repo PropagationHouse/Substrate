@@ -1,10 +1,10 @@
-# Tiny Pirate Avatar Animation System
+# Substrate Avatar Animation System
 
-This document provides a detailed technical overview of the Tiny Pirate avatar animation system.
+This document provides a detailed technical overview of the Substrate avatar animation system.
 
 ## Overview
 
-The avatar animation system is implemented in `static/js/avatar.js` and styled in `static/css/avatar.css`. It provides a responsive, interactive character that serves as the visual representation of the Tiny Pirate agent.
+The avatar animation system is implemented in `static/js/avatar.js` and styled in `static/css/avatar.css`. It provides a responsive, interactive character that serves as the visual representation of the Substrate agent.
 
 ## Core Components
 

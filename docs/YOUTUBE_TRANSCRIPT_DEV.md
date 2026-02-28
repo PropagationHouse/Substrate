@@ -1,6 +1,6 @@
 # YouTube Transcript Integration - Developer Guide
 
-This document provides technical details for developers working with the YouTube transcript retrieval system in Tiny Pirate.
+This document provides technical details for developers working with the YouTube transcript retrieval system in Substrate.
 
 ## Architecture Overview
 

@@ -1,6 +1,6 @@
 # YouTube Transcript Retrieval
 
-Tiny Pirate includes functionality to retrieve and process transcripts from YouTube videos. This document outlines how this feature works and how to use it.
+Substrate includes functionality to retrieve and process transcripts from YouTube videos. This document outlines how this feature works and how to use it.
 
 ## Overview
 

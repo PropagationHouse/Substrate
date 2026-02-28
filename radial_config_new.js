@@ -1318,7 +1318,7 @@
     
     // Function to populate model options
     async function populateModelOptions() {
-        let currentModel = 'llama3.2-vision:11b';
+        let currentModel = '';
         try {
             const modelInput = document.getElementById('model-input');
             if (modelInput && modelInput.value) {
@@ -1809,35 +1809,38 @@
     
     // Load SUBSTRATE.md content into the editor (with retry)
     async function loadSubstrateContent(retries) {
-        if (retries === undefined) retries = 3;
+        if (retries === undefined) retries = 8;
         const textarea = document.getElementById('substrate-input-radial');
         const status = document.getElementById('substrate-status');
         if (!textarea) { console.warn('SUBSTRATE textarea not found'); return; }
         
-        try {
-            console.log('Loading SUBSTRATE.md content from /api/substrate ...');
-            const res = await fetch('http://localhost:8765/api/substrate');
-            console.log('SUBSTRATE.md fetch response status:', res.status);
-            const data = await res.json();
-            console.log('SUBSTRATE.md response data:', JSON.stringify(data).substring(0, 200));
-            if (data.status === 'success') {
-                textarea.value = data.content || '';
-                textarea.dataset.loaded = 'true';
-                if (status) status.textContent = '';
-                console.log('SUBSTRATE.md loaded successfully (' + (data.content || '').length + ' chars)');
-            } else {
-                console.warn('SUBSTRATE.md load returned non-success:', data);
-                if (status) status.textContent = 'Failed to load: ' + (data.message || 'unknown error');
-            }
-        } catch (err) {
-            console.error('Error loading SUBSTRATE.md (retries left: ' + retries + '):', err);
-            if (retries > 0) {
-                const delay = (4 - retries) * 1500;
-                console.log('Retrying SUBSTRATE.md load in ' + delay + 'ms...');
-                setTimeout(() => loadSubstrateContent(retries - 1), delay);
-            } else {
-                if (status) status.textContent = 'Error loading SUBSTRATE.md';
-                textarea.placeholder = 'Could not load SUBSTRATE.md - click ↻ to retry';
+        for (let attempt = 0; attempt <= retries; attempt++) {
+            try {
+                console.log('Loading SUBSTRATE.md content from /api/substrate (attempt ' + (attempt+1) + '/' + (retries+1) + ')...');
+                const res = await fetch('http://localhost:8765/api/substrate');
+                console.log('SUBSTRATE.md fetch response status:', res.status);
+                const data = await res.json();
+                console.log('SUBSTRATE.md response data:', JSON.stringify(data).substring(0, 200));
+                if (data.status === 'success') {
+                    textarea.value = data.content || '';
+                    textarea.dataset.loaded = 'true';
+                    if (status) status.textContent = '';
+                    console.log('SUBSTRATE.md loaded successfully (' + (data.content || '').length + ' chars)');
+                    return;
+                } else {
+                    console.warn('SUBSTRATE.md load returned non-success:', data);
+                    if (status) status.textContent = 'Failed to load: ' + (data.message || 'unknown error');
+                }
+            } catch (err) {
+                console.error('Error loading SUBSTRATE.md (attempt ' + (attempt+1) + '):', err);
+                if (attempt < retries) {
+                    const delay = Math.min((attempt + 1) * 2000, 6000);
+                    console.log('Retrying SUBSTRATE.md load in ' + delay + 'ms...');
+                    await new Promise(r => setTimeout(r, delay));
+                } else {
+                    if (status) status.textContent = 'Error loading SUBSTRATE.md';
+                    textarea.placeholder = 'Could not load SUBSTRATE.md - click ↻ to retry';
+                }
             }
         }
     }
@@ -1878,52 +1881,52 @@
     
     // Load CIRCUITS.md content into the editor (with retry)
     async function loadCircuitsContent(retries) {
-        if (retries === undefined) retries = 3;
+        if (retries === undefined) retries = 8;
         const textarea = document.getElementById('circuits-input-radial');
         const status = document.getElementById('circuits-status');
         if (!textarea) {
-            console.warn('CIRCUITS textarea not found in DOM, retries left:', retries);
-            if (retries > 0) {
-                setTimeout(() => loadCircuitsContent(retries - 1), 1000);
-            }
+            console.warn('CIRCUITS textarea not found in DOM');
             return;
         }
         
-        try {
-            console.log('Loading CIRCUITS.md from /api/circuits (retries=' + retries + ')...');
-            const res = await fetch('http://localhost:8765/api/circuits');
-            console.log('CIRCUITS.md response status:', res.status, res.statusText);
-            if (!res.ok) {
-                throw new Error('HTTP ' + res.status + ' ' + res.statusText);
-            }
-            const text = await res.text();
-            console.log('CIRCUITS.md raw response:', text.substring(0, 300));
-            let data;
-            try { data = JSON.parse(text); } catch(e) {
-                console.error('CIRCUITS.md response is not valid JSON:', e);
-                if (status) status.textContent = 'Invalid response from server';
-                return;
-            }
-            if (data.status === 'success') {
-                textarea.value = data.content || '';
-                textarea.placeholder = 'Enter tasks for the agent...';
-                textarea.dataset.loaded = 'true';
-                if (status) status.textContent = '';
-                console.log('CIRCUITS.md loaded OK (' + (data.content || '').length + ' chars)');
-            } else {
-                console.warn('CIRCUITS.md non-success response:', data);
-                if (status) status.textContent = 'Failed: ' + (data.message || 'unknown error');
-                textarea.placeholder = 'Failed to load - click ↻ to retry';
-            }
-        } catch (err) {
-            console.error('CIRCUITS.md fetch error (retries=' + retries + '):', err.message || err);
-            if (retries > 0) {
-                const delay = (4 - retries) * 1500;
-                console.log('Retrying CIRCUITS.md in ' + delay + 'ms...');
-                setTimeout(() => loadCircuitsContent(retries - 1), delay);
-            } else {
-                if (status) status.textContent = 'Error loading CIRCUITS.md';
-                textarea.placeholder = 'Could not load - click ↻ to retry';
+        for (let attempt = 0; attempt <= retries; attempt++) {
+            try {
+                console.log('Loading CIRCUITS.md from /api/circuits (attempt ' + (attempt+1) + '/' + (retries+1) + ')...');
+                const res = await fetch('http://localhost:8765/api/circuits');
+                console.log('CIRCUITS.md response status:', res.status, res.statusText);
+                if (!res.ok) {
+                    throw new Error('HTTP ' + res.status + ' ' + res.statusText);
+                }
+                const text = await res.text();
+                console.log('CIRCUITS.md raw response:', text.substring(0, 300));
+                let data;
+                try { data = JSON.parse(text); } catch(e) {
+                    console.error('CIRCUITS.md response is not valid JSON:', e);
+                    if (status) status.textContent = 'Invalid response from server';
+                    return;
+                }
+                if (data.status === 'success') {
+                    textarea.value = data.content || '';
+                    textarea.placeholder = 'Enter tasks for the agent...';
+                    textarea.dataset.loaded = 'true';
+                    if (status) status.textContent = '';
+                    console.log('CIRCUITS.md loaded OK (' + (data.content || '').length + ' chars)');
+                    return;
+                } else {
+                    console.warn('CIRCUITS.md non-success response:', data);
+                    if (status) status.textContent = 'Failed: ' + (data.message || 'unknown error');
+                    textarea.placeholder = 'Failed to load - click ↻ to retry';
+                }
+            } catch (err) {
+                console.error('CIRCUITS.md fetch error (attempt ' + (attempt+1) + '):', err.message || err);
+                if (attempt < retries) {
+                    const delay = Math.min((attempt + 1) * 2000, 6000);
+                    console.log('Retrying CIRCUITS.md in ' + delay + 'ms...');
+                    await new Promise(r => setTimeout(r, delay));
+                } else {
+                    if (status) status.textContent = 'Error loading CIRCUITS.md';
+                    textarea.placeholder = 'Could not load - click ↻ to retry';
+                }
             }
         }
     }
@@ -2137,42 +2140,43 @@
 
     // Load PRIME.md content into the editor (with retry)
     async function loadPrimeContent(retries) {
-        if (retries === undefined) retries = 3;
+        if (retries === undefined) retries = 8;
         const textarea = document.getElementById('prime-input-radial');
         const status = document.getElementById('prime-status');
         if (!textarea) {
-            console.warn('PRIME textarea not found in DOM, retries left:', retries);
-            if (retries > 0) {
-                setTimeout(() => loadPrimeContent(retries - 1), 1000);
-            }
+            console.warn('PRIME textarea not found in DOM');
             return;
         }
         
-        try {
-            console.log('Loading PRIME.md from /api/prime (retries=' + retries + ')...');
-            const res = await fetch('http://localhost:8765/api/prime');
-            if (!res.ok) {
-                throw new Error('HTTP ' + res.status + ' ' + res.statusText);
-            }
-            const data = await res.json();
-            if (data.status === 'success') {
-                textarea.value = data.content || '';
-                textarea.placeholder = 'Add startup tasks under \'## On Startup\'...';
-                textarea.dataset.loaded = 'true';
-                if (status) status.textContent = '';
-                console.log('PRIME.md loaded OK (' + (data.content || '').length + ' chars)');
-            } else {
-                console.warn('PRIME.md non-success response:', data);
-                if (status) status.textContent = 'Failed: ' + (data.message || 'unknown error');
-            }
-        } catch (err) {
-            console.error('PRIME.md fetch error (retries=' + retries + '):', err.message || err);
-            if (retries > 0) {
-                const delay = (4 - retries) * 1500;
-                setTimeout(() => loadPrimeContent(retries - 1), delay);
-            } else {
-                if (status) status.textContent = 'Error loading PRIME.md';
-                textarea.placeholder = 'Could not load - click \u21BB to retry';
+        for (let attempt = 0; attempt <= retries; attempt++) {
+            try {
+                console.log('Loading PRIME.md from /api/prime (attempt ' + (attempt+1) + '/' + (retries+1) + ')...');
+                const res = await fetch('http://localhost:8765/api/prime');
+                if (!res.ok) {
+                    throw new Error('HTTP ' + res.status + ' ' + res.statusText);
+                }
+                const data = await res.json();
+                if (data.status === 'success') {
+                    textarea.value = data.content || '';
+                    textarea.placeholder = 'Add startup tasks under \'## On Startup\'...';
+                    textarea.dataset.loaded = 'true';
+                    if (status) status.textContent = '';
+                    console.log('PRIME.md loaded OK (' + (data.content || '').length + ' chars)');
+                    return;
+                } else {
+                    console.warn('PRIME.md non-success response:', data);
+                    if (status) status.textContent = 'Failed: ' + (data.message || 'unknown error');
+                }
+            } catch (err) {
+                console.error('PRIME.md fetch error (attempt ' + (attempt+1) + '):', err.message || err);
+                if (attempt < retries) {
+                    const delay = Math.min((attempt + 1) * 2000, 6000);
+                    console.log('Retrying PRIME.md in ' + delay + 'ms...');
+                    await new Promise(r => setTimeout(r, delay));
+                } else {
+                    if (status) status.textContent = 'Error loading PRIME.md';
+                    textarea.placeholder = 'Could not load - click \u21BB to retry';
+                }
             }
         }
     }
@@ -3044,11 +3048,12 @@
         
         // First check localStorage for saved avatar
         const savedAvatar = localStorage.getItem('agent-avatar');
+        const validSavedAvatar = savedAvatar ? savedAvatar : null;
         
-        if (savedAvatar) {
+        if (validSavedAvatar) {
             // If we have a saved avatar in localStorage, use that
-            if (originalAvatar) originalAvatar.src = savedAvatar;
-            if (radialAvatar) radialAvatar.src = savedAvatar;
+            if (originalAvatar) originalAvatar.src = validSavedAvatar;
+            if (radialAvatar) radialAvatar.src = validSavedAvatar;
         } else if (originalAvatar && radialAvatar) {
             // Otherwise use the original avatar if available
             radialAvatar.src = originalAvatar.src;
@@ -3767,36 +3772,38 @@
     document.addEventListener('DOMContentLoaded', setupElevenLabsToggleListener);
     
     // Failsafe: auto-load CIRCUITS.md, SUBSTRATE.md, and PRIME.md when their textareas appear
-    let _circuitsAutoLoaded = false;
-    let _substrateAutoLoaded = false;
-    let _primeAutoLoaded = false;
+    // Only consider truly loaded when dataset.loaded === 'true' (set by successful fetch)
+    let _circuitsLoadPending = false;
+    let _substrateLoadPending = false;
+    let _primeLoadPending = false;
     const _autoLoadCheck = setInterval(() => {
-        if (!_circuitsAutoLoaded) {
-            const cTA = document.getElementById('circuits-input-radial');
-            if (cTA && cTA.dataset.loaded !== 'true') {
-                console.log('[AutoLoad] Found circuits textarea, triggering load...');
-                _circuitsAutoLoaded = true;
-                loadCircuitsContent();
-            }
+        const cTA = document.getElementById('circuits-input-radial');
+        const cDone = cTA && cTA.dataset.loaded === 'true';
+        if (cTA && !cDone && !_circuitsLoadPending) {
+            console.log('[AutoLoad] Found circuits textarea, triggering load...');
+            _circuitsLoadPending = true;
+            loadCircuitsContent(8).finally(() => { _circuitsLoadPending = false; });
         }
-        if (!_substrateAutoLoaded) {
-            const sTA = document.getElementById('substrate-input-radial');
-            if (sTA && sTA.dataset.loaded !== 'true') {
-                console.log('[AutoLoad] Found substrate textarea, triggering load...');
-                _substrateAutoLoaded = true;
-                loadSubstrateContent();
-            }
+
+        const sTA = document.getElementById('substrate-input-radial');
+        const sDone = sTA && sTA.dataset.loaded === 'true';
+        if (sTA && !sDone && !_substrateLoadPending) {
+            console.log('[AutoLoad] Found substrate textarea, triggering load...');
+            _substrateLoadPending = true;
+            loadSubstrateContent(8).finally(() => { _substrateLoadPending = false; });
         }
-        if (!_primeAutoLoaded) {
-            const pTA = document.getElementById('prime-input-radial');
-            if (pTA && pTA.dataset.loaded !== 'true') {
-                console.log('[AutoLoad] Found prime textarea, triggering load...');
-                _primeAutoLoaded = true;
-                loadPrimeContent();
-            }
+
+        const pTA = document.getElementById('prime-input-radial');
+        const pDone = pTA && pTA.dataset.loaded === 'true';
+        if (pTA && !pDone && !_primeLoadPending) {
+            console.log('[AutoLoad] Found prime textarea, triggering load...');
+            _primeLoadPending = true;
+            loadPrimeContent(8).finally(() => { _primeLoadPending = false; });
         }
-        if (_circuitsAutoLoaded && _substrateAutoLoaded && _primeAutoLoaded) {
+
+        if (cDone && sDone && pDone) {
+            console.log('[AutoLoad] All MD files loaded successfully, stopping interval.');
             clearInterval(_autoLoadCheck);
         }
-    }, 2000);
+    }, 3000);
 })();

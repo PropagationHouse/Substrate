@@ -1,10 +1,10 @@
-# Tiny Pirate IPC Communication System
+# Substrate IPC Communication System
 
-This document details the Inter-Process Communication (IPC) system that enables the Electron frontend and Python backend to communicate in Tiny Pirate.
+This document details the Inter-Process Communication (IPC) system that enables the Electron frontend and Python backend to communicate in Substrate.
 
 ## Overview
 
-Tiny Pirate uses a bidirectional communication system:
+Substrate uses a bidirectional communication system:
 1. **Electron to Python**: Commands and requests flow from the UI to the backend
 2. **Python to Electron**: Responses, status updates, and events flow from the backend to the UI
 
@@ -121,7 +121,7 @@ All messages use a JSON format for consistency:
 
 1. **Text Responses**:
    ```json
-   { "type": "response", "content": "Hello, I'm Tiny Pirate!" }
+   { "type": "response", "content": "Hello, I'm Substrate!" }
    ```
 
 2. **Configuration Updates**:

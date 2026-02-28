@@ -1,4 +1,4 @@
-# Project Analysis: TPXGO
+# Project Analysis: Substrate
 
 *Generated on: 2025-08-01 02:57:46*
 

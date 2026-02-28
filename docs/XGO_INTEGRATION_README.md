@@ -1,12 +1,12 @@
-# Tiny Pirate XGO Integration
+# Substrate XGO Integration
 
-This document explains how the XGO integration works with Tiny Pirate.
+This document explains how the XGO integration works with Substrate.
 
 > **Note**: For detailed information about the voice synthesis system that powers the XGO audio integration, see the [Voice System Documentation](docs/VOICE_SYSTEM.md).
 
 ## Overview
 
-The integration allows Tiny Pirate to send audio to an XGO Rider device over WiFi using both UDP and HTTP protocols. When Tiny Pirate generates speech using Kokoro TTS, the audio is both played locally and forwarded to the XGO device. The system also supports receiving audio from the XGO device for speech recognition.
+The integration allows Substrate to send audio to an XGO Rider device over WiFi using both UDP and HTTP protocols. When Substrate generates speech using Kokoro TTS, the audio is both played locally and forwarded to the XGO device. The system also supports receiving audio from the XGO device for speech recognition.
 
 ## Components
 
@@ -35,8 +35,8 @@ The integration allows Tiny Pirate to send audio to an XGO Rider device over WiF
 
 ## How to Use
 
-1. **Start Tiny Pirate**
-   - Run `main.py` to start the Tiny Pirate application
+1. **Start Substrate**
+   - Run `main.py` to start the Substrate application
    - This will initialize the voice handler with XGO integration
 
 2. **Start XGO Bridge**
@@ -60,7 +60,7 @@ The integration allows Tiny Pirate to send audio to an XGO Rider device over WiF
   - Can be changed via the web interface: http://localhost:5000/set_ip/<new_ip>
   - Or by editing the `xgo_ip` variable in the respective files
 
-- **Voice Settings**: Configurable in Tiny Pirate's profile settings
+- **Voice Settings**: Configurable in Substrate's profile settings
   - Voice: Default is "af_heart"
   - Speed: Default is 1.0
   - Pitch: Default is 0.0
@@ -75,12 +75,12 @@ The integration allows Tiny Pirate to send audio to an XGO Rider device over WiF
 
 The system now supports bidirectional communication with XGO:
 
-1. **Tiny Pirate to XGO**:
+1. **Substrate to XGO**:
    - Voice audio is sent to XGO via UDP in chunks
    - File size is sent first, followed by audio data
    - Small delays (0.001s) between chunks prevent packet loss
 
-2. **XGO to Tiny Pirate**:
+2. **XGO to Substrate**:
    - XGO sends audio via HTTP POST to the audio receiver
    - Audio is saved with timestamp in the monitored directory
    - whisper_speech.py automatically processes new audio files
@@ -126,7 +126,7 @@ The system now supports bidirectional communication with XGO:
 ## Directory Structure
 
 ```
-TPXGO/
+Substrate/
 ├── src/
 │   └── voice/
 │       ├── voice_handler.py  # Voice synthesis and XGO forwarding

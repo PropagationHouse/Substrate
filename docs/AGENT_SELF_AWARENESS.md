@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document outlines a plan to give Tiny Pirate self-awareness of its own codebase, enabling it to understand, describe, and reason about its own structure and functionality. This capability will enhance the agent's ability to explain its behavior, diagnose issues, and potentially propose improvements.
+This document outlines a plan to give Substrate self-awareness of its own codebase, enabling it to understand, describe, and reason about its own structure and functionality. This capability will enhance the agent's ability to explain its behavior, diagnose issues, and potentially propose improvements.
 
 ## Goals and Success Criteria
 
@@ -212,4 +212,4 @@ This document outlines a plan to give Tiny Pirate self-awareness of its own code
 
 ## Conclusion
 
-This plan provides a structured approach to implementing self-awareness of the codebase for Tiny Pirate. By following these phases and steps, we can create a system that allows the agent to understand, explain, and reason about its own code, enhancing its capabilities and user experience.
+This plan provides a structured approach to implementing self-awareness of the codebase for Substrate. By following these phases and steps, we can create a system that allows the agent to understand, explain, and reason about its own code, enhancing its capabilities and user experience.

@@ -16,8 +16,8 @@ Thanks for your interest in contributing! Here's how to get started.
 
 ```bash
 # Clone and install
-git clone https://github.com/<your-username>/substrate-agent.git
-cd substrate-agent
+git clone https://github.com/propagationhouse/substrate.git
+cd substrate
 setup.bat
 
 # Or manually:
@@ -76,4 +76,4 @@ npm install
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the [MIT License](LICENSE).
+By contributing, you agree that your contributions will be licensed under the [Business Source License 1.1](LICENSE).
