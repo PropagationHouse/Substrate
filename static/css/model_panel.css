@@ -1,0 +1,343 @@
+/* Model Management Panel Styles */
+.panel {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 90%;
+    max-width: 800px;
+    max-height: 90vh;
+    background: rgba(0, 0, 0, 0.85);
+    border: 1px solid rgba(0, 255, 255, 0.3);
+    border-radius: 10px;
+    box-shadow: 0 0 20px rgba(0, 255, 255, 0.2);
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    color: white;
+    font-family: 'Press Start 2P', monospace;
+}
+
+.panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    border-bottom: 1px solid rgba(0, 255, 255, 0.3);
+}
+
+.panel-header h2 {
+    margin: 0;
+    font-size: 18px;
+    color: rgba(0, 255, 255, 0.9);
+}
+
+.close-button {
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 24px;
+    cursor: pointer;
+    padding: 0;
+    transition: color 0.2s;
+}
+
+.close-button:hover {
+    color: rgba(0, 255, 255, 0.9);
+}
+
+.panel-content {
+    padding: 15px 20px;
+    overflow-y: auto;
+    max-height: calc(90vh - 60px);
+}
+
+/* Model Section Styles */
+.model-section {
+    margin-bottom: 25px;
+}
+
+.model-section h3 {
+    font-size: 14px;
+    margin-bottom: 15px;
+    color: rgba(0, 255, 255, 0.7);
+    border-bottom: 1px solid rgba(0, 255, 255, 0.2);
+    padding-bottom: 5px;
+}
+
+.model-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 15px;
+}
+
+/* Model Card Styles */
+.model-card {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(0, 255, 255, 0.2);
+    border-radius: 8px;
+    padding: 15px;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+}
+
+.model-card:hover {
+    background: rgba(0, 255, 255, 0.1);
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(0, 255, 255, 0.1);
+}
+
+.model-card.installed {
+    border-color: rgba(0, 255, 255, 0.4);
+}
+
+.model-card.remote {
+    border-color: rgba(255, 200, 0, 0.5);
+    background: rgba(255, 200, 0, 0.08);
+}
+
+.model-card.remote:hover {
+    background: rgba(255, 200, 0, 0.12);
+    box-shadow: 0 5px 15px rgba(255, 200, 0, 0.15);
+}
+
+.model-card.selected {
+    border-color: rgba(0, 255, 255, 0.9);
+    background: rgba(0, 255, 255, 0.15);
+}
+
+.model-name {
+    font-size: 12px;
+    margin-bottom: 10px;
+    color: white;
+}
+
+.model-status {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.model-status.installed {
+    color: rgba(0, 255, 255, 0.7);
+}
+
+.model-card.remote .model-status {
+    color: rgba(255, 200, 0, 0.9);
+}
+
+.model-status.selected {
+    color: rgba(0, 255, 255, 1);
+}
+
+.model-size {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.5);
+    margin-top: 5px;
+}
+
+/* Model Card Actions */
+.model-actions {
+    margin-top: 10px;
+    display: flex;
+    gap: 8px;
+}
+
+.action-button {
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(0, 255, 255, 0.3);
+    border-radius: 4px;
+    color: rgba(0, 255, 255, 0.7);
+    font-size: 10px;
+    padding: 5px 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: 'Press Start 2P', monospace;
+}
+
+.action-button:hover {
+    background: rgba(0, 255, 255, 0.2);
+    color: white;
+}
+
+.install-button {
+    background: rgba(0, 100, 0, 0.3);
+}
+
+.remove-button {
+    background: rgba(100, 0, 0, 0.3);
+}
+
+.select-button {
+    background: rgba(0, 0, 100, 0.3);
+}
+
+/* Loading Indicator */
+.loading-indicator {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 20px;
+    color: rgba(0, 255, 255, 0.5);
+    font-size: 12px;
+}
+
+/* Modal Styles */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1001;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(5px);
+}
+
+.modal-content {
+    position: relative;
+    background: rgba(0, 0, 0, 0.9);
+    border: 1px solid rgba(0, 255, 255, 0.3);
+    border-radius: 10px;
+    margin: 15% auto;
+    padding: 20px;
+    width: 80%;
+    max-width: 500px;
+    box-shadow: 0 0 20px rgba(0, 255, 255, 0.3);
+}
+
+.modal-close {
+    color: rgba(255, 255, 255, 0.6);
+    float: right;
+    font-size: 24px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.modal-close:hover {
+    color: rgba(0, 255, 255, 0.9);
+}
+
+#modal-model-name {
+    margin-top: 10px;
+    margin-bottom: 20px;
+    color: rgba(0, 255, 255, 0.9);
+    font-size: 16px;
+}
+
+.model-detail {
+    margin-bottom: 10px;
+    font-size: 12px;
+}
+
+.detail-label {
+    color: rgba(255, 255, 255, 0.7);
+    margin-right: 10px;
+}
+
+#modal-model-actions {
+    margin-top: 20px;
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+}
+
+#modal-model-actions .action-button {
+    padding: 8px 15px;
+    font-size: 12px;
+}
+
+/* Progress Bar */
+#modal-progress-container {
+    margin-top: 20px;
+}
+
+.progress-bar-container {
+    width: 100%;
+    height: 20px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, rgba(0, 255, 255, 0.5), rgba(0, 255, 255, 0.8));
+    width: 0%;
+    transition: width 0.3s ease;
+}
+
+#modal-progress-text {
+    text-align: center;
+    margin-top: 5px;
+    font-size: 12px;
+    color: rgba(0, 255, 255, 0.7);
+}
+
+.hidden {
+    display: none;
+}
+
+/* Featured Models Section */
+.featured-models .model-card {
+    background: rgba(0, 0, 100, 0.2);
+    border: 1px solid rgba(0, 100, 255, 0.3);
+}
+
+.featured-models .model-card:hover {
+    background: rgba(0, 100, 255, 0.15);
+}
+
+.featured-models .model-card.installed {
+    border-color: rgba(0, 100, 255, 0.6);
+}
+
+/* Badge for new models */
+.model-badge {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: rgba(255, 215, 0, 0.8);
+    color: black;
+    font-size: 8px;
+    padding: 2px 5px;
+    border-radius: 3px;
+}
+
+.model-badge.new {
+    background: rgba(255, 215, 0, 0.8);
+}
+
+.model-badge.recommended {
+    background: rgba(0, 255, 0, 0.6);
+}
+
+.model-badge.online {
+    background: rgba(255, 200, 0, 0.9);
+    color: #1b1b1b;
+}
+
+.model-provider {
+    font-size: 10px;
+    color: rgba(255, 200, 0, 0.9);
+    margin-top: 6px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .model-cards {
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    }
+    
+    .panel {
+        width: 95%;
+    }
+    
+    .modal-content {
+        width: 90%;
+        margin: 30% auto;
+    }
+}

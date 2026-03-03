@@ -1,0 +1,94 @@
+<!-- Model Management Panel -->
+<div id="model-management-panel" class="panel">
+    <div class="panel-header">
+        <h2>Model Management</h2>
+        <button id="model-panel-close" class="close-button">&times;</button>
+    </div>
+    
+    <div class="panel-content">
+        <!-- Featured Models Section -->
+        <div class="model-section">
+            <h3>Featured Models</h3>
+            <div class="model-cards featured-models" id="featured-models-container">
+                <!-- Featured models will be populated here -->
+                <div class="loading-indicator">Loading models...</div>
+            </div>
+        </div>
+        
+        <!-- Installed Models Section -->
+        <div class="model-section">
+            <h3>Installed Models</h3>
+            <div class="model-cards installed-models" id="installed-models-container">
+                <!-- Installed models will be populated here -->
+                <div class="loading-indicator">Loading models...</div>
+            </div>
+        </div>
+
+        <!-- Online Models Section -->
+        <div class="model-section">
+            <h3>Online Providers</h3>
+            <div class="model-cards remote-models" id="remote-models-container">
+                <!-- Remote models will be populated here -->
+                <div class="loading-indicator">Loading online models...</div>
+            </div>
+        </div>
+
+        <!-- Available Models Section -->
+        <div class="model-section">
+            <h3>Available Models</h3>
+            <div class="model-cards available-models" id="available-models-container">
+                <!-- Available models will be populated here -->
+                <div class="loading-indicator">Loading models...</div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Model Details Modal -->
+    <div id="model-details-modal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close">&times;</span>
+            <h3 id="modal-model-name">Model Name</h3>
+            <div id="modal-model-details">
+                <div class="model-detail">
+                    <span class="detail-label">Status:</span>
+                    <span id="modal-model-status">Not installed</span>
+                </div>
+                <div class="model-detail">
+                    <span class="detail-label">Size:</span>
+                    <span id="modal-model-size">Unknown</span>
+                </div>
+                <div class="model-detail">
+                    <span class="detail-label">Last Modified:</span>
+                    <span id="modal-model-modified">Unknown</span>
+                </div>
+                <div class="model-detail hidden" id="modal-model-provider-row">
+                    <span class="detail-label">Provider:</span>
+                    <span id="modal-model-provider">—</span>
+                </div>
+                <div class="model-detail hidden" id="modal-model-endpoint-row">
+                    <span class="detail-label">Endpoint:</span>
+                    <span id="modal-model-endpoint">—</span>
+                </div>
+                <div class="model-detail hidden" id="modal-model-auth-row">
+                    <span class="detail-label">Auth Variable:</span>
+                    <span id="modal-model-auth">—</span>
+                </div>
+                <div class="model-detail hidden" id="modal-model-notes-row">
+                    <span class="detail-label">Notes:</span>
+                    <span id="modal-model-notes">—</span>
+                </div>
+            </div>
+            <div id="modal-model-actions">
+                <button id="modal-install-button" class="action-button install-button">Install</button>
+                <button id="modal-remove-button" class="action-button remove-button">Remove</button>
+                <button id="modal-select-button" class="action-button select-button">Select for Use</button>
+            </div>
+            <div id="modal-progress-container" class="hidden">
+                <div class="progress-bar-container">
+                    <div id="modal-progress-bar" class="progress-bar"></div>
+                </div>
+                <div id="modal-progress-text">0%</div>
+            </div>
+        </div>
+    </div>
+</div>

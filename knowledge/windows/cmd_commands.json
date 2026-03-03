@@ -1,0 +1,29 @@
+{
+  "commands": [
+    {
+      "name": "Open Task Manager",
+      "command": "taskmgr",
+      "description": "Opens the Task Manager to view running processes."
+    },
+    {
+      "name": "Open Settings",
+      "command": "start ms-settings:",
+      "description": "Opens the Windows Settings app."
+    },
+    {
+      "name": "Open File Explorer",
+      "command": "explorer",
+      "description": "Opens the File Explorer window."
+    },
+    {
+      "name": "Check Disk Usage",
+      "command": "chkdsk",
+      "description": "Checks the disk for errors and displays a status report."
+    },
+    {
+      "name": "System Information",
+      "command": "msinfo32",
+      "description": "Displays a comprehensive view of your hardware, system components, and software environment."
+    }
+  ]
+}
