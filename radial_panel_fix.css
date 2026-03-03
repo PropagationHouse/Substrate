@@ -1,0 +1,46 @@
+/* CSS to prevent click-through on background cards */
+.radial-config-panel .section-card:not(.active) {
+    pointer-events: none !important;
+}
+
+.radial-config-panel .section-card.active {
+    pointer-events: auto !important;
+}
+
+/* Ensure active card is always on top and clickable */
+.radial-config-panel .section-card.active {
+    z-index: 100 !important;
+}
+
+/* Styles for Kokoro voice settings */
+.config-row.active-setting label strong {
+    color: #2a9fd6;
+    font-weight: bold;
+}
+
+.config-row.active-setting {
+    border-left: 3px solid #2a9fd6;
+    padding-left: 10px;
+    margin-bottom: 15px;
+}
+
+.config-row.inactive-setting {
+    opacity: 0.7;
+    border-left: 3px solid #666;
+    padding-left: 10px;
+    margin-bottom: 10px;
+}
+
+details summary {
+    cursor: pointer;
+    color: #888;
+    font-style: italic;
+    margin: 15px 0;
+    padding: 5px;
+    background: rgba(0,0,0,0.2);
+    border-radius: 4px;
+}
+
+details summary:hover {
+    background: rgba(0,0,0,0.3);
+}

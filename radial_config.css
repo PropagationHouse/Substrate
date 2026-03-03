@@ -1,0 +1,961 @@
+/* Radial Config Panel Styling */
+.radial-config-panel {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    z-index: 9999;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s, visibility 0.3s;
+    overflow: hidden;
+}
+
+.radial-config-panel.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+.radial-wheel {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 280px; /* Reduced from 700px */
+    height: 280px; /* Reduced from 700px */
+    perspective: 1000px;
+    transform-style: preserve-3d;
+}
+
+.wheel-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    transform-style: preserve-3d;
+    transition: transform 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.section-card {
+    position: absolute;
+    width: 280px;
+    height: 280px;
+    top: 50%;
+    left: 50%;
+    margin-left: -140px;
+    margin-top: -140px;
+    background: rgba(20, 20, 30, 0.85);
+    border: 1px solid rgba(100, 100, 255, 0.3);
+    border-radius: 12px;
+    box-shadow: 0 0 10px rgba(0, 150, 255, 0.2), 
+                inset 0 0 10px rgba(0, 150, 255, 0.1);
+    padding: 15px;
+    backface-visibility: hidden;
+    overflow: hidden;
+    transition: transform 0.3s ease, opacity 0.3s ease, z-index 0s;
+    color: white;
+    opacity: 0.3;
+    z-index: 1;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    font-size: 11px;
+}
+
+.section-card.active {
+    opacity: 1;
+    background: rgb(20, 20, 30);
+    z-index: 100;
+    pointer-events: auto;
+    overflow: hidden;
+}
+
+.section-card h3 {
+    margin-top: 0;
+    margin-bottom: 8px;
+    color: #4fc3f7;
+    text-align: center;
+    font-size: 14px;
+    text-shadow: 0 0 5px rgba(79, 195, 247, 0.5);
+    border-bottom: 1px solid rgba(79, 195, 247, 0.3);
+    padding-bottom: 5px;
+}
+
+.section-card .content {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: 5px;
+    padding-bottom: 5px;
+    height: calc(100% - 25px); /* Account for smaller header height */
+    scrollbar-width: thin;
+}
+
+.section-card .content::-webkit-scrollbar {
+    width: 5px;
+}
+
+.section-card .content::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 10px;
+}
+
+.section-card .content::-webkit-scrollbar-thumb {
+    background: rgba(79, 195, 247, 0.5);
+    border-radius: 10px;
+}
+
+
+.wheel-indicator {
+    position: absolute;
+    bottom: -25px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 5px;
+}
+
+.indicator-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.3);
+    cursor: pointer;
+    transition: background 0.3s, transform 0.3s;
+}
+
+.indicator-dot.active {
+    background: rgba(79, 195, 247, 1);
+    transform: scale(1.2);
+}
+
+.radial-close {
+    position: absolute;
+    top: -40px;
+    right: -40px;
+    width: 30px;
+    height: 30px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    z-index: 100;
+    transition: background 0.3s;
+    font-size: 18px;
+    color: white;
+}
+
+.radial-close:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+/* Futuristic form elements */
+.section-card input[type="text"],
+.section-card input[type="number"],
+.section-card textarea {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(79, 195, 247, 0.3);
+    border-radius: 3px;
+    color: white;
+    padding: 6px;
+    margin-bottom: 8px;
+    width: 100%;
+    font-size: 12px;
+    transition: border-color 0.3s, box-shadow 0.3s;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    min-height: 80px;
+    resize: vertical;
+}
+
+.section-card input[type="text"]:focus,
+.section-card input[type="number"]:focus,
+.section-card textarea:focus {
+    border-color: rgba(79, 195, 247, 0.8);
+    box-shadow: 0 0 10px rgba(79, 195, 247, 0.3);
+    outline: none;
+}
+
+.section-card label {
+    display: block;
+    margin-bottom: 5px;
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.section-card .config-help {
+    font-size: 9px;
+    color: rgba(255, 255, 255, 0.6);
+    margin-top: 2px;
+    margin-bottom: 5px;
+}
+
+/* Checkbox styling */
+.section-card input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 24px;
+    height: 12px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 6px;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+.section-card input[type="checkbox"]::before {
+    content: '';
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: white;
+    top: 1px;
+    left: 1px;
+    transition: left 0.3s;
+}
+
+.section-card input[type="checkbox"]:checked {
+    background: rgba(79, 195, 247, 0.8);
+}
+
+.section-card input[type="checkbox"]:checked::before {
+    left: 13px;
+}
+
+/* Config row styling */
+.section-card .config-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+    font-size: 10px;
+}
+
+/* Glowing effect animations */
+@keyframes glow {
+    0% { box-shadow: 0 0 5px rgba(79, 195, 247, 0.3); }
+    50% { box-shadow: 0 0 15px rgba(79, 195, 247, 0.5); }
+    100% { box-shadow: 0 0 5px rgba(79, 195, 247, 0.3); }
+}
+
+.section-card.active {
+    animation: glow 3s infinite;
+}
+
+/* Circuits card — orange theme */
+#section-circuits {
+    background: rgba(30, 20, 10, 0.85);
+    border-color: rgba(245, 158, 11, 0.4);
+    box-shadow: 0 0 10px rgba(245, 158, 11, 0.2),
+                inset 0 0 10px rgba(245, 158, 11, 0.08);
+}
+
+#section-circuits h3 {
+    color: #f59e0b;
+    text-shadow: 0 0 5px rgba(245, 158, 11, 0.5);
+    border-bottom-color: rgba(245, 158, 11, 0.3);
+}
+
+#section-circuits.active {
+    background: rgb(30, 20, 10);
+    animation: glow-orange 3s infinite;
+}
+
+@keyframes glow-orange {
+    0% { box-shadow: 0 0 5px rgba(245, 158, 11, 0.3); }
+    50% { box-shadow: 0 0 15px rgba(245, 158, 11, 0.5); }
+    100% { box-shadow: 0 0 5px rgba(245, 158, 11, 0.3); }
+}
+
+#section-circuits .content::-webkit-scrollbar-thumb {
+    background: rgba(245, 158, 11, 0.5);
+}
+
+#section-circuits .config-help {
+    color: rgba(245, 190, 100, 0.7);
+}
+
+#section-circuits textarea {
+    border-color: rgba(245, 158, 11, 0.25);
+    background: rgba(0, 0, 0, 0.3);
+}
+
+#section-circuits textarea:focus {
+    border-color: rgba(245, 158, 11, 0.6);
+    box-shadow: 0 0 10px rgba(245, 158, 11, 0.3);
+}
+
+#section-circuits .config-button-small {
+    border-color: rgba(245, 158, 11, 0.3);
+    color: #f59e0b;
+}
+
+#section-circuits .config-button-small:hover {
+    background: rgba(245, 158, 11, 0.15);
+}
+
+#section-circuits .circuits-badge {
+    font-size: 11px;
+}
+
+/* Prime card — green theme */
+#section-prime {
+    background: rgba(10, 30, 15, 0.85);
+    border-color: rgba(74, 222, 128, 0.4);
+    box-shadow: 0 0 10px rgba(74, 222, 128, 0.2),
+                inset 0 0 10px rgba(74, 222, 128, 0.08);
+}
+
+#section-prime h3 {
+    color: #4ade80;
+    text-shadow: 0 0 5px rgba(74, 222, 128, 0.5);
+    border-bottom-color: rgba(74, 222, 128, 0.3);
+}
+
+#section-prime.active {
+    background: rgb(10, 30, 15);
+    animation: glow-green 3s infinite;
+}
+
+@keyframes glow-green {
+    0% { box-shadow: 0 0 5px rgba(74, 222, 128, 0.3); }
+    50% { box-shadow: 0 0 15px rgba(74, 222, 128, 0.5); }
+    100% { box-shadow: 0 0 5px rgba(74, 222, 128, 0.3); }
+}
+
+#section-prime .content::-webkit-scrollbar-thumb {
+    background: rgba(74, 222, 128, 0.5);
+}
+
+#section-prime .config-help {
+    color: rgba(150, 230, 170, 0.7);
+}
+
+#section-prime textarea {
+    border-color: rgba(74, 222, 128, 0.25);
+    background: rgba(0, 0, 0, 0.3);
+}
+
+#section-prime textarea:focus {
+    border-color: rgba(74, 222, 128, 0.6);
+    box-shadow: 0 0 10px rgba(74, 222, 128, 0.3);
+}
+
+#section-prime .config-button-small {
+    border-color: rgba(74, 222, 128, 0.3);
+    color: #4ade80;
+}
+
+#section-prime .config-button-small:hover {
+    background: rgba(74, 222, 128, 0.15);
+}
+
+#section-prime .prime-badge {
+    font-size: 11px;
+}
+
+.prime-badge {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: linear-gradient(135deg, #22c55e, #16a34a);
+    color: white;
+    font-weight: 500;
+    margin-left: 8px;
+}
+
+.prime-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.prime-status {
+    font-size: 11px;
+    min-height: 14px;
+    color: #888;
+}
+
+/* Holographic effect */
+.holographic-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, 
+                rgba(255, 255, 255, 0.05) 0%, 
+                rgba(255, 255, 255, 0) 50%, 
+                rgba(255, 255, 255, 0.05) 100%);
+    pointer-events: none;
+    z-index: 10;
+}
+
+/* Avatar section specific styling */
+.avatar-preview-radial {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    border: 1px solid rgba(79, 195, 247, 0.5);
+    margin: 0 auto 10px;
+    display: block;
+    object-fit: cover;
+    box-shadow: 0 0 8px rgba(79, 195, 247, 0.3);
+}
+
+.avatar-upload-radial {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.avatar-upload-radial input[type="file"] {
+    display: none;
+}
+
+.avatar-upload-radial label {
+    background: rgba(79, 195, 247, 0.3);
+    color: white;
+    padding: 8px 15px;
+    border-radius: 20px;
+    cursor: pointer;
+    transition: background 0.3s;
+    text-align: center;
+}
+
+.avatar-upload-radial label:hover {
+    background: rgba(79, 195, 247, 0.5);
+}
+
+/* Model selection styling */
+.model-select-radial {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(79, 195, 247, 0.3);
+    border-radius: 5px;
+    padding: 10px;
+    cursor: pointer;
+    position: relative;
+    margin-bottom: 15px;
+}
+
+.model-select-radial .selected {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 13px;
+}
+
+.model-select-radial.remote-active {
+    border-color: rgba(255, 200, 0, 0.7);
+    box-shadow: 0 0 10px rgba(255, 200, 0, 0.2);
+}
+
+.model-select-radial .model-option-remote::after,
+.model-select-radial.remote-active .model-arrow::after {
+    display: none;
+}
+
+.model-select-radial .model-option-remote {
+    color: rgba(255, 220, 120, 0.95);
+}
+
+.model-select-radial .model-option-remote.selected {
+    background: rgba(255, 200, 0, 0.18) !important;
+}
+
+.model-select-radial .model-option-remote:hover {
+    background: rgba(255, 200, 0, 0.12) !important;
+}
+
+.model-select-radial .model-option-remote::before {
+    content: '• ';
+    color: rgba(255, 200, 0, 0.9);
+}
+
+.model-select-radial.remote-active .selected {
+    color: rgba(255, 220, 150, 0.95);
+}
+
+.model-select-radial .selected .model-name.remote-provider::after {
+    content: attr(data-provider);
+    margin-left: 8px;
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 999px;
+    background: rgba(255, 200, 0, 0.25);
+    border: 1px solid rgba(255, 200, 0, 0.5);
+    color: rgba(255, 220, 170, 0.95);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+}
+
+.model-options-radial {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    width: 100%;
+    background: rgba(20, 20, 30, 0.95);
+    border: 1px solid rgba(79, 195, 247, 0.3);
+    border-radius: 0 0 5px 5px;
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 20;
+    display: none;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+}
+
+.model-options-radial.active {
+    display: block;
+}
+
+.model-option {
+    padding: 8px 10px;
+    transition: background 0.3s;
+    font-size: 13px;
+    border-bottom: 1px solid rgba(79, 195, 247, 0.1);
+}
+
+.model-option:last-child {
+    border-bottom: none;
+}
+
+.model-option:hover {
+    background: rgba(79, 195, 247, 0.2);
+}
+
+.manage-models-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 6px;
+    width: 100%;
+    padding: 8px 0;
+    font-size: 11px;
+    border: 1px solid rgba(79, 195, 247, 0.4);
+    border-radius: 6px;
+    background: rgba(79, 195, 247, 0.12);
+    color: rgba(210, 240, 255, 0.95);
+    cursor: pointer;
+    transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.manage-models-button:hover {
+    background: rgba(79, 195, 247, 0.25);
+    border-color: rgba(79, 195, 247, 0.7);
+    box-shadow: 0 0 10px rgba(79, 195, 247, 0.25);
+}
+
+/* Vertical radial wheel for autonomy section */
+.vertical-radial-wheel {
+    position: relative;
+    width: 100%;
+    height: 280px;
+    perspective: 1000px;
+    transform-style: preserve-3d;
+    margin: 5px 0;
+}
+
+.vertical-wheel-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    transform-style: preserve-3d;
+    transition: transform 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.vertical-section-card {
+    position: absolute;
+    width: 260px;
+    height: 260px;
+    top: 50%;
+    left: 50%;
+    margin-left: -130px;
+    margin-top: -130px;
+    background: rgba(20, 20, 30, 0.85);
+    border: 1px solid rgba(100, 100, 255, 0.3);
+    border-radius: 12px;
+    box-shadow: 0 0 10px rgba(0, 150, 255, 0.2), 
+                inset 0 0 10px rgba(0, 150, 255, 0.1);
+    padding: 12px;
+    backface-visibility: hidden;
+    transform-style: preserve-3d;
+    overflow: hidden;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+    color: white;
+    opacity: 0.3;
+    display: flex;
+    flex-direction: column;
+    font-size: 10px;
+    box-sizing: border-box;
+}
+
+.vertical-section-card.active {
+    opacity: 1;
+    z-index: 10;
+    animation: glow 3s infinite;
+}
+
+.vertical-section-card h4 {
+    margin-top: 0;
+    margin-bottom: 8px;
+    color: #4fc3f7;
+    text-align: center;
+    font-size: 14px;
+    text-shadow: 0 0 5px rgba(79, 195, 247, 0.5);
+    border-bottom: 1px solid rgba(79, 195, 247, 0.3);
+    padding-bottom: 5px;
+}
+
+.vertical-section-card .content {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 5px;
+    height: calc(100% - 25px);
+    scrollbar-width: thin;
+    position: relative;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.vertical-section-card .content::-webkit-scrollbar {
+    width: 5px;
+}
+
+.vertical-section-card .content::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 10px;
+}
+
+.vertical-section-card .content::-webkit-scrollbar-thumb {
+    background: rgba(79, 195, 247, 0.5);
+    border-radius: 10px;
+}
+
+
+.vertical-wheel-indicator {
+    position: absolute;
+    right: -25px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.vertical-indicator-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.3);
+    cursor: pointer;
+    transition: background 0.3s, transform 0.3s;
+}
+
+.vertical-indicator-dot.active {
+    background: rgba(79, 195, 247, 1);
+    transform: scale(1.2);
+}
+
+/* Make sure the section content is properly styled */
+#section-autonomy .vertical-section-card .config-row {
+    margin-bottom: 4px;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+}
+
+#section-autonomy .vertical-section-card .config-row label {
+    margin-bottom: 2px;
+    font-size: 10px;
+    display: block;
+    color: rgba(79, 195, 247, 0.8);
+}
+
+#section-autonomy .vertical-section-card .interval-row {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2px;
+    height: 18px;
+}
+
+#section-autonomy .vertical-section-card .interval-container {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 5px;
+    border: 1px solid rgba(79, 195, 247, 0.2);
+    padding: 3px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 3px;
+}
+
+#section-autonomy .vertical-section-card .simple-row {
+    display: flex;
+    flex-direction: row;
+    justify-content: flex-start;
+    align-items: center;
+    margin-bottom: 5px;
+}
+
+#section-autonomy .vertical-section-card .simple-row label {
+    margin-right: 10px;
+}
+
+#section-autonomy .vertical-section-card .prompt-section {
+    margin-bottom: 5px;
+}
+
+#section-autonomy .vertical-section-card .prompt-section label {
+    display: block;
+    margin-bottom: 2px;
+    font-size: 10px;
+    color: rgba(79, 195, 247, 0.8);
+}
+
+#section-autonomy .vertical-section-card .interval-row label {
+    font-size: 9px;
+    width: 50%;
+    margin-bottom: 0;
+}
+
+#section-autonomy .vertical-section-card .interval-row input {
+    width: 40px;
+}
+
+#section-autonomy .vertical-section-card textarea {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(79, 195, 247, 0.3);
+    border-radius: 3px;
+    color: white;
+    padding: 4px;
+    margin-bottom: 5px;
+    width: 100%;
+    font-size: 10px;
+    height: 40px;
+    min-height: 40px;
+    resize: none;
+    box-sizing: border-box;
+    white-space: normal;
+    word-break: break-word;
+    overflow-wrap: break-word;
+}
+
+#section-autonomy .vertical-section-card h4 {
+    font-size: 13px;
+    margin-bottom: 6px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid rgba(79, 195, 247, 0.3);
+    text-align: center;
+    color: rgb(79, 195, 247);
+}
+
+#section-autonomy .vertical-section-card label {
+    margin-bottom: 4px;
+    display: block;
+    font-size: 12px;
+    color: rgba(79, 195, 247, 0.9);
+}
+
+#section-autonomy .vertical-section-card input[type="number"] {
+    width: 45px;
+    text-align: center;
+    background: rgba(0, 0, 0, 0.3);
+    color: white;
+    border: 1px solid rgba(79, 195, 247, 0.3);
+    border-radius: 3px;
+    padding: 2px;
+    margin: 1px 0;
+    font-size: 10px;
+    display: inline-block;
+}
+
+#section-autonomy .vertical-section-card input[type="checkbox"] {
+    margin-left: 10px;
+}
+
+/* Combined Agent & Model Card Styling */
+.combined-agent-model {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    gap: 5px;
+}
+
+.combined-agent-model h4 {
+    color: rgba(79, 195, 247, 0.9);
+    margin: 0 0 5px 0;
+    font-size: 12px;
+    text-align: center;
+}
+
+.combined-agent-model .divider {
+    height: 1px;
+    background: rgba(79, 195, 247, 0.3);
+    margin: 5px 0;
+}
+
+.combined-agent-model .avatar-section {
+    display: flex;
+    flex-direction: column;
+    flex: 0.8;
+    margin-bottom: 0;
+}
+
+.combined-agent-model .model-section {
+    display: flex;
+    flex-direction: column;
+    flex: 1.2;
+}
+
+.combined-agent-model .avatar-upload-radial {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 5px;
+}
+
+.combined-agent-model .avatar-preview-radial {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    object-fit: cover;
+    margin-bottom: 5px;
+    border: 2px solid rgba(79, 195, 247, 0.5);
+    box-shadow: 0 0 10px rgba(79, 195, 247, 0.3);
+}
+
+.combined-agent-model .config-help {
+    font-size: 9px;
+    margin-top: 3px;
+}
+
+/* Make interval input boxes smaller in autonomy settings */
+.autonomy-settings-card .interval-row input[type="number"],
+.interval-row input[type="number"] {
+    width: 60px;
+    min-width: 0;
+    max-width: 100px;
+    font-size: 14px;
+    line-height: 1;
+    height: calc(1em + 2px);
+    padding: 0 6px;
+    margin-left: 8px;
+    margin-right: 8px;
+    box-sizing: border-box;
+    border-radius: 3px;
+    vertical-align: middle;
+    background: transparent;
+    appearance: textfield;
+    -webkit-appearance: textfield;
+    -moz-appearance: textfield;
+}
+
+
+
+
+/* Optional: tighten up the interval-row and config-row spacing */
+.autonomy-settings-card .interval-row,
+.interval-row,
+.config-row {
+    display: flex;
+    align-items: center;
+    height: auto !important;
+    min-height: 0 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    margin-top: 0 !important;
+    margin-bottom: 2px !important;
+}
+
+/* SUBSTRATE.md Editor Styles */
+.substrate-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.substrate-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.substrate-badge, .circuits-badge {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    color: white;
+    font-weight: 500;
+    margin-left: 8px;
+}
+
+.circuits-badge {
+    background: linear-gradient(135deg, #f59e0b, #ef4444);
+}
+
+.config-button-small {
+    padding: 4px 8px;
+    font-size: 12px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    color: #e6f2ff;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.config-button-small:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.substrate-status, .circuits-status {
+    font-size: 11px;
+    min-height: 14px;
+    color: #888;
+}
+
+/* CIRCUITS.md Editor Styles */
+.circuits-section {
+    background: rgba(245, 158, 11, 0.05);
+    border: 1px solid rgba(245, 158, 11, 0.2);
+    border-radius: 8px;
+    padding: 10px;
+    margin-bottom: 12px;
+}
+
+.circuits-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.circuits-section textarea {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    color: #e6f2ff;
+    padding: 8px;
+    resize: vertical;
+}
+
+.circuits-section textarea:focus {
+    outline: none;
+    border-color: rgba(245, 158, 11, 0.5);
+}

@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fresh Chat Implementation</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #121212;
+            color: #fff;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        
+        #chat-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            max-width: 800px;
+            margin: 0 auto;
+            width: 100%;
+            border: 1px solid #333;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        #output {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            background-color: #1e1e1e;
+        }
+        
+        .input-container {
+            display: flex;
+            padding: 10px;
+            background-color: #333;
+        }
+        
+        #chat-input {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 4px;
+            background-color: #444;
+            color: #fff;
+            margin-right: 10px;
+        }
+        
+        button {
+            padding: 10px 15px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        .message {
+            margin-bottom: 15px;
+            display: flex;
+            align-items: flex-start;
+        }
+        
+        .message.user {
+            justify-content: flex-end;
+        }
+        
+        .message-content {
+            padding: 10px 15px;
+            border-radius: 8px;
+            max-width: 70%;
+            word-wrap: break-word;
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            font-size: 14px;
+            white-space: pre-wrap;
+        }
+        
+        .user .message-content {
+            background-color: #007bff;
+        }
+        
+        .assistant .message-content {
+            background-color: #444;
+        }
+        
+        .thinking {
+            opacity: 0.7;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div id="chat-container">
+        <div id="output"></div>
+        <div class="input-container">
+            <input type="text" id="chat-input" placeholder="Type a message...">
+            <button id="send-button">Send</button>
+        </div>
+    </div>
+
+    <script>
+        // Simple chat implementation
+        const output = document.getElementById('output');
+        const chatInput = document.getElementById('chat-input');
+        const sendButton = document.getElementById('send-button');
+        
+        // Function to escape HTML entities
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        // Function to add a message to the chat
+        function addMessage(content, isUser = false) {
+            console.log('Adding message:', content, isUser ? '(user)' : '(assistant)');
+            
+            // Create message element
+            const messageDiv = document.createElement('div');
+            messageDiv.className = isUser ? 'message user' : 'message assistant';
+            
+            // Create content element
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            
+            // Set content
+            if (content === 'thinking...') {
+                contentDiv.classList.add('thinking');
+                contentDiv.textContent = '⌛ thinking...';
+            } else if (typeof content === 'string') {
+                contentDiv.innerHTML = escapeHtml(content);
+            } else if (content && content.result) {
+                contentDiv.innerHTML = escapeHtml(content.result);
+            } else {
+                contentDiv.innerHTML = escapeHtml(String(content || ''));
+            }
+            
+            // Add to message
+            messageDiv.appendChild(contentDiv);
+            
+            // Add to output
+            output.appendChild(messageDiv);
+            
+            // Scroll to bottom
+            output.scrollTop = output.scrollHeight;
+        }
+        
+        // Function to handle user input
+        function handleUserInput() {
+            const text = chatInput.value.trim();
+            if (!text) return;
+            
+            // Add user message
+            addMessage(text, true);
+            
+            // Clear input
+            chatInput.value = '';
+            
+            // Simulate thinking
+            setTimeout(() => {
+                addMessage('thinking...');
+                
+                // Simulate response after a delay
+                setTimeout(() => {
+                    // Remove thinking message
+                    const thinkingMessages = document.querySelectorAll('.thinking');
+                    thinkingMessages.forEach(msg => msg.parentElement.remove());
+                    
+                    // Add assistant response
+                    addMessage(`This is a test response to: "${text}"`);
+                }, 1500);
+            }, 500);
+        }
+        
+        // Event listeners
+        sendButton.addEventListener('click', handleUserInput);
+        chatInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                handleUserInput();
+            }
+        });
+        
+        // Add initial message
+        addMessage('This is a fresh chat implementation. Type a message to test it.');
+    </script>
+</body>
+</html>

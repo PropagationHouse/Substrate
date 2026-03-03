@@ -1,0 +1,1722 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Substrate — Autonomous Desktop Agent</title>
+    <meta name="description" content="A source-available autonomous desktop agent powered by local and cloud LLMs. Full OS control, voice, memory, scheduling, and more.">
+    <meta property="og:title" content="Substrate — Autonomous Desktop Agent">
+    <meta property="og:description" content="A source-available agentic system that turns your machine into something conversational, proactive, and autonomous. 17 built-in tools, model-independent.">
+    <meta property="og:type" content="website">
+    <meta property="og:image" content="https://raw.githubusercontent.com/propagationhouse/substrate/main/website/og-image.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Substrate — Autonomous Desktop Agent">
+    <meta name="twitter:description" content="A source-available agentic system that turns your machine into something conversational, proactive, and autonomous. 17 built-in tools, model-independent.">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%230a70e8' rx='20' width='100' height='100'/><text x='50' y='72' text-anchor='middle' fill='white' font-size='60' font-weight='bold'>S</text></svg>" type="image/svg+xml">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: { 50:'#eef9ff',100:'#d8f1ff',200:'#b9e8ff',300:'#89dbff',400:'#51c5ff',500:'#29a7ff',600:'#1189fc',700:'#0a70e8',800:'#0f5abb',900:'#134d93',950:'#0f3059' },
+                    },
+                    fontFamily: {
+                        sans: ['Inter','system-ui','-apple-system','sans-serif'],
+                        mono: ['JetBrains Mono','Fira Code','monospace'],
+                    },
+                },
+            },
+        }
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        body { background: #06060b; }
+        .gradient-text {
+            background: linear-gradient(135deg, #51c5ff 0%, #89dbff 40%, #29a7ff 100%);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+        }
+        .gradient-line {
+            height: 2px;
+            background: linear-gradient(90deg, transparent 0%, rgba(41,167,255,0.5) 50%, transparent 100%);
+        }
+        .glow { box-shadow: 0 0 80px rgba(41,167,255,0.18), 0 0 160px rgba(41,167,255,0.06); }
+        .card-hover { transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease; }
+        .card-hover:hover { transform: translateY(-4px); box-shadow: 0 8px 50px rgba(41,167,255,0.14); border-color: rgba(41,167,255,0.2); }
+        .terminal-bg { background: linear-gradient(180deg, #0e0e16 0%, #0a0a12 100%); }
+        .grid-bg {
+            background-image:
+                radial-gradient(ellipse 80% 60% at 50% 0%, rgba(41,167,255,0.08) 0%, transparent 70%),
+                radial-gradient(rgba(41,167,255,0.04) 1px, transparent 1px);
+            background-size: 100% 100%, 40px 40px;
+        }
+        @keyframes cursor-blink-anim { 0%,100%{opacity:1} 50%{opacity:0} }
+        @keyframes site-float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
+        .cursor-blink { animation: cursor-blink-anim 1s step-end infinite; }
+        .tool-pill { transition: background 0.15s ease, border-color 0.15s ease; }
+        .tool-pill:hover { background: rgba(41,167,255,0.12); border-color: rgba(41,167,255,0.25); }
+        ::selection { background: rgba(41,167,255,0.3); }
+
+        /* Stat counter pulse */
+        .stat-glow { text-shadow: 0 0 30px rgba(41,167,255,0.4); }
+
+        /* Diagram tabs */
+        .diagram-tab { background: rgba(255,255,255,0.04); color: #9ca3af; border: 1px solid rgba(255,255,255,0.06); }
+        .diagram-tab:hover { background: rgba(255,255,255,0.08); color: #d1d5db; }
+        .diagram-tab-active { background: rgba(41,167,255,0.12) !important; color: #51c5ff !important; border-color: rgba(41,167,255,0.25) !important; }
+    </style>
+</head>
+<body class="text-gray-300 font-sans antialiased overflow-x-hidden">
+
+    <!-- ==================== NAV ==================== -->
+    <nav class="fixed top-0 w-full z-50 bg-[#06060b]/80 backdrop-blur-2xl border-b border-white/5">
+        <div class="max-w-7xl mx-auto px-8 h-16 flex items-center justify-between">
+            <a href="#" class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-xl bg-brand-600 flex items-center justify-center shadow-lg shadow-brand-600/30">
+                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                </div>
+                <span class="text-white font-bold text-xl tracking-tight">Substrate</span>
+            </a>
+            <div class="hidden md:flex items-center gap-10 text-[15px] text-gray-400 font-medium">
+                <a href="#features" class="hover:text-white transition">Features</a>
+                <a href="#architecture" class="hover:text-white transition">Architecture</a>
+                <a href="#tools" class="hover:text-white transition">Tools</a>
+                <a href="philosophy.html" class="hover:text-white transition">Philosophy</a>
+                <a href="#download" class="hover:text-white transition">Download</a>
+                <a href="https://github.com/propagationhouse/substrate" target="_blank" class="flex items-center gap-2 bg-white/[0.06] hover:bg-white/[0.12] px-5 py-2.5 rounded-xl transition border border-white/[0.08]">
+                    <svg class="w-[18px] h-[18px]" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+                    GitHub
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- ==================== HERO ==================== -->
+    <section class="relative min-h-[100vh] flex items-center justify-center pt-16 grid-bg">
+        <div class="relative max-w-5xl mx-auto px-8 text-center py-24">
+            <div class="inline-flex items-center gap-2.5 px-5 py-2 rounded-full bg-brand-500/10 border border-brand-500/20 text-brand-400 text-base font-semibold mb-10 tracking-wide">
+                <span class="w-2.5 h-2.5 rounded-full bg-brand-400 animate-pulse"></span>
+                Source Available &middot; BSL 1.1
+            </div>
+
+            <h1 class="text-7xl sm:text-8xl md:text-9xl lg:text-[10rem] font-black text-white leading-[0.9] tracking-tighter mb-6">Substrate</h1>
+            <p class="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-300 leading-snug tracking-tight mb-8">
+                The Intelligence Layer:<br>
+                <span class="gradient-text">A Mind for Your Machine.</span>
+            </p>
+
+            <div class="max-w-2xl mx-auto mb-14 space-y-5 text-left">
+                <p class="text-lg md:text-xl text-gray-400 leading-relaxed">
+                    An open-source agentic system that turns your machine from an inanimate silo into something conversational, proactive, autonomous.
+                </p>
+                <p class="text-lg md:text-xl text-gray-400 leading-relaxed">
+                    Model-independent by design &mdash; it dynamically loads every model tied to your API keys, runs entirely offline via your preferred model library, or takes a hybrid approach with both.
+                </p>
+                <p class="text-lg md:text-xl text-gray-400 leading-relaxed">
+                    It learns your patterns and remembers your context, adapting into a uniquely tuned agent specific to each user.
+                </p>
+                <p class="text-lg md:text-xl text-gray-400 leading-relaxed pt-2">
+                    One foundational substrate, infinite potential outcomes.<br><em class="text-gray-300 font-semibold">You</em> are what makes your agent truly unique.
+                </p>
+            </div>
+
+            <div class="flex flex-col sm:flex-row items-center justify-center gap-5 mb-20">
+                <a href="#quickstart" class="px-10 py-4 bg-brand-600 hover:bg-brand-500 text-white text-lg font-bold rounded-2xl transition shadow-xl shadow-brand-600/30">
+                    Get Started
+                </a>
+                <a href="https://github.com/propagationhouse/substrate" target="_blank" class="px-10 py-4 bg-white/[0.06] hover:bg-white/[0.12] text-white text-lg font-bold rounded-2xl border border-white/10 transition">
+                    View on GitHub
+                </a>
+            </div>
+
+            <!-- Terminal mockup -->
+            <div class="max-w-3xl mx-auto terminal-bg rounded-3xl border border-white/10 glow overflow-hidden text-left">
+                <div class="flex items-center justify-between px-4 py-3 border-b border-white/[0.06]">
+                    <div class="flex items-center gap-2">
+                        <div class="w-4 h-4 rounded bg-brand-600 flex items-center justify-center">
+                            <svg class="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/></svg>
+                        </div>
+                        <span class="text-sm text-gray-500 font-mono">Substrate</span>
+                    </div>
+                    <div class="flex items-center gap-0.5">
+                        <div class="w-10 h-7 flex items-center justify-center hover:bg-white/[0.06] rounded-sm"><svg class="w-3 h-3 text-gray-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M5 12h14"/></svg></div>
+                        <div class="w-10 h-7 flex items-center justify-center hover:bg-white/[0.06] rounded-sm"><svg class="w-3 h-3 text-gray-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="1"/></svg></div>
+                        <div class="w-10 h-7 flex items-center justify-center hover:bg-red-500/20 rounded-sm"><svg class="w-3 h-3 text-gray-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></div>
+                    </div>
+                </div>
+                <div class="p-6 md:p-8 font-mono text-base md:text-lg leading-loose">
+                    <p class="text-gray-500">$ substrate</p>
+                    <p class="text-brand-400 mt-3">Substrate v1.2.0 &mdash; Agent ready.</p>
+                    <p class="text-gray-400 mt-4"><span class="text-brand-300 font-semibold">you:</span> Find all PDFs on my desktop, summarize each, and save a report to Obsidian.</p>
+                    <p class="text-gray-400 mt-3"><span class="text-green-400 font-semibold">agent:</span> On it. Found 4 PDFs. Reading and summarizing...</p>
+                    <p class="text-gray-500 mt-2">&nbsp;&nbsp;&#9656; exec &nbsp;<span class="text-gray-400">Get-ChildItem ~\Desktop -Filter *.pdf</span></p>
+                    <p class="text-gray-500">&nbsp;&nbsp;&#9656; read_file &nbsp;<span class="text-gray-400">quarterly_report.pdf</span></p>
+                    <p class="text-gray-500">&nbsp;&nbsp;&#9656; obsidian &nbsp;<span class="text-gray-400">create_note "PDF Summaries"</span></p>
+                    <p class="text-gray-400 mt-3"><span class="text-green-400 font-semibold">agent:</span> Done. Summaries saved to your Obsidian vault.</p>
+                    <p class="mt-4 text-gray-500">$ <span class="cursor-blink text-brand-400">|</span></p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ==================== STATS BAR ==================== -->
+    <section class="relative py-20">
+        <div class="gradient-line max-w-4xl mx-auto mb-20"></div>
+        <div class="max-w-5xl mx-auto px-8">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-10 text-center">
+                <div>
+                    <div class="text-5xl md:text-6xl font-black text-white stat-glow mb-2">17</div>
+                    <div class="text-lg text-gray-400 font-medium">Built-in Tools</div>
+                </div>
+                <div>
+                    <div class="text-5xl md:text-6xl font-black text-white stat-glow mb-2">5+</div>
+                    <div class="text-lg text-gray-400 font-medium">LLM Providers</div>
+                </div>
+                <div>
+                    <div class="text-5xl md:text-6xl font-black text-white stat-glow mb-2">3</div>
+                    <div class="text-lg text-gray-400 font-medium">UI Interfaces</div>
+                </div>
+                <div>
+                    <div class="text-5xl md:text-6xl font-black text-white stat-glow mb-2">100%</div>
+                    <div class="text-lg text-gray-400 font-medium">Local-First</div>
+                </div>
+            </div>
+        </div>
+        <div class="gradient-line max-w-4xl mx-auto mt-20"></div>
+    </section>
+
+    <!-- ==================== FEATURES ==================== -->
+    <section id="features" class="py-28 md:py-40 relative">
+        <div class="max-w-7xl mx-auto px-8">
+            <div class="text-center mb-20">
+                <p class="text-brand-400 text-lg font-bold uppercase tracking-widest mb-4">Capabilities</p>
+                <h2 class="text-4xl sm:text-5xl md:text-6xl font-black text-white leading-tight">Everything your system<br>needs to <em>be</em>.</h2>
+                <p class="text-xl text-gray-400 max-w-2xl mx-auto mt-6 leading-relaxed">Persistent memory, autonomous scheduling, and full OS control &mdash; model-independent architecture that adapts to each user.</p>
+            </div>
+            <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
+
+                <!-- Card: Desktop Control -->
+                <div class="bg-white/[0.025] border border-white/[0.06] rounded-3xl p-8 card-hover">
+                    <div class="w-14 h-14 rounded-2xl bg-brand-500/10 flex items-center justify-center mb-6">
+                        <svg class="w-7 h-7 text-brand-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+                    </div>
+                    <h3 class="text-white font-bold text-xl mb-3">Desktop Control</h3>
+                    <p class="text-gray-400 text-base leading-relaxed">Shell commands, file operations, process management, mouse/keyboard control, and native Windows UI automation via pywinauto.</p>
+                </div>
+
+                <!-- Card: Multi-Model LLM -->
+                <div class="bg-white/[0.025] border border-white/[0.06] rounded-3xl p-8 card-hover">
+                    <div class="w-14 h-14 rounded-2xl bg-purple-500/10 flex items-center justify-center mb-6">
+                        <svg class="w-7 h-7 text-purple-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M9.5 2A2.5 2.5 0 0112 4.5V12h7.5a2.5 2.5 0 010 5H12v2.5a2.5 2.5 0 01-5 0V17H4.5a2.5 2.5 0 010-5H7V4.5A2.5 2.5 0 019.5 2z"/></svg>
+                    </div>
+                    <h3 class="text-white font-bold text-xl mb-3">Multi-Model LLM</h3>
+                    <p class="text-gray-400 text-base leading-relaxed">Dynamically loads all available models from your API keys, runs entirely offline via your preferred model library, or takes a hybrid approach with both. Any OpenAI-compatible endpoint works too. Hot-swap mid-conversation.</p>
+                </div>
+
+                <!-- Card: Browser Automation -->
+                <div class="bg-white/[0.025] border border-white/[0.06] rounded-3xl p-8 card-hover">
+                    <div class="w-14 h-14 rounded-2xl bg-green-500/10 flex items-center justify-center mb-6">
+                        <svg class="w-7 h-7 text-green-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
+                    </div>
+                    <h3 class="text-white font-bold text-xl mb-3">Browser Automation</h3>
+                    <p class="text-gray-400 text-base leading-relaxed">Full Chrome DevTools Protocol control. Navigate, click, type, submit forms, execute JavaScript, and capture screenshots of any page.</p>
+                </div>
+
+                <!-- Card: Voice I/O -->
+                <div class="bg-white/[0.025] border border-white/[0.06] rounded-3xl p-8 card-hover">
+                    <div class="w-14 h-14 rounded-2xl bg-orange-500/10 flex items-center justify-center mb-6">
+                        <svg class="w-7 h-7 text-orange-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/></svg>
+                    </div>
+                    <h3 class="text-white font-bold text-xl mb-3">Voice I/O</h3>
+                    <p class="text-gray-400 text-base leading-relaxed">Local TTS via Kokoro-82M or cloud via ElevenLabs. Speech recognition input. The agent can speak every response aloud.</p>
+                </div>
+
+                <!-- Card: Memory -->
+                <div class="bg-white/[0.025] border border-white/[0.06] rounded-3xl p-8 card-hover">
+                    <div class="w-14 h-14 rounded-2xl bg-cyan-500/10 flex items-center justify-center mb-6">
+                        <svg class="w-7 h-7 text-cyan-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
+                    </div>
+                    <h3 class="text-white font-bold text-xl mb-3">Persistent Memory</h3>
+                    <p class="text-gray-400 text-base leading-relaxed">Unified SQLite with FTS5 full-text search and vector embeddings. Hybrid keyword + semantic retrieval across sessions.</p>
+                </div>
+
+                <!-- Card: Circuits -->
+                <div class="bg-white/[0.025] border border-white/[0.06] rounded-3xl p-8 card-hover">
+                    <div class="w-14 h-14 rounded-2xl bg-yellow-500/10 flex items-center justify-center mb-6">
+                        <svg class="w-7 h-7 text-yellow-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    </div>
+                    <h3 class="text-white font-bold text-xl mb-3">Circuits & Scheduling</h3>
+                    <p class="text-gray-400 text-base leading-relaxed">File-driven task scheduling via CIRCUITS.md. Recurring tasks, startup routines, and a system tray daemon that runs even when the UI is closed.</p>
+                </div>
+
+                <!-- Card: Image Gen -->
+                <div class="bg-white/[0.025] border border-white/[0.06] rounded-3xl p-8 card-hover">
+                    <div class="w-14 h-14 rounded-2xl bg-pink-500/10 flex items-center justify-center mb-6">
+                        <svg class="w-7 h-7 text-pink-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+                    </div>
+                    <h3 class="text-white font-bold text-xl mb-3">Image Generation</h3>
+                    <p class="text-gray-400 text-base leading-relaxed">Generate images via DALL-E 3 or Google Imagen. Results render inline in the chat with click-to-zoom and download.</p>
+                </div>
+
+                <!-- Card: Plugins & MCP -->
+                <div class="bg-white/[0.025] border border-white/[0.06] rounded-3xl p-8 card-hover">
+                    <div class="w-14 h-14 rounded-2xl bg-indigo-500/10 flex items-center justify-center mb-6">
+                        <svg class="w-7 h-7 text-indigo-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                    </div>
+                    <h3 class="text-white font-bold text-xl mb-3">Plugins & MCP</h3>
+                    <p class="text-gray-400 text-base leading-relaxed">Hook-based plugin architecture. Connect external MCP tool servers for any custom integration &mdash; the agent discovers and calls their tools automatically.</p>
+                </div>
+
+                <!-- Card: Dual UI -->
+                <div class="bg-white/[0.025] border border-white/[0.06] rounded-3xl p-8 card-hover">
+                    <div class="w-14 h-14 rounded-2xl bg-teal-500/10 flex items-center justify-center mb-6">
+                        <svg class="w-7 h-7 text-teal-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></svg>
+                    </div>
+                    <h3 class="text-white font-bold text-xl mb-3">Desktop & Mobile UI</h3>
+                    <p class="text-gray-400 text-base leading-relaxed">Electron desktop app with animated avatar, plus a PWA-capable WebUI accessible from any phone, tablet, or browser on your network.</p>
+                </div>
+
+                <!-- Card: Autonomy & Awareness -->
+                <div class="bg-white/[0.025] border border-white/[0.06] rounded-3xl p-8 card-hover">
+                    <div class="w-14 h-14 rounded-2xl bg-rose-500/10 flex items-center justify-center mb-6">
+                        <svg class="w-7 h-7 text-rose-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    </div>
+                    <h3 class="text-white font-bold text-xl mb-3">Autonomy & Awareness</h3>
+                    <p class="text-gray-400 text-base leading-relaxed">Configurable screen observation, camera/computer vision, and autonomous context building. Control how often the agent watches your screen, sees through your camera, and learns your workflows &mdash; all with adjustable intervals and toggles per channel.</p>
+                </div>
+
+                <!-- Card: Avatar & Agent Identity -->
+                <div class="bg-white/[0.025] border border-white/[0.06] rounded-3xl p-8 card-hover">
+                    <div class="w-14 h-14 rounded-2xl bg-sky-500/10 flex items-center justify-center mb-6">
+                        <svg class="w-7 h-7 text-sky-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                    </div>
+                    <h3 class="text-white font-bold text-xl mb-3">Animated Avatar & Identity</h3>
+                    <p class="text-gray-400 text-base leading-relaxed">A living, animated avatar with idle breathing, talking animations, bounce, wiggle, and squish reactions. Customize your agent's personality via editable markdown files &mdash; SUBSTRATE.md defines its core identity, PRIME.md sets startup behavior, and CIRCUITS.md schedules recurring tasks. Upload any image as the avatar face through the radial config panel.</p>
+                </div>
+
+                <!-- Card: Remote Access -->
+                <div class="bg-white/[0.025] border border-white/[0.06] rounded-3xl p-8 card-hover">
+                    <div class="w-14 h-14 rounded-2xl bg-emerald-500/10 flex items-center justify-center mb-6">
+                        <svg class="w-7 h-7 text-emerald-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9"/></svg>
+                    </div>
+                    <h3 class="text-white font-bold text-xl mb-3">Remote Access via ZeroTier</h3>
+                    <p class="text-gray-400 text-base leading-relaxed">Access your agent from any device on your ZeroTier network &mdash; phone, tablet, or another PC. The built-in WebUI and mobile PWA connect securely over your private overlay network without exposing anything to the public internet. Chat, use voice, and control your desktop remotely.</p>
+                </div>
+
+            </div>
+
+            <!-- Autonomy detail panel -->
+            <div class="mt-12 bg-white/[0.02] border border-white/[0.06] rounded-3xl p-8 md:p-10">
+                <div class="flex items-center gap-4 mb-8">
+                    <div class="w-12 h-12 rounded-2xl bg-rose-500/10 flex items-center justify-center">
+                        <svg class="w-6 h-6 text-rose-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    </div>
+                    <div>
+                        <h3 class="text-white font-bold text-xl">Autonomy Settings</h3>
+                        <p class="text-gray-500 text-sm">Every awareness channel is independently configurable &mdash; enable/disable, set intervals, customize prompts</p>
+                    </div>
+                </div>
+                <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
+                    <!-- Channel: Screen Observation -->
+                    <div class="bg-white/[0.02] border border-white/[0.04] rounded-2xl p-6">
+                        <div class="flex items-center gap-3 mb-3">
+                            <div class="w-8 h-8 rounded-lg bg-brand-500/10 flex items-center justify-center">
+                                <svg class="w-4 h-4 text-brand-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+                            </div>
+                            <h4 class="text-white font-semibold text-base">Screen Observation</h4>
+                        </div>
+                        <p class="text-gray-400 text-sm leading-relaxed mb-3">Periodic screenshots let the agent see what you're working on and build context about your workflow.</p>
+                        <div class="text-xs text-gray-500 space-y-1">
+                            <div class="flex justify-between"><span>Interval</span><span class="text-gray-400">2 &ndash; 10 min (configurable)</span></div>
+                            <div class="flex justify-between"><span>Default</span><span class="text-rose-400/70">Off</span></div>
+                        </div>
+                    </div>
+                    <!-- Channel: Camera Vision -->
+                    <div class="bg-white/[0.02] border border-white/[0.04] rounded-2xl p-6">
+                        <div class="flex items-center gap-3 mb-3">
+                            <div class="w-8 h-8 rounded-lg bg-purple-500/10 flex items-center justify-center">
+                                <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+                            </div>
+                            <h4 class="text-white font-semibold text-base">Camera / Vision</h4>
+                        </div>
+                        <p class="text-gray-400 text-sm leading-relaxed mb-3">See through your phone's camera via the mobile WebUI. The agent reacts naturally to what it sees &mdash; with a special "first look" prompt when vision connects.</p>
+                        <div class="text-xs text-gray-500 space-y-1">
+                            <div class="flex justify-between"><span>Interval</span><span class="text-gray-400">30s &ndash; 2 min</span></div>
+                            <div class="flex justify-between"><span>Silent chance</span><span class="text-gray-400">50% (won't always comment)</span></div>
+                        </div>
+                    </div>
+                    <!-- Channel: Circuits Polling -->
+                    <div class="bg-white/[0.02] border border-white/[0.04] rounded-2xl p-6">
+                        <div class="flex items-center gap-3 mb-3">
+                            <div class="w-8 h-8 rounded-lg bg-yellow-500/10 flex items-center justify-center">
+                                <svg class="w-4 h-4 text-yellow-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                            </div>
+                            <h4 class="text-white font-semibold text-base">Circuits Polling</h4>
+                        </div>
+                        <p class="text-gray-400 text-sm leading-relaxed mb-3">Background system monitoring on a timer. The agent checks for events, alerts, and scheduled tasks &mdash; responds silently unless something needs attention.</p>
+                        <div class="text-xs text-gray-500 space-y-1">
+                            <div class="flex justify-between"><span>Interval</span><span class="text-gray-400">1 &ndash; 60 min (configurable)</span></div>
+                            <div class="flex justify-between"><span>Active hours</span><span class="text-gray-400">Configurable window</span></div>
+                        </div>
+                    </div>
+                    <!-- Channel: Autonomous Messages -->
+                    <div class="bg-white/[0.02] border border-white/[0.04] rounded-2xl p-6">
+                        <div class="flex items-center gap-3 mb-3">
+                            <div class="w-8 h-8 rounded-lg bg-green-500/10 flex items-center justify-center">
+                                <svg class="w-4 h-4 text-green-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+                            </div>
+                            <h4 class="text-white font-semibold text-base">Autonomous Messages</h4>
+                        </div>
+                        <p class="text-gray-400 text-sm leading-relaxed mb-3">Periodic conversational check-ins. The agent proactively comments on your work, offers suggestions, or shares observations.</p>
+                        <div class="text-xs text-gray-500 space-y-1">
+                            <div class="flex justify-between"><span>Interval</span><span class="text-gray-400">1 &ndash; 5 min</span></div>
+                            <div class="flex justify-between"><span>Custom prompt</span><span class="text-gray-400">Fully editable</span></div>
+                        </div>
+                    </div>
+                    <!-- Channel: Autonomous Notes -->
+                    <div class="bg-white/[0.02] border border-white/[0.04] rounded-2xl p-6">
+                        <div class="flex items-center gap-3 mb-3">
+                            <div class="w-8 h-8 rounded-lg bg-cyan-500/10 flex items-center justify-center">
+                                <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                            </div>
+                            <h4 class="text-white font-semibold text-base">Autonomous Notes</h4>
+                        </div>
+                        <p class="text-gray-400 text-sm leading-relaxed mb-3">Automatically creates Obsidian notes summarizing key conversation points, decisions, and action items.</p>
+                        <div class="text-xs text-gray-500 space-y-1">
+                            <div class="flex justify-between"><span>Interval</span><span class="text-gray-400">10 &ndash; 30 min</span></div>
+                            <div class="flex justify-between"><span>Default</span><span class="text-rose-400/70">Off</span></div>
+                        </div>
+                    </div>
+                    <!-- Channel: Image Generation -->
+                    <div class="bg-white/[0.02] border border-white/[0.04] rounded-2xl p-6">
+                        <div class="flex items-center gap-3 mb-3">
+                            <div class="w-8 h-8 rounded-lg bg-pink-500/10 flex items-center justify-center">
+                                <svg class="w-4 h-4 text-pink-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+                            </div>
+                            <h4 class="text-white font-semibold text-base">Auto Image Gen</h4>
+                        </div>
+                        <p class="text-gray-400 text-sm leading-relaxed mb-3">Periodically generates image prompts inspired by the conversation context using DALL-E or Imagen. Creative visual companion.</p>
+                        <div class="text-xs text-gray-500 space-y-1">
+                            <div class="flex justify-between"><span>Interval</span><span class="text-gray-400">5 &ndash; 15 min</span></div>
+                            <div class="flex justify-between"><span>Custom prompt</span><span class="text-gray-400">Fully editable</span></div>
+                        </div>
+                    </div>
+                </div>
+                <p class="text-center text-gray-500 text-sm mt-6">All channels have independent enable/disable toggles, configurable min/max intervals, and custom prompts. The agent builds a richer understanding of your workflow over time.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- ==================== UI PREVIEW ==================== -->
+    <section class="py-28 md:py-40 relative">
+        <div class="gradient-line max-w-4xl mx-auto mb-28"></div>
+        <div class="max-w-6xl mx-auto px-8">
+            <div class="text-center mb-20">
+                <p class="text-brand-400 text-lg font-bold uppercase tracking-widest mb-4">The Interface</p>
+                <h2 class="text-4xl sm:text-5xl md:text-6xl font-black text-white leading-tight">Minimalist by design,<br>powerful by nature.</h2>
+                <p class="text-xl text-gray-400 max-w-2xl mx-auto mt-6 leading-relaxed">Just your avatar, a text field, and a transparent canvas. Designed to fit into whatever workflow you have without being intrusive or distracting.</p>
+            </div>
+
+            <!-- All avatar + UI styles scoped under .app-demo -->
+            <style>
+                /* ── Avatar body ── */
+                .app-demo .da { position:relative; width:61px; height:120px; background:#5bbfdd; border-radius:60% 60% 50% 50%; box-shadow:0 2px 10px rgba(0,0,0,.1),0 0 15px 4px rgba(91,191,221,.5),0 0 30px 8px rgba(91,191,221,.2); animation:da-float 6s ease-in-out infinite,da-bloom 25s linear infinite; display:flex; flex-direction:column; align-items:center; justify-content:center; overflow:visible; transition:transform .3s ease,background-color .5s ease,box-shadow 2s ease-in-out; transform-origin:center center; cursor:grab; user-select:none; }
+                .app-demo .da:active { cursor:grabbing; }
+                /* ── Face panel (::before) ── */
+                .app-demo .da::before { content:''; position:absolute; width:64%; height:25%; background:#a8e4f3; border-radius:10px; border:2px solid #5bbfdd; z-index:1; top:23%; left:50%; transform:translate(-50%,-50%); transition:background-color .5s ease; }
+                /* ── Eyes ── */
+                .app-demo .da-eye { position:absolute; width:9px; height:9px; background:radial-gradient(circle at 25% 25%,#fff 0%,#fff 25%,#000 25%,#000 100%); border:2px solid #000; border-radius:50%; z-index:10; transition:transform .2s ease-out,height .15s ease-out; }
+                .app-demo .da-eye-l { top:11%; left:23%; }
+                .app-demo .da-eye-r { top:11%; right:23%; }
+                .app-demo .da-eye.da-blink { transform:scaleY(.1)!important; transition:transform .1s ease; }
+                /* ── Mouth (closed smile) ── */
+                .app-demo .da-mouth { position:absolute; width:15px; height:3px; top:24%; left:50%; transform:translateX(-50%); z-index:5; background:transparent; border-radius:50%; border:2px solid #c83333; border-top:none; }
+                /* ── Cheeks ── */
+                .app-demo .da-cheek { position:absolute; width:8px; height:5px; background:#ffb6c1; border-radius:50%; z-index:4; }
+                .app-demo .da-cheek-l { top:21%; left:20%; }
+                .app-demo .da-cheek-r { top:21%; right:20%; }
+                /* ── Arms ── */
+                .app-demo .da-arm { position:absolute; width:20px; height:10px; background:var(--demo-arm-bg,#7acee6); border-radius:0 0 10px 10px; z-index:5; border:2px solid var(--demo-body-bg,#5bbfdd); transition:all .3s ease,background-color .5s ease; transform-origin:center top; }
+                .app-demo .da-arm-l { top:60%; left:5px; transform:rotate(-10deg); }
+                .app-demo .da-arm-r { top:60%; right:5px; transform:rotate(10deg); }
+                /* ── Brows (hidden default) ── */
+                .app-demo .da-brow { position:absolute; width:0; height:0; background:#222; border-radius:2px; z-index:11; opacity:0; pointer-events:none; }
+                /* ── Container ── */
+                #demo-avatar-wrap { position:absolute; bottom:80px; left:50%; transform:translateX(-50%); z-index:100; }
+                /* ── Expressions ── */
+                .app-demo .da.da-happy .da-eye { height:3px!important; width:10px!important; border-radius:50% 50% 0 0!important; background:transparent!important; border:1px solid #000!important; border-bottom:none!important; }
+                .app-demo .da.da-happy .da-cheek { transform:scale(1.3) translateY(-1px); opacity:1; }
+                .app-demo .da.da-surprised .da-eye { height:10px!important; width:12px!important; border-radius:50%!important; background:radial-gradient(circle at 60% 35%,#fff 0%,#fff 20%,#111 20%,#111 100%)!important; border:none!important; }
+                .app-demo .da.da-angry .da-eye { height:10px!important; width:15px!important; border-radius:0 0 50% 50%!important; background:radial-gradient(circle at 50% 50%,#fff 0%,#fff 60%,#d0eaff 80%,#60bfff 100%)!important; border:1px solid rgba(130,210,255,.7)!important; border-top:none!important; box-shadow:0 0 5px 2px rgba(130,210,255,.6)!important; }
+                .app-demo .da.da-angry { animation:da-shake .4s ease-in-out 3!important; }
+                .app-demo .da.da-sad .da-eye { height:3px!important; width:8px!important; border-radius:0 0 50% 50%!important; background:transparent!important; border:1px solid #000!important; border-top:none!important; }
+                /* ── Keyframes ── */
+                @keyframes da-float { 0%{transform:translateY(0) rotate(0) scale(1)} 25%{transform:translateY(-5px) rotate(1deg) scale(1.05,.95)} 50%{transform:translateY(-10px) rotate(0) scale(1.03,.97)} 75%{transform:translateY(-5px) rotate(-1deg) scale(1.05,.95)} 100%{transform:translateY(0) rotate(0) scale(1)} }
+                @keyframes da-bloom { 0%,100%{box-shadow:0 2px 10px rgba(0,0,0,.1),0 0 14px 4px rgba(91,191,221,.4),0 0 28px 7px rgba(91,191,221,.14)} 35%{box-shadow:0 2px 10px rgba(0,0,0,.1),0 0 17px 5px rgba(91,191,221,.48),0 0 32px 9px rgba(91,191,221,.18)} 70%{box-shadow:0 2px 10px rgba(0,0,0,.1),0 0 15px 4px rgba(91,191,221,.43),0 0 30px 8px rgba(91,191,221,.16)} }
+                @keyframes da-shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-4px) rotate(-1deg)} 75%{transform:translateX(4px) rotate(1deg)} }
+                @keyframes da-bounce { 0%{transform:translateY(0) scale(1)} 40%{transform:translateY(-20px) scale(.95,1.05)} 50%{transform:translateY(-25px) scale(1)} 70%{transform:translateY(0) scale(1.2,.8)} 90%{transform:translateY(0) scale(1.1,.9)} 100%{transform:translateY(0) scale(1)} }
+                @keyframes da-wiggle { 0%,100%{transform:rotate(0)} 25%{transform:rotate(-3deg)} 75%{transform:rotate(3deg)} }
+                @keyframes da-jiggle { 0%,100%{transform:rotate(0) scale(1)} 25%{transform:rotate(-5deg) scale(1.05)} 50%{transform:rotate(0) scale(1.1)} 75%{transform:rotate(5deg) scale(1.05)} }
+                /* ── Messages ── */
+                .app-demo .message { background:rgba(0,0,0,.5); padding:15px; border-radius:10px; margin:5px 0; backdrop-filter:blur(5px); font-family:'Consolas','Monaco','Courier New',monospace; font-size:12px; line-height:1.6; color:white; }
+                .app-demo .message.user { background:rgba(0,255,255,.1); }
+                .app-demo .message.assistant { background:rgba(255,255,255,.1); }
+                .app-demo .message .tool-line { font-size:10px; color:rgba(255,255,255,.5); margin-top:6px; }
+                /* ── Titlebar ── */
+                .app-demo .titlebar { position:relative; height:32px; display:flex; justify-content:flex-end; align-items:center; padding:0 8px; }
+                .app-demo .titlebar button { background:transparent; border:none; color:rgba(255,255,255,.5); cursor:default; padding:5px; }
+                .app-demo .titlebar .close-btn { color:rgba(255,255,255,.6); font-size:16px; }
+                .app-demo .titlebar .minimize-btn { font-size:18px; line-height:1; }
+                /* ── Input bar ── */
+                .app-demo .input-container { position:absolute; bottom:20px; left:0; right:0; display:flex; flex-direction:column; align-items:center; padding:0 20px; z-index:10; }
+                .app-demo .chat-input-container { position:relative; display:flex; align-items:center; padding:10px 15px; background:rgba(255,255,255,.1); max-width:800px; width:90%; margin:0 auto; border-radius:999px; backdrop-filter:blur(5px); }
+                .app-demo .chat-input { flex:1; padding:8px 20px; border:none; border-radius:999px; background:rgba(255,255,255,.2); color:rgba(255,255,255,.9); font-size:10px; outline:none; resize:none; font-family:'Press Start 2P','Consolas',monospace; letter-spacing:.5px; min-height:24px; margin-right:50px; width:calc(100% - 70px); backdrop-filter:blur(3px); }
+                .app-demo .chat-input::placeholder { color:rgba(255,255,255,.9); }
+                .app-demo .button-container { position:absolute; right:15px; top:50%; transform:translateY(-50%); display:flex; align-items:center; gap:10px; z-index:2; }
+                .app-demo .mode-toggle { display:flex; align-items:center; gap:1px; margin-right:8px; }
+                .app-demo .mode-toggle button { position:relative; padding:3px 5px; border:none; background:transparent; color:rgba(255,255,255,.28); cursor:pointer; line-height:0; display:flex; align-items:center; }
+                .app-demo .mode-toggle button svg { width:14px; height:14px; }
+                .app-demo .mode-toggle button:hover { color:rgba(255,255,255,.6); }
+                .app-demo .mode-toggle button.active { color:rgba(255,255,255,.9); }
+                /* ── Tooltips ── */
+                .app-demo [data-tip]::after { content:attr(data-tip); position:absolute; bottom:calc(100% + 6px); left:50%; transform:translateX(-50%); background:rgba(30,30,30,.95); color:rgba(255,255,255,.85); font-size:9px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; padding:3px 7px; border-radius:4px; white-space:nowrap; pointer-events:none; opacity:0; transition:opacity .2s; z-index:50; }
+                .app-demo [data-tip]:hover::after { opacity:1; }
+                .app-demo .record-mic-button { position:relative; width:30px; height:30px; border-radius:50%; background:transparent; border:none; color:rgba(255,255,255,.4); cursor:default; display:flex; align-items:center; justify-content:center; padding:0; }
+                .app-demo .tool-button { position:relative; width:40px; height:40px; border-radius:50%; background:rgba(255,255,255,.1); border:none; color:white; font-size:24px; cursor:default; display:flex; align-items:center; justify-content:center; backdrop-filter:blur(5px); padding:0; }
+                /* ── Radial menu (hover only) ── */
+                .app-demo .upload-wrapper { position:relative; display:inline-flex; }
+                .app-demo .radial-menu { position:absolute; left:50%; top:50%; width:0; height:0; pointer-events:none; z-index:3; }
+                .app-demo .radial-menu .radial-item { position:absolute; width:26px; height:26px; min-width:26px; min-height:26px; font-size:11px; border-radius:50%; background:rgba(255,255,255,.1); border:none; color:white; display:flex; align-items:center; justify-content:center; backdrop-filter:blur(5px); cursor:default; padding:0; opacity:0; transform:scale(.3); pointer-events:none; left:-13px; top:-13px; transition:all .25s cubic-bezier(.34,1.56,.64,1); }
+                .app-demo .ri-mute { font-size:7px; line-height:1; }
+                .app-demo .ri-user { font-size:8px; font-family:'Consolas',monospace; font-weight:bold; line-height:1; }
+                .app-demo .ri-cfg { font-size:12px; line-height:1; }
+                .app-demo .upload-wrapper:hover .radial-menu { pointer-events:all; }
+                .app-demo .upload-wrapper:hover .radial-menu .radial-item { opacity:1; transform:scale(1); pointer-events:all; }
+                .app-demo .upload-wrapper:hover .ri-mute { left:22px; top:4px; transition-delay:0s; }
+                .app-demo .upload-wrapper:hover .ri-user { left:28px; top:-18px; transition-delay:.03s; }
+                .app-demo .upload-wrapper:hover .ri-11 { left:20px; top:-40px; transition-delay:.06s; }
+                .app-demo .upload-wrapper:hover .ri-cfg { left:2px; top:-54px; transition-delay:.09s; }
+                .app-demo .upload-wrapper:not(:hover) .ri-cfg { transition-delay:0s; }
+                .app-demo .upload-wrapper:not(:hover) .ri-11 { transition-delay:.03s; }
+                .app-demo .upload-wrapper:not(:hover) .ri-user { transition-delay:.06s; }
+                .app-demo .upload-wrapper:not(:hover) .ri-mute { transition-delay:.09s; }
+                .app-demo .radial-menu .radial-item:hover { transform:scale(1.2)!important; background:rgba(255,255,255,.25); box-shadow:0 0 10px rgba(79,195,247,.3); }
+                .app-demo .upload-wrapper:hover .radial-menu::before { content:''; position:absolute; left:-20px; top:-80px; width:70px; height:100px; pointer-events:all; }
+            </style>
+
+            <!-- UI Mockup -->
+            <div class="max-w-4xl mx-auto app-demo">
+                <div class="rounded-3xl border border-white/10 glow overflow-hidden" style="background:linear-gradient(180deg,#0c0c14 0%,#080810 100%);">
+                    <div class="titlebar">
+                        <button class="minimize-btn" title="Minimize to tray">−</button>
+                        <button class="close-btn" title="Close">×</button>
+                    </div>
+                    <div id="demo-box" class="relative flex flex-col" style="min-height:540px; overflow:hidden;">
+                        <div id="demo-messages" class="flex-1 px-5 pt-2 pb-4 flex flex-col gap-2.5 overflow-hidden" style="padding-bottom:220px;">
+                            <div class="message user">What can you do in Code mode?</div>
+                            <div class="message assistant">In <span style="color:rgba(0,255,255,.7);">Code</span> mode I act on your instructions immediately &mdash; executing commands, writing files, browsing the web, and controlling your desktop in real time.<br><br>I can:<br>&bull; Run shell commands and scripts on your OS<br>&bull; Read, write, and manage files across your system<br>&bull; Browse the web, scrape data, and take screenshots<br>&bull; Send messages to Obsidian, Notion, or any integrated app<br>&bull; Chain multiple tools together in a single response<br><br>This is the default mode &mdash; tell me what to do and I'll do it.</div>
+                        </div>
+                        <!-- Avatar -->
+                        <div id="demo-avatar-wrap">
+                            <div class="da" id="demo-av">
+                                <div class="da-brow"></div><div class="da-brow"></div>
+                                <div class="da-eye da-eye-l" id="da-el"></div>
+                                <div class="da-eye da-eye-r" id="da-er"></div>
+                                <div class="da-mouth" id="da-mo"></div>
+                                <div class="da-cheek da-cheek-l"></div>
+                                <div class="da-cheek da-cheek-r"></div>
+                                <div class="da-arm da-arm-l" id="da-al"></div>
+                                <div class="da-arm da-arm-r" id="da-ar"></div>
+                            </div>
+                        </div>
+                        <!-- Input -->
+                        <div class="input-container">
+                            <div class="chat-input-container">
+                                <textarea class="chat-input" placeholder="Type your message..." rows="1" readonly></textarea>
+                                <div class="button-container">
+                                    <div class="mode-toggle" id="demo-mode-toggle">
+                                        <button class="active" data-mode="code" data-tip="Code"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></button>
+                                        <button data-mode="ask" data-tip="Ask"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></button>
+                                        <button data-mode="plan" data-tip="Plan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></button>
+                                    </div>
+                                    <button class="record-mic-button" data-tip="Record"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="1" width="6" height="11" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="21" x2="12" y2="17"/></svg></button>
+                                    <div class="upload-wrapper">
+                                        <button class="tool-button" data-tip="Upload">&#128449;</button>
+                                        <div class="radial-menu">
+                                            <button class="radial-item ri-mute" data-tip="Mute">၊၊||၊</button>
+                                            <button class="radial-item ri-user" data-tip="Toggle User Msgs">U</button>
+                                            <button class="radial-item ri-11" data-tip="ElevenLabs Call"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg></button>
+                                            <button class="radial-item ri-cfg" data-tip="Settings">&#128462;</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- Annotation callouts -->
+                <div class="grid md:grid-cols-3 gap-6 mt-10">
+                    <div class="text-center">
+                        <div class="w-10 h-10 rounded-xl bg-brand-500/10 flex items-center justify-center mx-auto mb-3"><svg class="w-5 h-5 text-brand-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg></div>
+                        <h4 class="text-white font-bold text-sm mb-1">Radial Config</h4>
+                        <p class="text-gray-500 text-xs leading-relaxed">Right-click the avatar to open the radial menu &mdash; settings, prompts, profiles, models, and autonomy controls all live here.</p>
+                    </div>
+                    <div class="text-center">
+                        <div class="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center mx-auto mb-3"><svg class="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
+                        <h4 class="text-white font-bold text-sm mb-1">Custom Avatar</h4>
+                        <p class="text-gray-500 text-xs leading-relaxed">Upload any image as the agent face. It animates with idle breathing, talking lips, and reactive expressions like happy, angry, or searching.</p>
+                    </div>
+                    <div class="text-center">
+                        <div class="w-10 h-10 rounded-xl bg-green-500/10 flex items-center justify-center mx-auto mb-3"><svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/></svg></div>
+                        <h4 class="text-white font-bold text-sm mb-1">Voice or Text</h4>
+                        <p class="text-gray-500 text-xs leading-relaxed">Type or speak. The agent responds in text and can read every reply aloud with local or cloud TTS voices.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Self-contained avatar behavior (no avatar.js dependency) -->
+    <script>
+    (function(){
+        var av = document.getElementById('demo-av');
+        var el = document.getElementById('da-el');
+        var er = document.getElementById('da-er');
+        var mo = document.getElementById('da-mo');
+        var al = document.getElementById('da-al');
+        var ar = document.getElementById('da-ar');
+        var wrap = document.getElementById('demo-avatar-wrap');
+        var box = document.getElementById('demo-box');
+        if(!av) return;
+
+        /* ── Color sets (same as app) ── */
+        var colors = [
+            {body:'#5bbfdd',face:'#a8e4f3'},
+            {body:'#ff9d7a',face:'#ffd4c2'},
+            {body:'#a5d6a7',face:'#c8e6c9'},
+            {body:'#ce93d8',face:'#e1bee7'},
+            {body:'#fff59d',face:'#fff9c4'}
+        ];
+        var ci = 0;
+        function hexToRgb(h){h=h.replace('#','');return[parseInt(h.substring(0,2),16),parseInt(h.substring(2,4),16),parseInt(h.substring(4,6),16)];}
+        function rgbToHex(r,g,b){return'#'+[r,g,b].map(function(x){var s=Math.round(x).toString(16);return s.length===1?'0'+s:s;}).join('');}
+        function lerp(a,b,t){return a+(b-a)*t;}
+        function transitionColor(targetIdx,dur){
+            if(targetIdx===ci) return;
+            var from=colors[ci], to=colors[targetIdx];
+            var fb=hexToRgb(from.body),tb=hexToRgb(to.body),ff=hexToRgb(from.face),tf=hexToRgb(to.face);
+            var start=performance.now();
+            function step(now){
+                var t=Math.min((now-start)/dur,1);
+                var br=lerp(fb[0],tb[0],t),bg=lerp(fb[1],tb[1],t),bb=lerp(fb[2],tb[2],t);
+                var fr=lerp(ff[0],tf[0],t),fg=lerp(ff[1],tf[1],t),fbl=lerp(ff[2],tf[2],t);
+                var bc=rgbToHex(br,bg,bb);
+                var fc=rgbToHex(fr,fg,fbl);
+                // Arm = 60% body + 40% face
+                var ac=rgbToHex(br*.6+fr*.4,bg*.6+fg*.4,bb*.6+fbl*.4);
+                av.style.backgroundColor=bc;
+                av.style.setProperty('--demo-face-bg',fc);
+                av.style.setProperty('--demo-body-bg',bc);
+                av.style.setProperty('--demo-arm-bg',ac);
+                // Update glow
+                av.style.boxShadow='0 2px 10px rgba(0,0,0,.1),0 0 15px 4px '+bc+'80,0 0 30px 8px '+bc+'33';
+                if(t<1) requestAnimationFrame(step);
+                else ci=targetIdx;
+            }
+            requestAnimationFrame(step);
+        }
+        // Inject dynamic face color var
+        var faceRule=document.createElement('style');
+        faceRule.textContent='.app-demo .da::before{background:var(--demo-face-bg,#a8e4f3)!important;border-color:var(--demo-body-bg,#5bbfdd)!important;}';
+        document.head.appendChild(faceRule);
+
+        /* ── Blinking ── */
+        function blink(){
+            el.classList.add('da-blink'); er.classList.add('da-blink');
+            setTimeout(function(){el.classList.remove('da-blink');er.classList.remove('da-blink');},200);
+            scheduleBlink();
+        }
+        function scheduleBlink(){setTimeout(blink,2000+Math.random()*5000);}
+        scheduleBlink();
+
+        /* ── Eye tracking ── */
+        document.addEventListener('mousemove',function(e){
+            var rect=av.getBoundingClientRect();
+            var cx=rect.left+rect.width/2, cy=rect.top+rect.height/2;
+            var dx=e.clientX-cx, dy=e.clientY-cy;
+            var dist=Math.sqrt(dx*dx+dy*dy);
+            var maxShift=3;
+            var sx=(dx/Math.max(dist,1))*maxShift, sy=(dy/Math.max(dist,1))*maxShift;
+            el.style.transform='translate('+sx+'px,'+sy+'px)';
+            er.style.transform='translate('+sx+'px,'+sy+'px)';
+        });
+
+        /* ── Poke / click reaction ── */
+        var pokeCount=0, pokeTimer=null;
+        var expressions=['da-happy','da-surprised','da-angry','da-sad'];
+        av.addEventListener('click',function(e){
+            e.preventDefault();
+            pokeCount++;
+            clearTimeout(pokeTimer);
+            pokeTimer=setTimeout(function(){pokeCount=0;},3000);
+            // Play a random animation
+            var anims=['da-bounce','da-wiggle','da-jiggle'];
+            var anim=anims[Math.floor(Math.random()*anims.length)];
+            av.style.animation=anim+' .6s ease-in-out';
+            setTimeout(function(){av.style.animation='da-float 6s ease-in-out infinite,da-bloom 25s linear infinite';},700);
+            // Show expression
+            var expr=expressions[Math.floor(Math.random()*expressions.length)];
+            av.classList.add(expr);
+            setTimeout(function(){av.classList.remove(expr);},1500);
+            // Wave arms
+            al.style.left='-8px'; al.style.top='30%'; al.style.borderRadius='10px 10px 0 0';
+            ar.style.right='-8px'; ar.style.top='30%'; ar.style.borderRadius='10px 10px 0 0';
+            al.style.transform='rotate(-30deg)'; ar.style.transform='rotate(30deg)';
+            setTimeout(function(){
+                al.style.left='5px'; al.style.top='60%'; al.style.borderRadius='0 0 10px 10px'; al.style.transform='rotate(-10deg)';
+                ar.style.right='5px'; ar.style.top='60%'; ar.style.borderRadius='0 0 10px 10px'; ar.style.transform='rotate(10deg)';
+            },600);
+        });
+
+        /* ── Random color cycling ── */
+        setInterval(function(){
+            if(Math.random()<0.15){
+                var next=(ci+1+Math.floor(Math.random()*(colors.length-1)))%colors.length;
+                transitionColor(next,2000+Math.random()*3000);
+            }
+        },5000);
+
+        /* ── Constrained dragging ── */
+        var isDrag=false,offX=0,offY=0;
+        av.addEventListener('mousedown',function(e){
+            if(e.button!==0) return;
+            isDrag=true;
+            var wr=wrap.getBoundingClientRect();
+            offX=e.clientX-wr.left; offY=e.clientY-wr.top;
+            av.style.animation='none';
+            e.preventDefault();
+        });
+        document.addEventListener('mousemove',function(e){
+            if(!isDrag) return;
+            var br=box.getBoundingClientRect();
+            var x=e.clientX-br.left-offX, y=e.clientY-br.top-offY;
+            x=Math.max(0,Math.min(x,br.width-wrap.offsetWidth));
+            y=Math.max(0,Math.min(y,br.height-wrap.offsetHeight));
+            wrap.style.left=x+'px'; wrap.style.top=y+'px';
+            wrap.style.bottom='auto'; wrap.style.transform='none';
+        });
+        document.addEventListener('mouseup',function(){
+            if(!isDrag) return;
+            isDrag=false;
+            av.style.animation='da-float 6s ease-in-out infinite,da-bloom 25s linear infinite';
+        });
+    })();
+    </script>
+
+    <!-- Mode toggle + message swap -->
+    <script>
+    (function(){
+        var toggle = document.getElementById('demo-mode-toggle');
+        var msgs = document.getElementById('demo-messages');
+        if(!toggle || !msgs) return;
+
+        var content = {
+            code: '<div class="message user">What can you do in Code mode?</div>'
+                + '<div class="message assistant">In <span style="color:rgba(0,255,255,.7);">Code</span> mode I act on your instructions immediately &mdash; executing commands, writing files, browsing the web, and controlling your desktop in real time.'
+                + '<br><br>I can:'
+                + '<br>&bull; Run shell commands and scripts on your OS'
+                + '<br>&bull; Read, write, and manage files across your system'
+                + '<br>&bull; Browse the web, scrape data, and take screenshots'
+                + '<br>&bull; Send messages to Obsidian, Notion, or any integrated app'
+                + '<br>&bull; Chain multiple tools together in a single response'
+                + '<br><br>This is the default mode &mdash; tell me what to do and I\'ll do it.</div>',
+
+            ask: '<div class="message user">What can you do in Ask mode?</div>'
+                + '<div class="message assistant">In <span style="color:rgba(0,255,255,.7);">Ask</span> mode I answer questions using my knowledge, your files, and web search &mdash; without executing any commands or modifying anything.'
+                + '<br><br>I can:'
+                + '<br>&bull; Explain code, concepts, or errors'
+                + '<br>&bull; Search the web and summarize findings'
+                + '<br>&bull; Read and analyze your local files'
+                + '<br>&bull; Reference your conversation history and memory'
+                + '<br><br>Think of it as a research assistant that looks but doesn\'t touch.</div>',
+
+            plan: '<div class="message user">What does Plan mode do?</div>'
+                + '<div class="message assistant">In <span style="color:rgba(0,255,255,.7);">Plan</span> mode I break down complex tasks into structured steps before executing anything.'
+                + '<br><br>I will:'
+                + '<br>&bull; Analyze what you\'re asking for'
+                + '<br>&bull; Outline each step with the tools I\'ll use'
+                + '<br>&bull; Show you the full plan for approval'
+                + '<br>&bull; Execute step-by-step once confirmed'
+                + '<br><br>Best for multi-step workflows, project scaffolding, or anything you want to review before I act.</div>'
+        };
+
+        // Pre-load audio files
+        var audio = { code: new Audio('audio/mode_code.wav'), ask: new Audio('audio/mode_ask.wav'), plan: new Audio('audio/mode_plan.wav') };
+        var currentAudio = null;
+
+        // Avatar references for talking animation
+        var av = document.getElementById('demo-av');
+        var mo = document.getElementById('da-mo');
+        var al = document.getElementById('da-al');
+        var ar = document.getElementById('da-ar');
+        var mouthInterval = null;
+        var armInterval = null;
+
+        // Mouth shapes — cycle randomly like the real app
+        var shapes = [
+            {w:8,h:6,bg:'#ff6b6b',br:'50%',bt:'none'},       // open O
+            {w:12,h:3,bg:'#ff6b6b',br:'2px',bt:'none'},       // wide
+            {w:6,h:8,bg:'#ff6b6b',br:'50%',bt:'none'},        // tall O
+            {w:10,h:2,bg:'transparent',br:'50%',bt:'2px solid #c83333'}, // closed
+            {w:9,h:5,bg:'#ff6b6b',br:'40%',bt:'none'},        // mid
+            {w:14,h:4,bg:'#ff6b6b',br:'3px',bt:'none'},       // smile wide
+        ];
+
+        function startTalking(){
+            if(mouthInterval) return;
+            mo.style.transition = 'all 0.12s ease-in-out';
+            mo.style.borderTop = 'none';
+            mouthInterval = setInterval(function(){
+                var s = shapes[Math.floor(Math.random()*shapes.length)];
+                mo.style.width = s.w+'px';
+                mo.style.height = s.h+'px';
+                mo.style.backgroundColor = s.bg;
+                mo.style.borderRadius = s.br;
+                mo.style.border = s.bt;
+                mo.style.borderTop = 'none';
+            }, 120);
+            // Arm waving
+            var armTick = 0;
+            armInterval = setInterval(function(){
+                armTick++;
+                var lAngle = -10 + Math.sin(armTick*0.4)*15;
+                var rAngle = 10 + Math.cos(armTick*0.4)*15;
+                al.style.transform = 'rotate('+lAngle+'deg)';
+                ar.style.transform = 'rotate('+rAngle+'deg)';
+            }, 150);
+        }
+
+        function stopTalking(){
+            if(mouthInterval){ clearInterval(mouthInterval); mouthInterval = null; }
+            if(armInterval){ clearInterval(armInterval); armInterval = null; }
+            // Reset mouth to closed smile
+            mo.style.width = '15px';
+            mo.style.height = '3px';
+            mo.style.backgroundColor = 'transparent';
+            mo.style.borderRadius = '50%';
+            mo.style.border = '2px solid #c83333';
+            mo.style.borderTop = 'none';
+            // Reset arms
+            al.style.transform = 'rotate(-10deg)';
+            ar.style.transform = 'rotate(10deg)';
+        }
+
+        toggle.addEventListener('click', function(e){
+            var btn = e.target.closest('button[data-mode]');
+            if(!btn) return;
+            var mode = btn.getAttribute('data-mode');
+
+            // Update active state
+            toggle.querySelectorAll('button').forEach(function(b){ b.classList.remove('active'); });
+            btn.classList.add('active');
+
+            // Stop any currently playing audio + talking anim
+            if(currentAudio){ currentAudio.pause(); currentAudio.currentTime = 0; }
+            stopTalking();
+
+            // Swap messages with fade
+            msgs.style.opacity = '0';
+            setTimeout(function(){
+                msgs.innerHTML = content[mode] || content.code;
+                msgs.style.opacity = '1';
+                // Play the mode's voice explanation + start talking
+                if(audio[mode]){
+                    currentAudio = audio[mode];
+                    currentAudio.currentTime = 0;
+                    currentAudio.play().then(function(){ startTalking(); }).catch(function(){});
+                    currentAudio.onended = function(){ stopTalking(); currentAudio = null; };
+                }
+            }, 150);
+        });
+
+        // Add transition for fade
+        msgs.style.transition = 'opacity 0.15s ease';
+    })();
+    </script>
+
+    <!-- ==================== ARCHITECTURE ==================== -->
+    <section id="architecture" class="py-28 md:py-40 relative">
+        <div class="gradient-line max-w-4xl mx-auto mb-28"></div>
+        <div class="max-w-6xl mx-auto px-8">
+            <div class="text-center mb-20">
+                <p class="text-brand-400 text-lg font-bold uppercase tracking-widest mb-4">Architecture</p>
+                <h2 class="text-4xl sm:text-5xl md:text-6xl font-black text-white leading-tight">How it works</h2>
+                <p class="text-xl text-gray-400 max-w-2xl mx-auto mt-6 leading-relaxed">A hybrid Electron + Python architecture with bidirectional IPC, a Flask API layer, and pluggable LLM backends.</p>
+            </div>
+
+            <!-- Diagram tab switcher -->
+            <div class="flex flex-wrap justify-center gap-3 mb-12">
+                <button onclick="showDiagram('stack')" id="tab-stack" class="diagram-tab diagram-tab-active px-6 py-3 rounded-xl text-base font-semibold transition">System Stack</button>
+                <button onclick="showDiagram('ocs')" id="tab-ocs" class="diagram-tab px-6 py-3 rounded-xl text-base font-semibold transition">Agent Loop</button>
+                <button onclick="showDiagram('tools')" id="tab-tools" class="diagram-tab px-6 py-3 rounded-xl text-base font-semibold transition">Tool Pipeline</button>
+                <button onclick="showDiagram('parser')" id="tab-parser" class="diagram-tab px-6 py-3 rounded-xl text-base font-semibold transition">Command Parser</button>
+                <button onclick="showDiagram('tokens')" id="tab-tokens" class="diagram-tab px-6 py-3 rounded-xl text-base font-semibold transition">Token Efficiency</button>
+                <button onclick="showDiagram('learning')" id="tab-learning" class="diagram-tab px-6 py-3 rounded-xl text-base font-semibold transition">Learning &amp; Skills</button>
+            </div>
+
+            <!-- ── DIAGRAM 1: System Stack ── -->
+            <div id="diagram-stack" class="diagram-panel">
+                <div class="terminal-bg rounded-3xl border border-white/10 p-6 md:p-10 glow overflow-x-auto">
+                    <svg viewBox="0 0 900 620" class="w-full max-w-4xl mx-auto" xmlns="http://www.w3.org/2000/svg">
+                        <defs>
+                            <linearGradient id="glow-blue" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#29a7ff" stop-opacity="0.25"/><stop offset="100%" stop-color="#29a7ff" stop-opacity="0"/></linearGradient>
+                            <linearGradient id="glow-green" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#4ade80" stop-opacity="0.2"/><stop offset="100%" stop-color="#4ade80" stop-opacity="0"/></linearGradient>
+                            <filter id="shadow"><feDropShadow dx="0" dy="2" stdDeviation="6" flood-color="#29a7ff" flood-opacity="0.15"/></filter>
+                            <filter id="shadow-green"><feDropShadow dx="0" dy="2" stdDeviation="6" flood-color="#4ade80" flood-opacity="0.12"/></filter>
+                        </defs>
+
+                        <!-- Layer label: User Interfaces -->
+                        <text x="450" y="30" text-anchor="middle" fill="#51c5ff" font-size="15" font-weight="700" letter-spacing="3" font-family="Inter,sans-serif">USER INTERFACES</text>
+
+                        <!-- UI Boxes -->
+                        <g filter="url(#shadow)">
+                            <rect x="60" y="48" width="220" height="80" rx="16" fill="#0e0e16" stroke="#29a7ff" stroke-opacity="0.3" stroke-width="1.5"/>
+                            <text x="170" y="80" text-anchor="middle" fill="white" font-size="16" font-weight="700" font-family="Inter,sans-serif">Electron App</text>
+                            <text x="170" y="104" text-anchor="middle" fill="#9ca3af" font-size="13" font-family="Inter,sans-serif">Desktop UI + Avatar</text>
+                        </g>
+                        <g filter="url(#shadow)">
+                            <rect x="340" y="48" width="220" height="80" rx="16" fill="#0e0e16" stroke="#29a7ff" stroke-opacity="0.3" stroke-width="1.5"/>
+                            <text x="450" y="80" text-anchor="middle" fill="white" font-size="16" font-weight="700" font-family="Inter,sans-serif">WebUI / PWA</text>
+                            <text x="450" y="104" text-anchor="middle" fill="#9ca3af" font-size="13" font-family="Inter,sans-serif">Mobile &amp; Browser</text>
+                        </g>
+                        <g filter="url(#shadow)">
+                            <rect x="620" y="48" width="220" height="80" rx="16" fill="#0e0e16" stroke="#29a7ff" stroke-opacity="0.3" stroke-width="1.5"/>
+                            <text x="730" y="80" text-anchor="middle" fill="white" font-size="16" font-weight="700" font-family="Inter,sans-serif">System Tray</text>
+                            <text x="730" y="104" text-anchor="middle" fill="#9ca3af" font-size="13" font-family="Inter,sans-serif">Background Daemon</text>
+                        </g>
+
+                        <!-- Connection arrows -->
+                        <line x1="170" y1="128" x2="170" y2="180" stroke="#29a7ff" stroke-opacity="0.35" stroke-width="1.5" stroke-dasharray="6,4"/>
+                        <text x="190" y="160" fill="#6b7280" font-size="11" font-family="JetBrains Mono,monospace">IPC</text>
+                        <line x1="450" y1="128" x2="450" y2="180" stroke="#29a7ff" stroke-opacity="0.35" stroke-width="1.5" stroke-dasharray="6,4"/>
+                        <text x="470" y="160" fill="#6b7280" font-size="11" font-family="JetBrains Mono,monospace">HTTP/WS</text>
+                        <line x1="730" y1="128" x2="730" y2="180" stroke="#29a7ff" stroke-opacity="0.35" stroke-width="1.5" stroke-dasharray="6,4"/>
+                        <text x="750" y="160" fill="#6b7280" font-size="11" font-family="JetBrains Mono,monospace">HTTP</text>
+
+                        <!-- Arrow tips -->
+                        <polygon points="170,180 165,170 175,170" fill="#29a7ff" fill-opacity="0.5"/>
+                        <polygon points="450,180 445,170 455,170" fill="#29a7ff" fill-opacity="0.5"/>
+                        <polygon points="730,180 725,170 735,170" fill="#29a7ff" fill-opacity="0.5"/>
+
+                        <!-- Backend layer -->
+                        <rect x="40" y="188" width="820" height="210" rx="20" fill="url(#glow-blue)" stroke="#29a7ff" stroke-opacity="0.15" stroke-width="1"/>
+                        <text x="450" y="218" text-anchor="middle" fill="#51c5ff" font-size="15" font-weight="700" letter-spacing="3" font-family="Inter,sans-serif">PYTHON BACKEND</text>
+                        <text x="450" y="238" text-anchor="middle" fill="#6b7280" font-size="12" font-family="JetBrains Mono,monospace">Flask &middot; port 8765</text>
+
+                        <!-- Backend modules -->
+                        <rect x="70" y="258" width="170" height="110" rx="14" fill="#0e0e16" stroke="white" stroke-opacity="0.08" stroke-width="1"/>
+                        <text x="155" y="290" text-anchor="middle" fill="white" font-size="15" font-weight="700" font-family="Inter,sans-serif">Chat Agent</text>
+                        <text x="155" y="312" text-anchor="middle" fill="#9ca3af" font-size="12" font-family="Inter,sans-serif">OCS Loop</text>
+                        <text x="155" y="330" text-anchor="middle" fill="#9ca3af" font-size="12" font-family="Inter,sans-serif">Prompt Builder</text>
+                        <text x="155" y="348" text-anchor="middle" fill="#9ca3af" font-size="12" font-family="Inter,sans-serif">Context Mgmt</text>
+
+                        <rect x="260" y="258" width="170" height="110" rx="14" fill="#0e0e16" stroke="white" stroke-opacity="0.08" stroke-width="1"/>
+                        <text x="345" y="290" text-anchor="middle" fill="white" font-size="15" font-weight="700" font-family="Inter,sans-serif">Tool Registry</text>
+                        <text x="345" y="312" text-anchor="middle" fill="#9ca3af" font-size="12" font-family="Inter,sans-serif">17 Tools</text>
+                        <text x="345" y="330" text-anchor="middle" fill="#9ca3af" font-size="12" font-family="Inter,sans-serif">On-demand Loading</text>
+                        <text x="345" y="348" text-anchor="middle" fill="#9ca3af" font-size="12" font-family="Inter,sans-serif">Schema Generation</text>
+
+                        <rect x="450" y="258" width="170" height="110" rx="14" fill="#0e0e16" stroke="white" stroke-opacity="0.08" stroke-width="1"/>
+                        <text x="535" y="290" text-anchor="middle" fill="white" font-size="15" font-weight="700" font-family="Inter,sans-serif">Memory</text>
+                        <text x="535" y="312" text-anchor="middle" fill="#9ca3af" font-size="12" font-family="Inter,sans-serif">SQLite + FTS5</text>
+                        <text x="535" y="330" text-anchor="middle" fill="#9ca3af" font-size="12" font-family="Inter,sans-serif">Vector Embeddings</text>
+                        <text x="535" y="348" text-anchor="middle" fill="#9ca3af" font-size="12" font-family="Inter,sans-serif">Hybrid Retrieval</text>
+
+                        <rect x="640" y="258" width="190" height="110" rx="14" fill="#0e0e16" stroke="white" stroke-opacity="0.08" stroke-width="1"/>
+                        <text x="735" y="290" text-anchor="middle" fill="white" font-size="15" font-weight="700" font-family="Inter,sans-serif">Circuits</text>
+                        <text x="735" y="312" text-anchor="middle" fill="#9ca3af" font-size="12" font-family="Inter,sans-serif">Task Scheduling</text>
+                        <text x="735" y="330" text-anchor="middle" fill="#9ca3af" font-size="12" font-family="Inter,sans-serif">Startup Tasks</text>
+                        <text x="735" y="348" text-anchor="middle" fill="#9ca3af" font-size="12" font-family="Inter,sans-serif">CIRCUITS.md</text>
+
+                        <!-- Arrow down to LLM -->
+                        <line x1="450" y1="398" x2="450" y2="450" stroke="#4ade80" stroke-opacity="0.35" stroke-width="1.5" stroke-dasharray="6,4"/>
+                        <polygon points="450,450 445,440 455,440" fill="#4ade80" fill-opacity="0.5"/>
+                        <text x="470" y="430" fill="#6b7280" font-size="11" font-family="JetBrains Mono,monospace">API calls</text>
+
+                        <!-- LLM layer -->
+                        <rect x="60" y="458" width="780" height="100" rx="20" fill="url(#glow-green)" stroke="#4ade80" stroke-opacity="0.15" stroke-width="1"/>
+                        <text x="450" y="488" text-anchor="middle" fill="#4ade80" font-size="15" font-weight="700" letter-spacing="3" font-family="Inter,sans-serif">LLM PROVIDERS</text>
+
+                        <!-- Provider boxes -->
+                        <g filter="url(#shadow-green)">
+                            <rect x="85" y="502" width="160" height="40" rx="10" fill="#0e0e16" stroke="#4ade80" stroke-opacity="0.2" stroke-width="1"/>
+                            <text x="165" y="527" text-anchor="middle" fill="#4ade80" font-size="13" font-weight="600" font-family="Inter,sans-serif">Cloud Providers</text>
+                        </g>
+                        <g filter="url(#shadow-green)">
+                            <rect x="265" y="502" width="160" height="40" rx="10" fill="#0e0e16" stroke="#4ade80" stroke-opacity="0.2" stroke-width="1"/>
+                            <text x="345" y="527" text-anchor="middle" fill="#4ade80" font-size="13" font-weight="600" font-family="Inter,sans-serif">Local (Ollama)</text>
+                        </g>
+                        <g filter="url(#shadow-green)">
+                            <rect x="445" y="502" width="190" height="40" rx="10" fill="#0e0e16" stroke="#4ade80" stroke-opacity="0.2" stroke-width="1"/>
+                            <text x="540" y="527" text-anchor="middle" fill="#4ade80" font-size="13" font-weight="600" font-family="Inter,sans-serif">OpenAI-compatible</text>
+                        </g>
+                        <text x="450" y="565" text-anchor="middle" fill="#6b7280" font-size="11" font-family="Inter,sans-serif">Models discovered dynamically from API keys &mdash; or fully local via Ollama</text>
+
+                        <!-- OS layer at bottom -->
+                        <text x="450" y="600" text-anchor="middle" fill="#4b5563" font-size="12" font-family="JetBrains Mono,monospace">Windows 10/11 &nbsp;|&nbsp; CDP Browser &middot; pywinauto &middot; PyAutoGUI &middot; Shell</text>
+                    </svg>
+                </div>
+            </div>
+
+            <!-- ── DIAGRAM 2: OCS Agent Loop ── -->
+            <div id="diagram-ocs" class="diagram-panel hidden">
+                <div class="terminal-bg rounded-3xl border border-white/10 p-6 md:p-10 glow overflow-x-auto">
+                    <svg viewBox="0 0 900 820" class="w-full max-w-4xl mx-auto" xmlns="http://www.w3.org/2000/svg">
+                        <defs>
+                            <linearGradient id="ocs-ring" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#29a7ff"/><stop offset="50%" stop-color="#a78bfa"/><stop offset="100%" stop-color="#4ade80"/></linearGradient>
+                            <marker id="arrow-blue" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#29a7ff" fill-opacity="0.7"/></marker>
+                            <marker id="arrow-purple" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#a78bfa" fill-opacity="0.7"/></marker>
+                            <marker id="arrow-green" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#4ade80" fill-opacity="0.7"/></marker>
+                            <marker id="arrow-red" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#f87171" fill-opacity="0.7"/></marker>
+                        </defs>
+
+                        <text x="450" y="30" text-anchor="middle" fill="#9ca3af" font-size="14" font-weight="600" font-family="Inter,sans-serif">The Observe &ndash; Call &ndash; Summarize loop with built-in error recovery and self-healing</text>
+
+                        <!-- User message entry -->
+                        <rect x="320" y="50" width="260" height="50" rx="14" fill="#0e0e16" stroke="#6b7280" stroke-opacity="0.3" stroke-width="1.5"/>
+                        <text x="450" y="80" text-anchor="middle" fill="white" font-size="14" font-weight="600" font-family="Inter,sans-serif">User Message</text>
+                        <line x1="450" y1="100" x2="450" y2="140" stroke="#29a7ff" stroke-opacity="0.5" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+
+                        <!-- Step 1: OBSERVE -->
+                        <rect x="60" y="148" width="280" height="140" rx="18" fill="#0e0e16" stroke="#29a7ff" stroke-opacity="0.35" stroke-width="1.5" filter="url(#shadow)"/>
+                        <rect x="60" y="148" width="280" height="36" rx="18" fill="#29a7ff" fill-opacity="0.08"/>
+                        <circle cx="88" cy="166" r="10" fill="#29a7ff" fill-opacity="0.2"/>
+                        <text x="88" y="171" text-anchor="middle" fill="#29a7ff" font-size="12" font-weight="800" font-family="Inter,sans-serif">1</text>
+                        <text x="210" y="172" text-anchor="middle" fill="#51c5ff" font-size="16" font-weight="800" font-family="Inter,sans-serif">OBSERVE</text>
+                        <text x="200" y="208" text-anchor="middle" fill="#d1d5db" font-size="13" font-family="Inter,sans-serif">Build system prompt</text>
+                        <text x="200" y="228" text-anchor="middle" fill="#9ca3af" font-size="12" font-family="Inter,sans-serif">Load on-demand tool schemas</text>
+                        <text x="200" y="248" text-anchor="middle" fill="#9ca3af" font-size="12" font-family="Inter,sans-serif">Inject memory + context</text>
+                        <text x="200" y="268" text-anchor="middle" fill="#9ca3af" font-size="12" font-family="Inter,sans-serif">Prune old tool results</text>
+
+                        <!-- Arrow 1→2 -->
+                        <path d="M340,218 L540,218" fill="none" stroke="#a78bfa" stroke-opacity="0.5" stroke-width="1.5" marker-end="url(#arrow-purple)"/>
+                        <text x="450" y="208" text-anchor="middle" fill="#6b7280" font-size="11" font-family="JetBrains Mono,monospace">send to LLM</text>
+
+                        <!-- Step 2: CALL -->
+                        <rect x="555" y="148" width="280" height="140" rx="18" fill="#0e0e16" stroke="#a78bfa" stroke-opacity="0.35" stroke-width="1.5"/>
+                        <rect x="555" y="148" width="280" height="36" rx="18" fill="#a78bfa" fill-opacity="0.08"/>
+                        <circle cx="583" cy="166" r="10" fill="#a78bfa" fill-opacity="0.2"/>
+                        <text x="583" y="171" text-anchor="middle" fill="#a78bfa" font-size="12" font-weight="800" font-family="Inter,sans-serif">2</text>
+                        <text x="705" y="172" text-anchor="middle" fill="#c4b5fd" font-size="16" font-weight="800" font-family="Inter,sans-serif">CALL</text>
+                        <text x="695" y="208" text-anchor="middle" fill="#d1d5db" font-size="13" font-family="Inter,sans-serif">LLM returns function_calls</text>
+                        <text x="695" y="228" text-anchor="middle" fill="#9ca3af" font-size="12" font-family="Inter,sans-serif">Execute tools on your machine</text>
+                        <text x="695" y="248" text-anchor="middle" fill="#9ca3af" font-size="12" font-family="Inter,sans-serif">Stream progress to frontend</text>
+                        <text x="695" y="268" text-anchor="middle" fill="#9ca3af" font-size="12" font-family="Inter,sans-serif">Collect results per tool</text>
+
+                        <!-- Arrow 2→ Self-Verification -->
+                        <path d="M695,288 L695,320" fill="none" stroke="#f87171" stroke-opacity="0.5" stroke-width="1.5" marker-end="url(#arrow-red)"/>
+
+                        <!-- Self-Verification Layer (new) -->
+                        <rect x="460" y="328" width="380" height="150" rx="18" fill="#0e0e16" stroke="#f87171" stroke-opacity="0.3" stroke-width="1.5"/>
+                        <rect x="460" y="328" width="380" height="34" rx="18" fill="#f87171" fill-opacity="0.06"/>
+                        <text x="650" y="350" text-anchor="middle" fill="#fca5a5" font-size="14" font-weight="800" font-family="Inter,sans-serif">SELF-HEALING LAYER</text>
+                        <text x="650" y="380" text-anchor="middle" fill="#d1d5db" font-size="12" font-family="Inter,sans-serif">Per-tool validators check for subtle failures</text>
+                        <text x="650" y="400" text-anchor="middle" fill="#9ca3af" font-size="11" font-family="Inter,sans-serif">Auto-retry transient errors (file locks, timeouts)</text>
+                        <text x="650" y="418" text-anchor="middle" fill="#9ca3af" font-size="11" font-family="Inter,sans-serif">Contextual error enrichment + fix hints for LLM</text>
+                        <text x="650" y="436" text-anchor="middle" fill="#9ca3af" font-size="11" font-family="Inter,sans-serif">edit_file: auto-reads file region on "not found"</text>
+                        <text x="650" y="454" text-anchor="middle" fill="#9ca3af" font-size="11" font-family="Inter,sans-serif">exec: detects false success + common error patterns</text>
+                        <text x="650" y="472" text-anchor="middle" fill="#9ca3af" font-size="11" font-family="Inter,sans-serif">Compact self-heal nudge aggregates all failures</text>
+
+                        <!-- Arrow Self-Verification → Summarize -->
+                        <path d="M650,478 L650,510" fill="none" stroke="#4ade80" stroke-opacity="0.5" stroke-width="1.5" marker-end="url(#arrow-green)"/>
+                        <text x="680" y="498" fill="#6b7280" font-size="11" font-family="JetBrains Mono,monospace">enriched results</text>
+
+                        <!-- Step 3: SUMMARIZE -->
+                        <rect x="400" y="518" width="380" height="140" rx="18" fill="#0e0e16" stroke="#4ade80" stroke-opacity="0.35" stroke-width="1.5"/>
+                        <rect x="400" y="518" width="380" height="36" rx="18" fill="#4ade80" fill-opacity="0.08"/>
+                        <circle cx="428" cy="536" r="10" fill="#4ade80" fill-opacity="0.2"/>
+                        <text x="428" y="541" text-anchor="middle" fill="#4ade80" font-size="12" font-weight="800" font-family="Inter,sans-serif">3</text>
+                        <text x="600" y="542" text-anchor="middle" fill="#86efac" font-size="16" font-weight="800" font-family="Inter,sans-serif">SUMMARIZE</text>
+                        <text x="590" y="578" text-anchor="middle" fill="#d1d5db" font-size="13" font-family="Inter,sans-serif">Format structured observations</text>
+                        <text x="590" y="598" text-anchor="middle" fill="#9ca3af" font-size="12" font-family="Inter,sans-serif">Append tool results + fix hints to context</text>
+                        <text x="590" y="618" text-anchor="middle" fill="#9ca3af" font-size="12" font-family="Inter,sans-serif">Detect completion signals</text>
+                        <text x="590" y="638" text-anchor="middle" fill="#9ca3af" font-size="12" font-family="Inter,sans-serif">Auto-continue if task incomplete</text>
+
+                        <!-- Loop arrow back to OBSERVE -->
+                        <path d="M400,590 Q200,590 200,400 L200,288" fill="none" stroke="url(#ocs-ring)" stroke-opacity="0.4" stroke-width="1.5" stroke-dasharray="8,4" marker-end="url(#arrow-blue)"/>
+                        <text x="230" y="500" fill="#6b7280" font-size="11" font-family="JetBrains Mono,monospace">loop until done</text>
+
+                        <!-- API Retry side panel -->
+                        <rect x="60" y="328" width="180" height="120" rx="14" fill="#0e0e16" stroke="#fbbf24" stroke-opacity="0.2" stroke-width="1" stroke-dasharray="6,3"/>
+                        <text x="150" y="352" text-anchor="middle" fill="#fde68a" font-size="13" font-weight="700" font-family="Inter,sans-serif">API-Level Retry</text>
+                        <text x="150" y="374" text-anchor="middle" fill="#9ca3af" font-size="11" font-family="Inter,sans-serif">Rate limits &amp; 5xx errors</text>
+                        <text x="150" y="392" text-anchor="middle" fill="#9ca3af" font-size="11" font-family="Inter,sans-serif">Exponential backoff</text>
+                        <text x="150" y="410" text-anchor="middle" fill="#9ca3af" font-size="11" font-family="Inter,sans-serif">2s &rarr; 4s &rarr; 8s delay</text>
+                        <text x="150" y="428" text-anchor="middle" fill="#9ca3af" font-size="11" font-family="Inter,sans-serif">Format error recovery</text>
+
+                        <!-- Dashed arrow from API retry back to OBSERVE -->
+                        <path d="M150,448 L150,490 Q150,520 180,520 L200,490" fill="none" stroke="#fbbf24" stroke-opacity="0.3" stroke-width="1" stroke-dasharray="5,3" marker-end="url(#arrow-blue)"/>
+
+                        <!-- Exit arrow -->
+                        <line x1="590" y1="658" x2="590" y2="700" stroke="#4ade80" stroke-opacity="0.5" stroke-width="1.5" marker-end="url(#arrow-green)"/>
+                        <rect x="460" y="706" width="260" height="36" rx="12" fill="#4ade80" fill-opacity="0.08" stroke="#4ade80" stroke-opacity="0.2" stroke-width="1"/>
+                        <text x="590" y="729" text-anchor="middle" fill="#86efac" font-size="13" font-weight="700" font-family="Inter,sans-serif">Final Response to User</text>
+
+                        <!-- Bottom legend -->
+                        <text x="450" y="780" text-anchor="middle" fill="#4b5563" font-size="12" font-family="Inter,sans-serif">Errors are caught at 3 levels: infra auto-retry (no LLM cost) &rarr; enriched hints (1-shot fix) &rarr; self-heal nudge (retry with new approach)</text>
+                        <text x="450" y="800" text-anchor="middle" fill="#4b5563" font-size="11" font-family="Inter,sans-serif">Per-tool validators: edit_file, exec, read_file, write_file, grep, find_files, web_fetch</text>
+                    </svg>
+                </div>
+                <p class="text-center text-gray-500 text-base mt-8">The agent loops up to 50 rounds with 3 layers of error recovery: infra auto-retry, contextual fix hints, and self-heal nudges.</p>
+            </div>
+
+            <!-- ── DIAGRAM 3: Tool Loading Pipeline ── -->
+            <div id="diagram-tools" class="diagram-panel hidden">
+                <div class="terminal-bg rounded-3xl border border-white/10 p-6 md:p-10 glow overflow-x-auto">
+                    <svg viewBox="0 0 900 520" class="w-full max-w-4xl mx-auto" xmlns="http://www.w3.org/2000/svg">
+                        <text x="450" y="30" text-anchor="middle" fill="#9ca3af" font-size="14" font-weight="600" font-family="Inter,sans-serif">Tools load on-demand based on conversation context &mdash; no wasted tokens</text>
+
+                        <!-- Core tools (always loaded) -->
+                        <text x="450" y="70" text-anchor="middle" fill="#51c5ff" font-size="15" font-weight="700" letter-spacing="3" font-family="Inter,sans-serif">CORE TOOLS (always loaded)</text>
+                        <g>
+                            <rect x="30" y="88" width="120" height="44" rx="12" fill="#29a7ff" fill-opacity="0.08" stroke="#29a7ff" stroke-opacity="0.25" stroke-width="1"/>
+                            <text x="90" y="115" text-anchor="middle" fill="#89dbff" font-size="14" font-weight="600" font-family="JetBrains Mono,monospace">bash</text>
+                        </g>
+                        <g>
+                            <rect x="170" y="88" width="130" height="44" rx="12" fill="#29a7ff" fill-opacity="0.08" stroke="#29a7ff" stroke-opacity="0.25" stroke-width="1"/>
+                            <text x="235" y="115" text-anchor="middle" fill="#89dbff" font-size="13" font-weight="600" font-family="JetBrains Mono,monospace">text_editor</text>
+                        </g>
+                        <g>
+                            <rect x="320" y="88" width="120" height="44" rx="12" fill="#29a7ff" fill-opacity="0.08" stroke="#29a7ff" stroke-opacity="0.25" stroke-width="1"/>
+                            <text x="380" y="115" text-anchor="middle" fill="#89dbff" font-size="14" font-weight="600" font-family="JetBrains Mono,monospace">computer</text>
+                        </g>
+                        <g>
+                            <rect x="460" y="88" width="110" height="44" rx="12" fill="#29a7ff" fill-opacity="0.08" stroke="#29a7ff" stroke-opacity="0.25" stroke-width="1"/>
+                            <text x="515" y="115" text-anchor="middle" fill="#89dbff" font-size="14" font-weight="600" font-family="JetBrains Mono,monospace">browser</text>
+                        </g>
+                        <g>
+                            <rect x="590" y="88" width="100" height="44" rx="12" fill="#29a7ff" fill-opacity="0.08" stroke="#29a7ff" stroke-opacity="0.25" stroke-width="1"/>
+                            <text x="640" y="115" text-anchor="middle" fill="#89dbff" font-size="14" font-weight="600" font-family="JetBrains Mono,monospace">memory</text>
+                        </g>
+                        <g>
+                            <rect x="710" y="88" width="150" height="44" rx="12" fill="#29a7ff" fill-opacity="0.08" stroke="#29a7ff" stroke-opacity="0.25" stroke-width="1"/>
+                            <text x="785" y="115" text-anchor="middle" fill="#89dbff" font-size="12" font-weight="600" font-family="JetBrains Mono,monospace">web_search/fetch</text>
+                        </g>
+
+                        <!-- Keyword detection -->
+                        <line x1="450" y1="140" x2="450" y2="175" stroke="#a78bfa" stroke-opacity="0.4" stroke-width="1.5"/>
+                        <polygon points="450,175 445,165 455,165" fill="#a78bfa" fill-opacity="0.5"/>
+
+                        <rect x="250" y="180" width="400" height="60" rx="16" fill="#a78bfa" fill-opacity="0.06" stroke="#a78bfa" stroke-opacity="0.25" stroke-width="1"/>
+                        <text x="450" y="207" text-anchor="middle" fill="#c4b5fd" font-size="14" font-weight="700" font-family="Inter,sans-serif">Keyword Scanner</text>
+                        <text x="450" y="227" text-anchor="middle" fill="#9ca3af" font-size="12" font-family="Inter,sans-serif">Scans user message for trigger words</text>
+
+                        <!-- Fan out arrows -->
+                        <line x1="450" y1="240" x2="450" y2="270" stroke="#a78bfa" stroke-opacity="0.3" stroke-width="1"/>
+
+                        <!-- On-demand tools grid -->
+                        <text x="450" y="290" text-anchor="middle" fill="#fbbf24" font-size="15" font-weight="700" letter-spacing="3" font-family="Inter,sans-serif">ON-DEMAND TOOLS (loaded when needed)</text>
+
+                        <!-- Row 1 -->
+                        <g>
+                            <rect x="30" y="310" width="150" height="70" rx="14" fill="#0e0e16" stroke="#fbbf24" stroke-opacity="0.2" stroke-width="1"/>
+                            <text x="105" y="338" text-anchor="middle" fill="#fde68a" font-size="13" font-weight="600" font-family="JetBrains Mono,monospace">generate_image</text>
+                            <text x="105" y="358" text-anchor="middle" fill="#6b7280" font-size="11" font-family="Inter,sans-serif">DALL-E / Imagen</text>
+                        </g>
+                        <g>
+                            <rect x="200" y="310" width="120" height="70" rx="14" fill="#0e0e16" stroke="#fbbf24" stroke-opacity="0.2" stroke-width="1"/>
+                            <text x="260" y="338" text-anchor="middle" fill="#fde68a" font-size="14" font-weight="600" font-family="JetBrains Mono,monospace">pdf</text>
+                            <text x="260" y="358" text-anchor="middle" fill="#6b7280" font-size="11" font-family="Inter,sans-serif">text extraction</text>
+                        </g>
+                        <g>
+                            <rect x="340" y="310" width="120" height="70" rx="14" fill="#0e0e16" stroke="#fbbf24" stroke-opacity="0.2" stroke-width="1"/>
+                            <text x="400" y="338" text-anchor="middle" fill="#fde68a" font-size="14" font-weight="600" font-family="JetBrains Mono,monospace">obsidian</text>
+                            <text x="400" y="358" text-anchor="middle" fill="#6b7280" font-size="11" font-family="Inter,sans-serif">vault ops</text>
+                        </g>
+                        <g>
+                            <rect x="480" y="310" width="120" height="70" rx="14" fill="#0e0e16" stroke="#fbbf24" stroke-opacity="0.2" stroke-width="1"/>
+                            <text x="540" y="338" text-anchor="middle" fill="#fde68a" font-size="14" font-weight="600" font-family="JetBrains Mono,monospace">skill</text>
+                            <text x="540" y="358" text-anchor="middle" fill="#6b7280" font-size="11" font-family="Inter,sans-serif">find / create</text>
+                        </g>
+                        <g>
+                            <rect x="620" y="310" width="120" height="70" rx="14" fill="#0e0e16" stroke="#fbbf24" stroke-opacity="0.2" stroke-width="1"/>
+                            <text x="680" y="338" text-anchor="middle" fill="#fde68a" font-size="14" font-weight="600" font-family="JetBrains Mono,monospace">media</text>
+                            <text x="680" y="358" text-anchor="middle" fill="#6b7280" font-size="11" font-family="Inter,sans-serif">GIFs / search</text>
+                        </g>
+
+                        <!-- Row 2 -->
+                        <g>
+                            <rect x="80" y="400" width="120" height="70" rx="14" fill="#0e0e16" stroke="#fbbf24" stroke-opacity="0.2" stroke-width="1"/>
+                            <text x="140" y="428" text-anchor="middle" fill="#fde68a" font-size="14" font-weight="600" font-family="JetBrains Mono,monospace">look</text>
+                            <text x="140" y="448" text-anchor="middle" fill="#6b7280" font-size="11" font-family="Inter,sans-serif">camera snap</text>
+                        </g>
+                        <g>
+                            <rect x="220" y="400" width="120" height="70" rx="14" fill="#0e0e16" stroke="#fbbf24" stroke-opacity="0.2" stroke-width="1"/>
+                            <text x="280" y="428" text-anchor="middle" fill="#fde68a" font-size="14" font-weight="600" font-family="JetBrains Mono,monospace">notify</text>
+                            <text x="280" y="448" text-anchor="middle" fill="#6b7280" font-size="11" font-family="Inter,sans-serif">push alerts</text>
+                        </g>
+                        <g>
+                            <rect x="360" y="400" width="120" height="70" rx="14" fill="#0e0e16" stroke="#fbbf24" stroke-opacity="0.2" stroke-width="1"/>
+                            <text x="420" y="428" text-anchor="middle" fill="#fde68a" font-size="14" font-weight="600" font-family="JetBrains Mono,monospace">agent</text>
+                            <text x="420" y="448" text-anchor="middle" fill="#6b7280" font-size="11" font-family="Inter,sans-serif">sub-agents</text>
+                        </g>
+                        <g>
+                            <rect x="500" y="400" width="120" height="70" rx="14" fill="#0e0e16" stroke="#fbbf24" stroke-opacity="0.2" stroke-width="1"/>
+                            <text x="560" y="428" text-anchor="middle" fill="#fde68a" font-size="14" font-weight="600" font-family="JetBrains Mono,monospace">learn</text>
+                            <text x="560" y="448" text-anchor="middle" fill="#6b7280" font-size="11" font-family="Inter,sans-serif">F9 recordings</text>
+                        </g>
+                        <g>
+                            <rect x="640" y="400" width="150" height="70" rx="14" fill="#0e0e16" stroke="#a78bfa" stroke-opacity="0.2" stroke-width="1"/>
+                            <text x="715" y="428" text-anchor="middle" fill="#c4b5fd" font-size="14" font-weight="600" font-family="JetBrains Mono,monospace">+ MCP servers</text>
+                            <text x="715" y="448" text-anchor="middle" fill="#6b7280" font-size="11" font-family="Inter,sans-serif">external tools</text>
+                        </g>
+
+                        <!-- Bottom note -->
+                        <text x="450" y="505" text-anchor="middle" fill="#4b5563" font-size="12" font-family="Inter,sans-serif">Trigger words: "pdf", "obsidian", "gif", "camera", "skill", "image", "notify", ...</text>
+                    </svg>
+                </div>
+            </div>
+
+            <!-- ── DIAGRAM 4: Command Parser Fast-Path ── -->
+            <div id="diagram-parser" class="diagram-panel hidden">
+                <div class="terminal-bg rounded-3xl border border-white/10 p-6 md:p-10 glow overflow-x-auto">
+                    <svg viewBox="0 0 900 620" class="w-full max-w-4xl mx-auto" xmlns="http://www.w3.org/2000/svg">
+                        <defs>
+                            <marker id="arr-orange" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#fb923c" fill-opacity="0.7"/></marker>
+                            <marker id="arr-gray" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#6b7280" fill-opacity="0.7"/></marker>
+                            <marker id="arr-teal" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#2dd4bf" fill-opacity="0.7"/></marker>
+                        </defs>
+
+                        <text x="450" y="30" text-anchor="middle" fill="#9ca3af" font-size="14" font-weight="600" font-family="Inter,sans-serif">Customizable regex-based command parser intercepts simple commands before the LLM &mdash; zero tokens used</text>
+
+                        <!-- User input -->
+                        <rect x="310" y="50" width="280" height="50" rx="14" fill="#0e0e16" stroke="#6b7280" stroke-opacity="0.3" stroke-width="1.5"/>
+                        <text x="450" y="80" text-anchor="middle" fill="white" font-size="15" font-weight="600" font-family="Inter,sans-serif">User Input</text>
+
+                        <!-- Arrow down to parser -->
+                        <line x1="450" y1="100" x2="450" y2="140" stroke="#fb923c" stroke-opacity="0.5" stroke-width="1.5" marker-end="url(#arr-orange)"/>
+
+                        <!-- Command Parser box -->
+                        <rect x="230" y="148" width="440" height="110" rx="18" fill="#0e0e16" stroke="#fb923c" stroke-opacity="0.35" stroke-width="1.5"/>
+                        <rect x="230" y="148" width="440" height="36" rx="18" fill="#fb923c" fill-opacity="0.08"/>
+                        <text x="450" y="172" text-anchor="middle" fill="#fdba74" font-size="16" font-weight="800" font-family="Inter,sans-serif">CUSTOMIZABLE COMMAND PARSER</text>
+                        <text x="450" y="200" text-anchor="middle" fill="#d1d5db" font-size="13" font-family="Inter,sans-serif">User-configurable regex patterns across 10+ command categories</text>
+                        <text x="450" y="220" text-anchor="middle" fill="#9ca3af" font-size="12" font-family="Inter,sans-serif">App launch &middot; Web URLs &middot; YouTube &middot; Search &middot; Notes &middot; Clock &middot; System</text>
+                        <text x="450" y="240" text-anchor="middle" fill="#9ca3af" font-size="12" font-family="Inter,sans-serif">APK search &middot; Game search &middot; Close/quit &middot; Retry</text>
+
+                        <!-- Decision diamond -->
+                        <polygon points="450,290 530,330 450,370 370,330" fill="#0e0e16" stroke="#fb923c" stroke-opacity="0.3" stroke-width="1.5"/>
+                        <text x="450" y="334" text-anchor="middle" fill="#fdba74" font-size="13" font-weight="700" font-family="Inter,sans-serif">Match?</text>
+
+                        <!-- YES branch (left) — Fast Path -->
+                        <line x1="370" y1="330" x2="180" y2="330" stroke="#4ade80" stroke-opacity="0.5" stroke-width="1.5" marker-end="url(#arr-teal)"/>
+                        <text x="280" y="320" text-anchor="middle" fill="#4ade80" font-size="12" font-weight="700" font-family="Inter,sans-serif">YES</text>
+
+                        <rect x="40" y="300" width="140" height="60" rx="14" fill="#4ade80" fill-opacity="0.06" stroke="#4ade80" stroke-opacity="0.25" stroke-width="1"/>
+                        <text x="110" y="326" text-anchor="middle" fill="#86efac" font-size="14" font-weight="700" font-family="Inter,sans-serif">Fast Path</text>
+                        <text x="110" y="346" text-anchor="middle" fill="#9ca3af" font-size="11" font-family="Inter,sans-serif">0 LLM tokens</text>
+
+                        <!-- Fast path execution -->
+                        <line x1="110" y1="360" x2="110" y2="400" stroke="#4ade80" stroke-opacity="0.4" stroke-width="1.5" marker-end="url(#arr-teal)"/>
+
+                        <rect x="30" y="408" width="160" height="80" rx="14" fill="#0e0e16" stroke="#4ade80" stroke-opacity="0.2" stroke-width="1"/>
+                        <text x="110" y="436" text-anchor="middle" fill="white" font-size="14" font-weight="700" font-family="Inter,sans-serif">CommandExecutor</text>
+                        <text x="110" y="456" text-anchor="middle" fill="#9ca3af" font-size="11" font-family="Inter,sans-serif">Direct execution</text>
+                        <text x="110" y="472" text-anchor="middle" fill="#9ca3af" font-size="11" font-family="Inter,sans-serif">pyautogui + shell</text>
+
+                        <!-- Fast path result -->
+                        <line x1="110" y1="488" x2="110" y2="530" stroke="#4ade80" stroke-opacity="0.4" stroke-width="1.5" marker-end="url(#arr-teal)"/>
+                        <rect x="30" y="538" width="160" height="40" rx="12" fill="#4ade80" fill-opacity="0.08" stroke="#4ade80" stroke-opacity="0.2" stroke-width="1"/>
+                        <text x="110" y="563" text-anchor="middle" fill="#86efac" font-size="13" font-weight="600" font-family="Inter,sans-serif">Instant Response</text>
+
+                        <!-- NO branch (right) — Full LLM -->
+                        <line x1="530" y1="330" x2="680" y2="330" stroke="#29a7ff" stroke-opacity="0.5" stroke-width="1.5" marker-end="url(#arr-gray)"/>
+                        <text x="600" y="320" text-anchor="middle" fill="#f87171" font-size="12" font-weight="700" font-family="Inter,sans-serif">NO</text>
+
+                        <rect x="680" y="300" width="180" height="60" rx="14" fill="#29a7ff" fill-opacity="0.06" stroke="#29a7ff" stroke-opacity="0.25" stroke-width="1"/>
+                        <text x="770" y="326" text-anchor="middle" fill="#51c5ff" font-size="14" font-weight="700" font-family="Inter,sans-serif">Full Agent Loop</text>
+                        <text x="770" y="346" text-anchor="middle" fill="#9ca3af" font-size="11" font-family="Inter,sans-serif">OCS + tool calling</text>
+
+                        <!-- Full LLM path -->
+                        <line x1="770" y1="360" x2="770" y2="400" stroke="#29a7ff" stroke-opacity="0.4" stroke-width="1.5" marker-end="url(#arr-gray)"/>
+
+                        <rect x="680" y="408" width="180" height="80" rx="14" fill="#0e0e16" stroke="#29a7ff" stroke-opacity="0.2" stroke-width="1"/>
+                        <text x="770" y="436" text-anchor="middle" fill="white" font-size="14" font-weight="700" font-family="Inter,sans-serif">chat_with_tools</text>
+                        <text x="770" y="456" text-anchor="middle" fill="#9ca3af" font-size="11" font-family="Inter,sans-serif">LLM reasoning</text>
+                        <text x="770" y="472" text-anchor="middle" fill="#9ca3af" font-size="11" font-family="Inter,sans-serif">Multi-step tool use</text>
+
+                        <line x1="770" y1="488" x2="770" y2="530" stroke="#29a7ff" stroke-opacity="0.4" stroke-width="1.5" marker-end="url(#arr-gray)"/>
+                        <rect x="680" y="538" width="180" height="40" rx="12" fill="#29a7ff" fill-opacity="0.08" stroke="#29a7ff" stroke-opacity="0.2" stroke-width="1"/>
+                        <text x="770" y="563" text-anchor="middle" fill="#51c5ff" font-size="13" font-weight="600" font-family="Inter,sans-serif">Intelligent Response</text>
+
+                        <!-- Example commands -->
+                        <text x="450" y="605" text-anchor="middle" fill="#4b5563" font-size="12" font-family="JetBrains Mono,monospace">"open notepad" &rarr; fast-path &nbsp;|&nbsp; "summarize this PDF and email it" &rarr; full agent loop</text>
+                    </svg>
+                </div>
+                <p class="text-center text-gray-500 text-base mt-8">Simple commands like "open chrome" or "search YouTube for cats" execute instantly via customizable regex patterns &mdash; no LLM call needed. Add your own patterns to extend.</p>
+            </div>
+
+            <!-- ── DIAGRAM 5: Token Efficiency ── -->
+            <div id="diagram-tokens" class="diagram-panel hidden">
+                <div class="terminal-bg rounded-3xl border border-white/10 p-6 md:p-10 glow overflow-x-auto">
+                    <svg viewBox="0 0 900 700" class="w-full max-w-4xl mx-auto" xmlns="http://www.w3.org/2000/svg">
+                        <text x="450" y="30" text-anchor="middle" fill="#9ca3af" font-size="14" font-weight="600" font-family="Inter,sans-serif">Five layers of token cost optimization &mdash; from zero-cost fast-paths to intelligent context pruning</text>
+
+                        <!-- Layer 1: Fast-Path -->
+                        <rect x="60" y="55" width="780" height="90" rx="18" fill="#4ade80" fill-opacity="0.04" stroke="#4ade80" stroke-opacity="0.2" stroke-width="1"/>
+                        <circle cx="100" cy="80" r="16" fill="#4ade80" fill-opacity="0.15"/>
+                        <text x="100" y="85" text-anchor="middle" fill="#4ade80" font-size="14" font-weight="800" font-family="Inter,sans-serif">1</text>
+                        <text x="140" y="82" fill="#86efac" font-size="16" font-weight="800" font-family="Inter,sans-serif">Customizable Command Parser Fast-Path</text>
+                        <text x="740" y="82" text-anchor="end" fill="#4ade80" font-size="14" font-weight="700" font-family="JetBrains Mono,monospace">0 tokens</text>
+                        <text x="140" y="104" fill="#d1d5db" font-size="13" font-family="Inter,sans-serif">User-configurable regex patterns intercept app launches, web URLs, YouTube searches, system commands</text>
+                        <text x="140" y="124" fill="#9ca3af" font-size="12" font-family="Inter,sans-serif">Bypasses LLM entirely &mdash; direct execution via CommandExecutor with instant response. Extend with your own patterns.</text>
+
+                        <!-- Layer 2: On-Demand Tools -->
+                        <rect x="60" y="160" width="780" height="90" rx="18" fill="#fbbf24" fill-opacity="0.04" stroke="#fbbf24" stroke-opacity="0.2" stroke-width="1"/>
+                        <circle cx="100" cy="185" r="16" fill="#fbbf24" fill-opacity="0.15"/>
+                        <text x="100" y="190" text-anchor="middle" fill="#fbbf24" font-size="14" font-weight="800" font-family="Inter,sans-serif">2</text>
+                        <text x="140" y="187" fill="#fde68a" font-size="16" font-weight="800" font-family="Inter,sans-serif">On-Demand Tool Loading</text>
+                        <text x="740" y="187" text-anchor="end" fill="#fbbf24" font-size="14" font-weight="700" font-family="JetBrains Mono,monospace">~500 tokens saved/tool</text>
+                        <text x="140" y="209" fill="#d1d5db" font-size="13" font-family="Inter,sans-serif">Only load tool schemas the LLM needs &mdash; keyword scanner checks message before building prompt</text>
+                        <text x="140" y="229" fill="#9ca3af" font-size="12" font-family="Inter,sans-serif">7 core tools always loaded &middot; 10 on-demand tools loaded only when trigger words detected</text>
+
+                        <!-- Layer 3: Observation Formatting -->
+                        <rect x="60" y="265" width="780" height="90" rx="18" fill="#a78bfa" fill-opacity="0.04" stroke="#a78bfa" stroke-opacity="0.2" stroke-width="1"/>
+                        <circle cx="100" cy="290" r="16" fill="#a78bfa" fill-opacity="0.15"/>
+                        <text x="100" y="295" text-anchor="middle" fill="#a78bfa" font-size="14" font-weight="800" font-family="Inter,sans-serif">3</text>
+                        <text x="140" y="292" fill="#c4b5fd" font-size="16" font-weight="800" font-family="Inter,sans-serif">Structured Observation Formatting</text>
+                        <text x="740" y="292" text-anchor="end" fill="#a78bfa" font-size="14" font-weight="700" font-family="JetBrains Mono,monospace">up to 80% reduction</text>
+                        <text x="140" y="314" fill="#d1d5db" font-size="13" font-family="Inter,sans-serif">Per-tool formatters extract only what the LLM needs from raw tool results</text>
+                        <text x="140" y="334" fill="#9ca3af" font-size="12" font-family="Inter,sans-serif">desktop: 40 elements max &middot; pdf: 6k chars &middot; memory: 10 results &middot; generic: 2k/field, 8k total</text>
+
+                        <!-- Layer 4: Context Pruning -->
+                        <rect x="60" y="370" width="780" height="110" rx="18" fill="#29a7ff" fill-opacity="0.04" stroke="#29a7ff" stroke-opacity="0.2" stroke-width="1"/>
+                        <circle cx="100" cy="395" r="16" fill="#29a7ff" fill-opacity="0.15"/>
+                        <text x="100" y="400" text-anchor="middle" fill="#29a7ff" font-size="14" font-weight="800" font-family="Inter,sans-serif">4</text>
+                        <text x="140" y="397" fill="#51c5ff" font-size="16" font-weight="800" font-family="Inter,sans-serif">Two-Phase Context Pruning</text>
+                        <text x="740" y="397" text-anchor="end" fill="#29a7ff" font-size="14" font-weight="700" font-family="JetBrains Mono,monospace">dynamic savings</text>
+                        <text x="140" y="419" fill="#d1d5db" font-size="13" font-family="Inter,sans-serif">Runs before every LLM call &mdash; selectively trims old tool results based on context fill ratio</text>
+                        <text x="140" y="439" fill="#9ca3af" font-size="12" font-family="Inter,sans-serif">Phase 1 (soft): Keep head + tail of large results (1.5k + 1.5k chars) when context &gt; 30% full</text>
+                        <text x="140" y="459" fill="#9ca3af" font-size="12" font-family="Inter,sans-serif">Phase 2 (hard): Replace ancient results with placeholder when context &gt; 50% full</text>
+
+                        <!-- Layer 5: Compaction -->
+                        <rect x="60" y="495" width="780" height="110" rx="18" fill="#f472b6" fill-opacity="0.04" stroke="#f472b6" stroke-opacity="0.2" stroke-width="1"/>
+                        <circle cx="100" cy="520" r="16" fill="#f472b6" fill-opacity="0.15"/>
+                        <text x="100" y="525" text-anchor="middle" fill="#f472b6" font-size="14" font-weight="800" font-family="Inter,sans-serif">5</text>
+                        <text x="140" y="522" fill="#f9a8d4" font-size="16" font-weight="800" font-family="Inter,sans-serif">LLM-Powered Context Compaction</text>
+                        <text x="740" y="522" text-anchor="end" fill="#f472b6" font-size="14" font-weight="700" font-family="JetBrains Mono,monospace">last resort</text>
+                        <text x="140" y="544" fill="#d1d5db" font-size="13" font-family="Inter,sans-serif">When context exceeds 65k tokens, uses staged LLM summarization to compress conversation history</text>
+                        <text x="140" y="564" fill="#9ca3af" font-size="12" font-family="Inter,sans-serif">Normal compaction at 65k &middot; Aggressive at 32k &middot; Emergency truncation at 50k tokens</text>
+                        <text x="140" y="584" fill="#9ca3af" font-size="12" font-family="Inter,sans-serif">Preserves system prompt, recent messages, and critical tool results</text>
+
+                        <!-- Cost flow arrow on right side -->
+                        <line x1="820" y1="75" x2="820" y2="580" stroke="white" stroke-opacity="0.06" stroke-width="2"/>
+                        <text x="855" y="80" fill="#4ade80" font-size="11" font-weight="600" font-family="Inter,sans-serif" transform="rotate(90,855,80)">CHEAPEST</text>
+                        <text x="855" y="530" fill="#f472b6" font-size="11" font-weight="600" font-family="Inter,sans-serif" transform="rotate(90,855,530)">MOST EXPENSIVE</text>
+                        <polygon points="820,580 815,570 825,570" fill="white" fill-opacity="0.1"/>
+
+                        <!-- Bottom summary -->
+                        <rect x="160" y="630" width="580" height="50" rx="14" fill="white" fill-opacity="0.02" stroke="white" stroke-opacity="0.06" stroke-width="1"/>
+                        <text x="450" y="652" text-anchor="middle" fill="#d1d5db" font-size="14" font-weight="600" font-family="Inter,sans-serif">Each layer catches what the previous one missed &mdash; most requests never reach Layer 5</text>
+                        <text x="450" y="670" text-anchor="middle" fill="#6b7280" font-size="12" font-family="Inter,sans-serif">Result: fast responses, low API costs, and full context window available for complex tasks</text>
+                    </svg>
+                </div>
+            </div>
+
+            <!-- ── DIAGRAM 6: Learning & Skills ── -->
+            <div id="diagram-learning" class="diagram-panel hidden">
+                <div class="terminal-bg rounded-3xl border border-white/10 p-6 md:p-10 glow overflow-x-auto">
+                    <svg viewBox="0 0 900 820" class="w-full max-w-4xl mx-auto" xmlns="http://www.w3.org/2000/svg">
+                        <defs>
+                            <marker id="arr-cyan" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#22d3ee" fill-opacity="0.7"/></marker>
+                            <marker id="arr-amber" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#fbbf24" fill-opacity="0.7"/></marker>
+                            <marker id="arr-emerald" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#34d399" fill-opacity="0.7"/></marker>
+                            <marker id="arr-rose" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#fb7185" fill-opacity="0.7"/></marker>
+                        </defs>
+
+                        <text x="450" y="28" text-anchor="middle" fill="#9ca3af" font-size="14" font-weight="600" font-family="Inter,sans-serif">The agent learns from every task and builds reusable skills over time</text>
+
+                        <!-- ═══════ LEFT SIDE: Experiential Learning Loop ═══════ -->
+                        <text x="230" y="65" text-anchor="middle" fill="#22d3ee" font-size="16" font-weight="800" letter-spacing="2" font-family="Inter,sans-serif">EXPERIENTIAL LEARNING</text>
+
+                        <!-- Step 1: ACT -->
+                        <rect x="60" y="85" width="340" height="60" rx="14" fill="#0e0e16" stroke="#22d3ee" stroke-opacity="0.3" stroke-width="1.5"/>
+                        <rect x="60" y="85" width="340" height="28" rx="14" fill="#22d3ee" fill-opacity="0.06"/>
+                        <circle cx="88" cy="99" r="10" fill="#22d3ee" fill-opacity="0.2"/>
+                        <text x="88" y="104" text-anchor="middle" fill="#22d3ee" font-size="11" font-weight="800" font-family="Inter,sans-serif">1</text>
+                        <text x="240" y="103" text-anchor="middle" fill="#67e8f9" font-size="14" font-weight="700" font-family="Inter,sans-serif">ACT &mdash; Agent executes task with tools</text>
+                        <text x="230" y="132" text-anchor="middle" fill="#9ca3af" font-size="11" font-family="Inter,sans-serif">Tool history recorded: tool name, args, result, errors</text>
+
+                        <line x1="230" y1="145" x2="230" y2="170" stroke="#22d3ee" stroke-opacity="0.4" stroke-width="1.5" marker-end="url(#arr-cyan)"/>
+
+                        <!-- Step 2: EXTRACT -->
+                        <rect x="60" y="178" width="340" height="90" rx="14" fill="#0e0e16" stroke="#22d3ee" stroke-opacity="0.3" stroke-width="1.5"/>
+                        <rect x="60" y="178" width="340" height="28" rx="14" fill="#22d3ee" fill-opacity="0.06"/>
+                        <circle cx="88" cy="192" r="10" fill="#22d3ee" fill-opacity="0.2"/>
+                        <text x="88" y="197" text-anchor="middle" fill="#22d3ee" font-size="11" font-weight="800" font-family="Inter,sans-serif">2</text>
+                        <text x="240" y="196" text-anchor="middle" fill="#67e8f9" font-size="14" font-weight="700" font-family="Inter,sans-serif">EXTRACT &mdash; Mine lessons from outcomes</text>
+                        <text x="230" y="224" text-anchor="middle" fill="#d1d5db" font-size="11" font-family="Inter,sans-serif">LLM extraction (~300 tokens, any model)</text>
+                        <text x="230" y="242" text-anchor="middle" fill="#9ca3af" font-size="11" font-family="Inter,sans-serif">Rule-based fallback (0 tokens) for common patterns</text>
+                        <text x="230" y="258" text-anchor="middle" fill="#9ca3af" font-size="11" font-family="Inter,sans-serif">Quality filter rejects vague/generic advice</text>
+
+                        <line x1="230" y1="268" x2="230" y2="293" stroke="#22d3ee" stroke-opacity="0.4" stroke-width="1.5" marker-end="url(#arr-cyan)"/>
+
+                        <!-- Step 3: STORE -->
+                        <rect x="60" y="301" width="340" height="90" rx="14" fill="#0e0e16" stroke="#fbbf24" stroke-opacity="0.3" stroke-width="1.5"/>
+                        <rect x="60" y="301" width="340" height="28" rx="14" fill="#fbbf24" fill-opacity="0.06"/>
+                        <circle cx="88" cy="315" r="10" fill="#fbbf24" fill-opacity="0.2"/>
+                        <text x="88" y="320" text-anchor="middle" fill="#fbbf24" font-size="11" font-weight="800" font-family="Inter,sans-serif">3</text>
+                        <text x="240" y="319" text-anchor="middle" fill="#fde68a" font-size="14" font-weight="700" font-family="Inter,sans-serif">STORE &mdash; Persist with deduplication</text>
+                        <text x="230" y="347" text-anchor="middle" fill="#d1d5db" font-size="11" font-family="Inter,sans-serif">JSON store with confidence scoring (0.0 &ndash; 1.0)</text>
+                        <text x="230" y="363" text-anchor="middle" fill="#9ca3af" font-size="11" font-family="Inter,sans-serif">Dedup via Jaccard overlap + core signatures</text>
+                        <text x="230" y="379" text-anchor="middle" fill="#9ca3af" font-size="11" font-family="Inter,sans-serif">Repeated lessons get reinforced (confidence boost)</text>
+
+                        <line x1="230" y1="391" x2="230" y2="416" stroke="#fbbf24" stroke-opacity="0.4" stroke-width="1.5" marker-end="url(#arr-amber)"/>
+
+                        <!-- Step 4: INJECT -->
+                        <rect x="60" y="424" width="340" height="90" rx="14" fill="#0e0e16" stroke="#34d399" stroke-opacity="0.3" stroke-width="1.5"/>
+                        <rect x="60" y="424" width="340" height="28" rx="14" fill="#34d399" fill-opacity="0.06"/>
+                        <circle cx="88" cy="438" r="10" fill="#34d399" fill-opacity="0.2"/>
+                        <text x="88" y="443" text-anchor="middle" fill="#34d399" font-size="11" font-weight="800" font-family="Inter,sans-serif">4</text>
+                        <text x="240" y="442" text-anchor="middle" fill="#6ee7b7" font-size="14" font-weight="700" font-family="Inter,sans-serif">INJECT &mdash; Top lessons into next task</text>
+                        <text x="230" y="470" text-anchor="middle" fill="#d1d5db" font-size="11" font-family="Inter,sans-serif">Relevance scoring: confidence &times; recency &times; tag overlap</text>
+                        <text x="230" y="486" text-anchor="middle" fill="#9ca3af" font-size="11" font-family="Inter,sans-serif">Top 10 lessons injected (~300 tokens total)</text>
+                        <text x="230" y="502" text-anchor="middle" fill="#9ca3af" font-size="11" font-family="Inter,sans-serif">User corrections always rank highest (1.0 confidence)</text>
+
+                        <!-- Loop arrow back to ACT -->
+                        <path d="M60,469 Q25,469 25,300 L25,115 Q25,85 60,85" fill="none" stroke="#22d3ee" stroke-opacity="0.3" stroke-width="1.5" stroke-dasharray="8,4" marker-end="url(#arr-cyan)"/>
+                        <text x="18" y="290" fill="#67e8f9" font-size="10" font-weight="600" font-family="Inter,sans-serif" transform="rotate(-90,18,290)">ACT BETTER NEXT TIME</text>
+
+                        <!-- Decay/cleanup note -->
+                        <rect x="60" y="535" width="340" height="50" rx="12" fill="white" fill-opacity="0.02" stroke="white" stroke-opacity="0.06" stroke-width="1"/>
+                        <text x="230" y="556" text-anchor="middle" fill="#9ca3af" font-size="11" font-family="Inter,sans-serif">Decay: unused lessons lose confidence after 60 days</text>
+                        <text x="230" y="572" text-anchor="middle" fill="#6b7280" font-size="11" font-family="Inter,sans-serif">Max 100 lessons &middot; Consolidation merges near-duplicates</text>
+
+                        <!-- ═══════ RIGHT SIDE: Skills System ═══════ -->
+                        <text x="670" y="65" text-anchor="middle" fill="#a78bfa" font-size="16" font-weight="800" letter-spacing="2" font-family="Inter,sans-serif">SKILLS SYSTEM</text>
+
+                        <!-- Skills directory -->
+                        <rect x="490" y="85" width="360" height="120" rx="16" fill="#0e0e16" stroke="#a78bfa" stroke-opacity="0.3" stroke-width="1.5"/>
+                        <rect x="490" y="85" width="360" height="30" rx="16" fill="#a78bfa" fill-opacity="0.06"/>
+                        <text x="670" y="105" text-anchor="middle" fill="#c4b5fd" font-size="14" font-weight="700" font-family="Inter,sans-serif">skills/ directory &mdash; 15 skill files</text>
+                        <text x="670" y="132" text-anchor="middle" fill="#d1d5db" font-size="12" font-family="Inter,sans-serif">Markdown files with YAML frontmatter</text>
+                        <text x="670" y="150" text-anchor="middle" fill="#9ca3af" font-size="11" font-family="Inter,sans-serif">name &middot; description &middot; triggers &middot; step-by-step instructions</text>
+                        <text x="670" y="168" text-anchor="middle" fill="#9ca3af" font-size="11" font-family="Inter,sans-serif">Scanned at prompt build &rarr; embedded in system prompt</text>
+                        <text x="670" y="186" text-anchor="middle" fill="#9ca3af" font-size="11" font-family="Inter,sans-serif">Agent checks skills before improvising on complex tasks</text>
+
+                        <!-- Example skills grid -->
+                        <text x="670" y="228" text-anchor="middle" fill="#a78bfa" font-size="13" font-weight="700" font-family="Inter,sans-serif">Example Skills</text>
+
+                        <rect x="495" y="242" width="110" height="38" rx="10" fill="#a78bfa" fill-opacity="0.06" stroke="#a78bfa" stroke-opacity="0.15" stroke-width="1"/>
+                        <text x="550" y="266" text-anchor="middle" fill="#c4b5fd" font-size="11" font-weight="600" font-family="JetBrains Mono,monospace">obsidian-notes</text>
+
+                        <rect x="615" y="242" width="110" height="38" rx="10" fill="#a78bfa" fill-opacity="0.06" stroke="#a78bfa" stroke-opacity="0.15" stroke-width="1"/>
+                        <text x="670" y="266" text-anchor="middle" fill="#c4b5fd" font-size="11" font-weight="600" font-family="JetBrains Mono,monospace">pdf-tools</text>
+
+                        <rect x="735" y="242" width="110" height="38" rx="10" fill="#a78bfa" fill-opacity="0.06" stroke="#a78bfa" stroke-opacity="0.15" stroke-width="1"/>
+                        <text x="790" y="266" text-anchor="middle" fill="#c4b5fd" font-size="11" font-weight="600" font-family="JetBrains Mono,monospace">x-quick-post</text>
+
+                        <rect x="495" y="290" width="110" height="38" rx="10" fill="#a78bfa" fill-opacity="0.06" stroke="#a78bfa" stroke-opacity="0.15" stroke-width="1"/>
+                        <text x="550" y="314" text-anchor="middle" fill="#c4b5fd" font-size="11" font-weight="600" font-family="JetBrains Mono,monospace">yt-transcript</text>
+
+                        <rect x="615" y="290" width="110" height="38" rx="10" fill="#a78bfa" fill-opacity="0.06" stroke="#a78bfa" stroke-opacity="0.15" stroke-width="1"/>
+                        <text x="670" y="314" text-anchor="middle" fill="#c4b5fd" font-size="11" font-weight="600" font-family="JetBrains Mono,monospace">rss-intel</text>
+
+                        <rect x="735" y="290" width="110" height="38" rx="10" fill="#a78bfa" fill-opacity="0.06" stroke="#a78bfa" stroke-opacity="0.15" stroke-width="1"/>
+                        <text x="790" y="314" text-anchor="middle" fill="#c4b5fd" font-size="11" font-weight="600" font-family="JetBrains Mono,monospace">task-scheduler</text>
+
+                        <!-- Emergent skills -->
+                        <line x1="670" y1="345" x2="670" y2="375" stroke="#34d399" stroke-opacity="0.4" stroke-width="1.5" marker-end="url(#arr-emerald)"/>
+
+                        <rect x="490" y="383" width="360" height="130" rx="16" fill="#0e0e16" stroke="#34d399" stroke-opacity="0.3" stroke-width="1.5"/>
+                        <rect x="490" y="383" width="360" height="30" rx="16" fill="#34d399" fill-opacity="0.06"/>
+                        <text x="670" y="403" text-anchor="middle" fill="#6ee7b7" font-size="14" font-weight="700" font-family="Inter,sans-serif">Emergent Skills</text>
+                        <text x="670" y="430" text-anchor="middle" fill="#d1d5db" font-size="12" font-family="Inter,sans-serif">Agent creates new skills during complex tasks</text>
+                        <text x="670" y="450" text-anchor="middle" fill="#9ca3af" font-size="11" font-family="Inter,sans-serif">Saved to workspace/emergent/ as drafts</text>
+                        <text x="670" y="468" text-anchor="middle" fill="#9ca3af" font-size="11" font-family="Inter,sans-serif">Promoted to skills/ after user confirmation</text>
+                        <text x="670" y="486" text-anchor="middle" fill="#9ca3af" font-size="11" font-family="Inter,sans-serif">F9 records UI actions &rarr; saved as emergent skill</text>
+                        <text x="670" y="504" text-anchor="middle" fill="#9ca3af" font-size="11" font-family="Inter,sans-serif">Skills grow organically from real usage patterns</text>
+
+                        <!-- Lesson types box -->
+                        <text x="450" y="620" text-anchor="middle" fill="white" font-size="14" font-weight="700" font-family="Inter,sans-serif">Lesson Types</text>
+
+                        <rect x="100" y="640" width="310" height="80" rx="14" fill="#0e0e16" stroke="#22d3ee" stroke-opacity="0.2" stroke-width="1"/>
+                        <text x="255" y="664" text-anchor="middle" fill="#67e8f9" font-size="13" font-weight="700" font-family="Inter,sans-serif">TACTICAL</text>
+                        <text x="255" y="684" text-anchor="middle" fill="#d1d5db" font-size="11" font-family="Inter,sans-serif">Tool-level patterns from execution history</text>
+                        <text x="255" y="702" text-anchor="middle" fill="#9ca3af" font-size="11" font-family="Inter,sans-serif">"grep before edit_file to verify exact content"</text>
+
+                        <rect x="490" y="640" width="310" height="80" rx="14" fill="#0e0e16" stroke="#fb7185" stroke-opacity="0.2" stroke-width="1"/>
+                        <text x="645" y="664" text-anchor="middle" fill="#fda4af" font-size="13" font-weight="700" font-family="Inter,sans-serif">PREFERENCE</text>
+                        <text x="645" y="684" text-anchor="middle" fill="#d1d5db" font-size="11" font-family="Inter,sans-serif">User behavioral signals and corrections</text>
+                        <text x="645" y="702" text-anchor="middle" fill="#9ca3af" font-size="11" font-family="Inter,sans-serif">"use web_search not browser for research"</text>
+
+                        <!-- Bottom summary -->
+                        <rect x="130" y="750" width="640" height="50" rx="14" fill="white" fill-opacity="0.02" stroke="white" stroke-opacity="0.06" stroke-width="1"/>
+                        <text x="450" y="772" text-anchor="middle" fill="#d1d5db" font-size="13" font-weight="600" font-family="Inter,sans-serif">Closed feedback loop: Act &rarr; Observe outcome &rarr; Extract lesson &rarr; Store &rarr; Inject next time &rarr; Act better</text>
+                        <text x="450" y="790" text-anchor="middle" fill="#6b7280" font-size="11" font-family="Inter,sans-serif">Total cost: ~600 tokens/task (300 extraction + 300 injection) &middot; Rule-based fallback costs 0 tokens</text>
+                    </svg>
+                </div>
+            </div>
+
+        </div>
+    </section>
+
+    <script>
+        function showDiagram(id) {
+            document.querySelectorAll('.diagram-panel').forEach(p => p.classList.add('hidden'));
+            document.querySelectorAll('.diagram-tab').forEach(t => t.classList.remove('diagram-tab-active'));
+            document.getElementById('diagram-' + id).classList.remove('hidden');
+            document.getElementById('tab-' + id).classList.add('diagram-tab-active');
+        }
+    </script>
+
+    <!-- ==================== TOOLS ==================== -->
+    <section id="tools" class="py-28 md:py-40 relative">
+        <div class="gradient-line max-w-4xl mx-auto mb-28"></div>
+        <div class="max-w-6xl mx-auto px-8">
+            <div class="text-center mb-20">
+                <p class="text-brand-400 text-lg font-bold uppercase tracking-widest mb-4">Tool Ecosystem</p>
+                <h2 class="text-4xl sm:text-5xl md:text-6xl font-black text-white leading-tight">17 built-in tools</h2>
+                <p class="text-xl text-gray-400 max-w-2xl mx-auto mt-6 leading-relaxed">Every tool the agent needs to control your desktop, automate workflows, and interact with the world.</p>
+            </div>
+            <div class="flex flex-wrap justify-center gap-4 max-w-5xl mx-auto">
+                <span class="tool-pill px-5 py-3 rounded-2xl bg-brand-500/10 border border-brand-500/20 text-base font-mono text-brand-300 font-semibold">bash</span>
+                <span class="tool-pill px-5 py-3 rounded-2xl bg-brand-500/10 border border-brand-500/20 text-base font-mono text-brand-300 font-semibold">text_editor</span>
+                <span class="tool-pill px-5 py-3 rounded-2xl bg-brand-500/10 border border-brand-500/20 text-base font-mono text-brand-300 font-semibold">computer</span>
+                <span class="tool-pill px-5 py-3 rounded-2xl bg-brand-500/10 border border-brand-500/20 text-base font-mono text-brand-300 font-semibold">browser</span>
+                <span class="tool-pill px-5 py-3 rounded-2xl bg-brand-500/10 border border-brand-500/20 text-base font-mono text-brand-300 font-semibold">memory</span>
+                <span class="tool-pill px-5 py-3 rounded-2xl bg-brand-500/10 border border-brand-500/20 text-base font-mono text-brand-300 font-semibold">web_search</span>
+                <span class="tool-pill px-5 py-3 rounded-2xl bg-brand-500/10 border border-brand-500/20 text-base font-mono text-brand-300 font-semibold">web_fetch</span>
+                <span class="tool-pill px-5 py-3 rounded-2xl bg-white/[0.04] border border-white/[0.08] text-base font-mono text-gray-200">generate_image</span>
+                <span class="tool-pill px-5 py-3 rounded-2xl bg-white/[0.04] border border-white/[0.08] text-base font-mono text-gray-200">pdf</span>
+                <span class="tool-pill px-5 py-3 rounded-2xl bg-white/[0.04] border border-white/[0.08] text-base font-mono text-gray-200">obsidian</span>
+                <span class="tool-pill px-5 py-3 rounded-2xl bg-white/[0.04] border border-white/[0.08] text-base font-mono text-gray-200">skill</span>
+                <span class="tool-pill px-5 py-3 rounded-2xl bg-white/[0.04] border border-white/[0.08] text-base font-mono text-gray-200">learn</span>
+                <span class="tool-pill px-5 py-3 rounded-2xl bg-white/[0.04] border border-white/[0.08] text-base font-mono text-gray-200">media</span>
+                <span class="tool-pill px-5 py-3 rounded-2xl bg-white/[0.04] border border-white/[0.08] text-base font-mono text-gray-200">look</span>
+                <span class="tool-pill px-5 py-3 rounded-2xl bg-white/[0.04] border border-white/[0.08] text-base font-mono text-gray-200">notify</span>
+                <span class="tool-pill px-5 py-3 rounded-2xl bg-white/[0.04] border border-white/[0.08] text-base font-mono text-gray-200">agent</span>
+                <span class="tool-pill px-5 py-3 rounded-2xl bg-white/[0.04] border border-white/[0.08] text-base font-mono text-gray-200">macro</span>
+                <span class="tool-pill px-5 py-3 rounded-2xl bg-purple-500/10 border border-purple-500/25 text-base font-mono text-purple-300 font-semibold">+ MCP servers</span>
+            </div>
+            <p class="text-center text-gray-500 text-sm mt-4">Core tools (highlighted) are always loaded. On-demand tools load automatically when relevant keywords are detected.</p>
+            <p class="text-center text-gray-500 text-lg mt-10">Tools load on-demand based on conversation context &mdash; no wasted tokens.</p>
+
+            <!-- Emergent tools & skill creation -->
+            <div class="mt-16 bg-white/[0.025] border border-green-500/[0.15] rounded-3xl p-8 md:p-12 max-w-5xl mx-auto">
+                <div class="flex items-center gap-4 mb-6">
+                    <div class="w-14 h-14 rounded-2xl bg-green-500/10 flex items-center justify-center flex-shrink-0">
+                        <svg class="w-7 h-7 text-green-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+                    </div>
+                    <div>
+                        <h3 class="text-white font-black text-2xl">Emergent Tools &amp; Autonomous Skill Creation</h3>
+                        <p class="text-gray-400 text-base mt-1">The agent doesn't just use tools &mdash; it <span class="text-green-400 font-semibold">creates new ones</span>.</p>
+                    </div>
+                </div>
+
+                <p class="text-gray-400 text-base leading-relaxed mb-8">When the agent encounters a complex multi-step workflow, it can autonomously write scripts, save them as reusable skills, and invoke them in future tasks. Your toolset grows organically from real usage &mdash; no manual configuration needed.</p>
+
+                <!-- Flow: 3 steps -->
+                <div class="grid md:grid-cols-3 gap-5 mb-8">
+                    <div class="bg-white/[0.02] border border-white/[0.06] rounded-2xl p-6 text-center">
+                        <div class="w-10 h-10 rounded-xl bg-brand-500/10 flex items-center justify-center mx-auto mb-4">
+                            <span class="text-brand-400 font-black text-lg">1</span>
+                        </div>
+                        <h4 class="text-white font-bold text-base mb-2">Discover</h4>
+                        <p class="text-gray-400 text-sm leading-relaxed">Agent encounters a complex task and writes a multi-step script or automation to solve it.</p>
+                    </div>
+                    <div class="bg-white/[0.02] border border-white/[0.06] rounded-2xl p-6 text-center">
+                        <div class="w-10 h-10 rounded-xl bg-yellow-500/10 flex items-center justify-center mx-auto mb-4">
+                            <span class="text-yellow-400 font-black text-lg">2</span>
+                        </div>
+                        <h4 class="text-white font-bold text-base mb-2">Draft</h4>
+                        <p class="text-gray-400 text-sm leading-relaxed">Saves the solution as an emergent skill in <code class="text-gray-300 bg-white/[0.06] px-1.5 py-0.5 rounded text-xs">workspace/emergent/</code> with trigger words and documentation.</p>
+                    </div>
+                    <div class="bg-white/[0.02] border border-white/[0.06] rounded-2xl p-6 text-center">
+                        <div class="w-10 h-10 rounded-xl bg-green-500/10 flex items-center justify-center mx-auto mb-4">
+                            <span class="text-green-400 font-black text-lg">3</span>
+                        </div>
+                        <h4 class="text-white font-bold text-base mb-2">Promote</h4>
+                        <p class="text-gray-400 text-sm leading-relaxed">After user confirmation, the skill is promoted to the permanent <code class="text-gray-300 bg-white/[0.06] px-1.5 py-0.5 rounded text-xs">skills/</code> directory &mdash; available forever.</p>
+                    </div>
+                </div>
+
+                <!-- Extra details -->
+                <div class="grid md:grid-cols-2 gap-5">
+                    <div class="flex items-start gap-3">
+                        <div class="w-8 h-8 rounded-lg bg-purple-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                            <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3M12 17h.01"/></svg>
+                        </div>
+                        <div>
+                            <h5 class="text-white font-semibold text-sm mb-1">15 skills already included</h5>
+                            <p class="text-gray-500 text-xs leading-relaxed">Obsidian notes, X posting, YouTube transcripts, PDF tools, RSS intelligence, virtual desktops, task scheduling, and more.</p>
+                        </div>
+                    </div>
+                    <div class="flex items-start gap-3">
+                        <div class="w-8 h-8 rounded-lg bg-cyan-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                            <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>
+                        </div>
+                        <div>
+                            <h5 class="text-white font-semibold text-sm mb-1">F9 UI recording</h5>
+                            <p class="text-gray-500 text-xs leading-relaxed">Press F9 to record your UI actions (clicks, keystrokes, navigation). The recording is saved and can be turned into a reusable skill the agent can replay.</p>
+                        </div>
+                    </div>
+                    <div class="flex items-start gap-3">
+                        <div class="w-8 h-8 rounded-lg bg-orange-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                            <svg class="w-4 h-4 text-orange-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>
+                        </div>
+                        <div>
+                            <h5 class="text-white font-semibold text-sm mb-1">YAML frontmatter format</h5>
+                            <p class="text-gray-500 text-xs leading-relaxed">Each skill is a Markdown file with name, description, triggers, and step-by-step instructions. Easy to read, edit, and share.</p>
+                        </div>
+                    </div>
+                    <div class="flex items-start gap-3">
+                        <div class="w-8 h-8 rounded-lg bg-rose-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                            <svg class="w-4 h-4 text-rose-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                        </div>
+                        <div>
+                            <h5 class="text-white font-semibold text-sm mb-1">Auto-matched by trigger words</h5>
+                            <p class="text-gray-500 text-xs leading-relaxed">Skills are scanned at prompt build time and matched to user requests via trigger keywords. The agent checks skills before improvising.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ==================== DOWNLOAD ==================== -->
+    <section id="download" class="py-28 md:py-40 relative">
+        <div class="gradient-line max-w-4xl mx-auto mb-28"></div>
+        <div class="max-w-4xl mx-auto px-8 text-center">
+            <p class="text-brand-400 text-lg font-bold uppercase tracking-widest mb-4">Download</p>
+            <h2 class="text-4xl sm:text-5xl md:text-6xl font-black text-white leading-tight mb-6">Get Substrate</h2>
+            <p class="text-xl text-gray-400 max-w-2xl mx-auto mb-14 leading-relaxed">One-click installer for Windows. Python dependencies are installed automatically on first launch.</p>
+
+            <div class="flex flex-col sm:flex-row items-center justify-center gap-5 mb-12">
+                <a href="https://github.com/propagationhouse/substrate/releases/latest" target="_blank" class="px-10 py-5 bg-brand-600 hover:bg-brand-500 text-white text-xl font-bold rounded-2xl transition shadow-xl shadow-brand-600/30 flex items-center gap-3">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+                    Download for Windows
+                </a>
+            </div>
+
+            <div class="grid md:grid-cols-3 gap-6 max-w-3xl mx-auto text-left">
+                <div class="bg-white/[0.025] border border-white/[0.06] rounded-2xl p-6">
+                    <div class="text-brand-400 font-bold text-sm uppercase tracking-wider mb-2">Version</div>
+                    <div class="text-white font-bold text-lg">v1.2.0</div>
+                    <div class="text-gray-500 text-sm mt-1">Latest stable release</div>
+                </div>
+                <div class="bg-white/[0.025] border border-white/[0.06] rounded-2xl p-6">
+                    <div class="text-brand-400 font-bold text-sm uppercase tracking-wider mb-2">Requirements</div>
+                    <div class="text-white font-bold text-lg">Python 3.10+</div>
+                    <div class="text-gray-500 text-sm mt-1">Windows 10/11 &middot; 64-bit</div>
+                </div>
+                <div class="bg-white/[0.025] border border-white/[0.06] rounded-2xl p-6">
+                    <div class="text-brand-400 font-bold text-sm uppercase tracking-wider mb-2">Recommended</div>
+                    <div class="text-white font-bold text-lg">Ollama</div>
+                    <div class="text-gray-500 text-sm mt-1">For local LLM support</div>
+                </div>
+            </div>
+
+            <p class="text-gray-500 text-base mt-10">macOS &amp; Linux builds coming soon. In the meantime, use the <a href="#quickstart" class="text-brand-400 hover:text-brand-300 underline underline-offset-4">developer setup</a>.</p>
+        </div>
+    </section>
+
+    <!-- ==================== QUICK START ==================== -->
+    <section id="quickstart" class="py-28 md:py-40 relative">
+        <div class="gradient-line max-w-4xl mx-auto mb-28"></div>
+        <div class="max-w-4xl mx-auto px-8">
+            <div class="text-center mb-20">
+                <p class="text-brand-400 text-lg font-bold uppercase tracking-widest mb-4">Developer Setup</p>
+                <h2 class="text-4xl sm:text-5xl md:text-6xl font-black text-white leading-tight">Build from source<br>in 4 steps</h2>
+                <p class="text-xl text-gray-400 max-w-2xl mx-auto mt-6 leading-relaxed">For contributors and developers who want to modify, extend, or build Substrate from the repository.</p>
+            </div>
+            <div class="space-y-10">
+                <!-- Step 1 -->
+                <div class="flex gap-6 md:gap-8 items-start">
+                    <div class="flex-shrink-0 w-14 h-14 rounded-2xl bg-brand-500/10 border border-brand-500/20 flex items-center justify-center text-brand-400 font-black text-xl">1</div>
+                    <div class="flex-1">
+                        <h3 class="text-white font-bold text-2xl mb-4">Clone</h3>
+                        <div class="terminal-bg rounded-2xl border border-white/10 p-6 font-mono text-base md:text-lg">
+                            <span class="text-gray-500">$</span> <span class="text-gray-200">git clone https://github.com/propagationhouse/substrate.git && cd substrate-core</span>
+                        </div>
+                    </div>
+                </div>
+                <!-- Step 2 -->
+                <div class="flex gap-6 md:gap-8 items-start">
+                    <div class="flex-shrink-0 w-14 h-14 rounded-2xl bg-brand-500/10 border border-brand-500/20 flex items-center justify-center text-brand-400 font-black text-xl">2</div>
+                    <div class="flex-1">
+                        <h3 class="text-white font-bold text-2xl mb-4">Install</h3>
+                        <div class="terminal-bg rounded-2xl border border-white/10 p-6 font-mono text-base md:text-lg">
+                            <span class="text-gray-500">$</span> <span class="text-gray-200">setup.bat</span>
+                            <span class="text-gray-600 block mt-2"># Creates venv, installs Python + Node dependencies</span>
+                        </div>
+                    </div>
+                </div>
+                <!-- Step 3 -->
+                <div class="flex gap-6 md:gap-8 items-start">
+                    <div class="flex-shrink-0 w-14 h-14 rounded-2xl bg-brand-500/10 border border-brand-500/20 flex items-center justify-center text-brand-400 font-black text-xl">3</div>
+                    <div class="flex-1">
+                        <h3 class="text-white font-bold text-2xl mb-4">Configure</h3>
+                        <div class="terminal-bg rounded-2xl border border-white/10 p-6 font-mono text-base md:text-lg">
+                            <span class="text-gray-500">$</span> <span class="text-gray-200">copy config.example.json config.json</span>
+                            <span class="text-gray-600 block mt-2"># Add your API keys to custom_settings.json &mdash; all available models load automatically</span>
+                        </div>
+                    </div>
+                </div>
+                <!-- Step 4 -->
+                <div class="flex gap-6 md:gap-8 items-start">
+                    <div class="flex-shrink-0 w-14 h-14 rounded-2xl bg-brand-500/10 border border-brand-500/20 flex items-center justify-center text-brand-400 font-black text-xl">4</div>
+                    <div class="flex-1">
+                        <h3 class="text-white font-bold text-2xl mb-4">Launch</h3>
+                        <div class="terminal-bg rounded-2xl border border-white/10 p-6 font-mono text-base md:text-lg">
+                            <span class="text-gray-500">$</span> <span class="text-gray-200">start.bat</span>
+                            <span class="text-gray-600 block mt-2"># Or: python proxy_server.py &amp; open http://localhost:8765/ui</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ==================== CTA ==================== -->
+    <section class="py-28 md:py-40 relative">
+        <div class="gradient-line max-w-4xl mx-auto mb-28"></div>
+        <div class="max-w-4xl mx-auto px-8 text-center">
+            <h2 class="text-4xl sm:text-5xl md:text-6xl font-black text-white leading-tight mb-8">Ready to give your<br>desktop an AI brain?</h2>
+            <p class="text-xl text-gray-400 mb-14 max-w-2xl mx-auto leading-relaxed">Substrate is free for personal use, source-available, and runs entirely on your machine. Your data stays local. Your agent stays yours.</p>
+            <div class="flex flex-col sm:flex-row items-center justify-center gap-5">
+                <a href="https://github.com/propagationhouse/substrate" target="_blank" class="px-10 py-4 bg-brand-600 hover:bg-brand-500 text-white text-lg font-bold rounded-2xl transition shadow-xl shadow-brand-600/30 flex items-center gap-3">
+                    <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+                    Star on GitHub
+                </a>
+                <a href="#quickstart" class="px-10 py-4 bg-white/[0.06] hover:bg-white/[0.12] text-white text-lg font-bold rounded-2xl border border-white/10 transition">
+                    Get Started
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- ==================== FOOTER ==================== -->
+    <footer class="border-t border-white/5 py-16">
+        <div class="max-w-7xl mx-auto px-8">
+            <div class="flex flex-col md:flex-row items-center justify-between gap-8">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-xl bg-brand-600 flex items-center justify-center">
+                        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                    </div>
+                    <span class="text-gray-500 text-base">Substrate &copy; 2025&ndash;2026 Michael Blackstone &middot; BSL 1.1</span>
+                </div>
+                <div class="flex items-center gap-8 text-base text-gray-500 font-medium">
+                    <a href="https://github.com/propagationhouse/substrate" class="hover:text-white transition">GitHub</a>
+                    <a href="https://github.com/propagationhouse/substrate/issues" class="hover:text-white transition">Issues</a>
+                    <a href="https://github.com/propagationhouse/substrate/discussions" class="hover:text-white transition">Discussions</a>
+                    <a href="https://github.com/propagationhouse/substrate/blob/main/CONTRIBUTING.md" class="hover:text-white transition">Contributing</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+</body>
+</html>

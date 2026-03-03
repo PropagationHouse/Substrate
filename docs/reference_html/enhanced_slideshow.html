@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enhanced Image Slideshow</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #111;
+            font-family: Arial, sans-serif;
+            color: white;
+        }
+        
+        .slideshow-container {
+            max-width: 600px;
+            position: relative;
+            margin: 30px auto;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.3);
+        }
+        
+        .slideshow-title {
+            text-align: center;
+            color: cyan;
+            margin-bottom: 20px;
+            text-shadow: 0 0 5px rgba(0, 255, 255, 0.5);
+        }
+        
+        .slides {
+            position: relative;
+            height: 300px;
+            overflow: hidden;
+            border-radius: 5px;
+        }
+        
+        .slide {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            transition: opacity 0.8s ease-in-out;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #222;
+        }
+        
+        .slide.active {
+            opacity: 1;
+        }
+        
+        .slide img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+        
+        .caption {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px;
+            text-align: center;
+        }
+        
+        .navigation {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 15px;
+        }
+        
+        .nav-button {
+            background: rgba(0, 0, 0, 0.5);
+            color: white;
+            border: 1px solid cyan;
+            padding: 8px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .nav-button:hover {
+            background: rgba(0, 255, 255, 0.2);
+        }
+        
+        .dots {
+            text-align: center;
+            margin-top: 15px;
+        }
+        
+        .dot {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #555;
+            margin: 0 5px;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+        
+        .dot.active {
+            background: cyan;
+            box-shadow: 0 0 5px cyan;
+        }
+        
+        .counter {
+            text-align: center;
+            margin-top: 10px;
+            color: #aaa;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="slideshow-container">
+        <h2 class="slideshow-title">Interactive Image Slideshow</h2>
+        
+        <div class="slides">
+            <div class="slide active">
+                <img src="https://picsum.photos/600/400?random=1" alt="Random Image 1">
+                <div class="caption">Beautiful landscape scene</div>
+            </div>
+            
+            <div class="slide">
+                <img src="https://picsum.photos/600/400?random=2" alt="Random Image 2">
+                <div class="caption">Urban architecture</div>
+            </div>
+            
+            <div class="slide">
+                <img src="https://picsum.photos/600/400?random=3" alt="Random Image 3">
+                <div class="caption">Nature close-up</div>
+            </div>
+            
+            <div class="slide">
+                <img src="https://picsum.photos/600/400?random=4" alt="Random Image 4">
+                <div class="caption">Abstract patterns</div>
+            </div>
+        </div>
+        
+        <div class="navigation">
+            <button class="nav-button" id="prev">Previous</button>
+            <button class="nav-button" id="next">Next</button>
+        </div>
+        
+        <div class="dots" id="dots"></div>
+        
+        <div class="counter" id="counter">Image 1 of 4</div>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const slides = document.querySelectorAll('.slide');
+            const prevButton = document.getElementById('prev');
+            const nextButton = document.getElementById('next');
+            const dotsContainer = document.getElementById('dots');
+            const counter = document.getElementById('counter');
+            let currentSlide = 0;
+            
+            // Create dots
+            slides.forEach((_, index) => {
+                const dot = document.createElement('span');
+                dot.classList.add('dot');
+                if (index === 0) dot.classList.add('active');
+                dot.addEventListener('click', () => goToSlide(index));
+                dotsContainer.appendChild(dot);
+            });
+            
+            const dots = document.querySelectorAll('.dot');
+            
+            // Show the current slide
+            function showSlide(index) {
+                // Handle wrapping
+                if (index >= slides.length) index = 0;
+                if (index < 0) index = slides.length - 1;
+                
+                // Update current slide index
+                currentSlide = index;
+                
+                // Update slides
+                slides.forEach(slide => slide.classList.remove('active'));
+                slides[currentSlide].classList.add('active');
+                
+                // Update dots
+                dots.forEach(dot => dot.classList.remove('active'));
+                dots[currentSlide].classList.add('active');
+                
+                // Update counter
+                counter.textContent = `Image ${currentSlide + 1} of ${slides.length}`;
+            }
+            
+            // Go to specific slide
+            function goToSlide(index) {
+                showSlide(index);
+            }
+            
+            // Next slide
+            function nextSlide() {
+                showSlide(currentSlide + 1);
+            }
+            
+            // Previous slide
+            function prevSlide() {
+                showSlide(currentSlide - 1);
+            }
+            
+            // Event listeners
+            prevButton.addEventListener('click', prevSlide);
+            nextButton.addEventListener('click', nextSlide);
+            
+            // Auto advance slides every 5 seconds
+            let slideInterval = setInterval(nextSlide, 5000);
+            
+            // Pause auto-advance when hovering over slideshow
+            const slideshowContainer = document.querySelector('.slideshow-container');
+            slideshowContainer.addEventListener('mouseenter', () => {
+                clearInterval(slideInterval);
+            });
+            
+            slideshowContainer.addEventListener('mouseleave', () => {
+                slideInterval = setInterval(nextSlide, 5000);
+            });
+            
+            // Keyboard navigation
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'ArrowLeft') prevSlide();
+                if (e.key === 'ArrowRight') nextSlide();
+            });
+        });
+    </script>
+</body>
+</html>

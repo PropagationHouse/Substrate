@@ -1,0 +1,9 @@
+{
+  "disabled_triggers": [
+    "run"
+  ],
+  "disabled_categories": [],
+  "custom_aliases": {},
+  "first_sentence_only": true,
+  "custom_triggers": {}
+}
