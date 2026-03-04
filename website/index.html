@@ -8,8 +8,7 @@
     <meta property="og:title" content="Substrate — Autonomous Desktop Agent">
     <meta property="og:description" content="A source-available agentic system that turns your machine into something conversational, proactive, and autonomous. 17 built-in tools, model-independent.">
     <meta property="og:type" content="website">
-    <meta property="og:image" content="https://raw.githubusercontent.com/propagationhouse/substrate/main/website/og-image.png">
-    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:card" content="summary">
     <meta name="twitter:title" content="Substrate — Autonomous Desktop Agent">
     <meta name="twitter:description" content="A source-available agentic system that turns your machine into something conversational, proactive, and autonomous. 17 built-in tools, model-independent.">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%230a70e8' rx='20' width='100' height='100'/><text x='50' y='72' text-anchor='middle' fill='white' font-size='60' font-weight='bold'>S</text></svg>" type="image/svg+xml">
@@ -109,7 +108,7 @@
 
             <div class="max-w-2xl mx-auto mb-14 space-y-5 text-left">
                 <p class="text-lg md:text-xl text-gray-400 leading-relaxed">
-                    An open-source agentic system that turns your machine from an inanimate silo into something conversational, proactive, autonomous.
+                    A source-available agentic system that turns your machine from an inanimate silo into something conversational, proactive, autonomous.
                 </p>
                 <p class="text-lg md:text-xl text-gray-400 leading-relaxed">
                     Model-independent by design &mdash; it dynamically loads every model tied to your API keys, runs entirely offline via your preferred model library, or takes a hybrid approach with both.
@@ -203,7 +202,7 @@
                         <svg class="w-7 h-7 text-brand-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
                     </div>
                     <h3 class="text-white font-bold text-xl mb-3">Desktop Control</h3>
-                    <p class="text-gray-400 text-base leading-relaxed">Shell commands, file operations, process management, mouse/keyboard control, and native Windows UI automation via pywinauto.</p>
+                    <p class="text-gray-400 text-base leading-relaxed">Shell commands, file operations, process management, mouse/keyboard control, and native Windows UI automation.</p>
                 </div>
 
                 <!-- Card: Multi-Model LLM -->
@@ -516,7 +515,7 @@
                     <div id="demo-box" class="relative flex flex-col" style="min-height:540px; overflow:hidden;">
                         <div id="demo-messages" class="flex-1 px-5 pt-2 pb-4 flex flex-col gap-2.5 overflow-hidden" style="padding-bottom:220px;">
                             <div class="message user">What can you do in Code mode?</div>
-                            <div class="message assistant">In <span style="color:rgba(0,255,255,.7);">Code</span> mode I act on your instructions immediately &mdash; executing commands, writing files, browsing the web, and controlling your desktop in real time.<br><br>I can:<br>&bull; Run shell commands and scripts on your OS<br>&bull; Read, write, and manage files across your system<br>&bull; Browse the web, scrape data, and take screenshots<br>&bull; Send messages to Obsidian, Notion, or any integrated app<br>&bull; Chain multiple tools together in a single response<br><br>This is the default mode &mdash; tell me what to do and I'll do it.</div>
+                            <div class="message assistant">In <span style="color:rgba(0,255,255,.7);">Code</span> mode I act on your instructions immediately &mdash; executing commands, writing files, browsing the web, and controlling your desktop in real time.<br><br>I can:<br>&bull; Run shell commands and scripts on your OS<br>&bull; Read, write, and manage files across your system<br>&bull; Browse the web, scrape data, and take screenshots<br>&bull; Send messages to Obsidian or any integrated app<br>&bull; Chain multiple tools together in a single response<br><br>This is the default mode &mdash; tell me what to do and I'll do it.</div>
                         </div>
                         <!-- Avatar -->
                         <div id="demo-avatar-wrap">
@@ -729,7 +728,7 @@
                 + '<br>&bull; Run shell commands and scripts on your OS'
                 + '<br>&bull; Read, write, and manage files across your system'
                 + '<br>&bull; Browse the web, scrape data, and take screenshots'
-                + '<br>&bull; Send messages to Obsidian, Notion, or any integrated app'
+                + '<br>&bull; Send messages to Obsidian or any integrated app'
                 + '<br>&bull; Chain multiple tools together in a single response'
                 + '<br><br>This is the default mode &mdash; tell me what to do and I\'ll do it.</div>',
 
@@ -1546,15 +1545,6 @@
                 <!-- Extra details -->
                 <div class="grid md:grid-cols-2 gap-5">
                     <div class="flex items-start gap-3">
-                        <div class="w-8 h-8 rounded-lg bg-purple-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                            <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3M12 17h.01"/></svg>
-                        </div>
-                        <div>
-                            <h5 class="text-white font-semibold text-sm mb-1">15 skills already included</h5>
-                            <p class="text-gray-500 text-xs leading-relaxed">Obsidian notes, X posting, YouTube transcripts, PDF tools, RSS intelligence, virtual desktops, task scheduling, and more.</p>
-                        </div>
-                    </div>
-                    <div class="flex items-start gap-3">
                         <div class="w-8 h-8 rounded-lg bg-cyan-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
                             <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>
                         </div>
@@ -1639,7 +1629,7 @@
                     <div class="flex-1">
                         <h3 class="text-white font-bold text-2xl mb-4">Clone</h3>
                         <div class="terminal-bg rounded-2xl border border-white/10 p-6 font-mono text-base md:text-lg">
-                            <span class="text-gray-500">$</span> <span class="text-gray-200">git clone https://github.com/propagationhouse/substrate.git && cd substrate-core</span>
+                            <span class="text-gray-500">$</span> <span class="text-gray-200">git clone https://github.com/propagationhouse/substrate.git && cd substrate</span>
                         </div>
                     </div>
                 </div>
@@ -1661,7 +1651,7 @@
                         <h3 class="text-white font-bold text-2xl mb-4">Configure</h3>
                         <div class="terminal-bg rounded-2xl border border-white/10 p-6 font-mono text-base md:text-lg">
                             <span class="text-gray-500">$</span> <span class="text-gray-200">copy config.example.json config.json</span>
-                            <span class="text-gray-600 block mt-2"># Add your API keys to custom_settings.json &mdash; all available models load automatically</span>
+                            <span class="text-gray-600 block mt-2"># Add your API keys to config.json &mdash; all available models load automatically</span>
                         </div>
                     </div>
                 </div>
