@@ -82,6 +82,11 @@ workspace/temp/
 workspace/output/
 workspace/recordings/
 
+# User data files (personal to each machine, never commit)
+# Only ignores root-level copy; installer/templates/ version stays tracked
+/CIRCUITS.md
+profiles/
+
 # Config (contains personal settings)
 config.json
 

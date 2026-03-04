@@ -39,9 +39,24 @@ SOMA = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 # ─── File loaders ─────────────────────────────────────────────────────
 
 def _load_file(filename: str) -> Optional[str]:
-    """Load a file from project root. Returns content or None."""
+    """Load a file from project root. Returns content or None.
+    
+    If the file doesn't exist but a template exists at installer/templates/,
+    copies the template first (copy-on-first-use).
+    """
+    primary = os.path.join(SOMA, filename)
+    if not os.path.isfile(primary):
+        template = os.path.join(SOMA, "installer", "templates", filename)
+        if os.path.isfile(template):
+            try:
+                import shutil
+                shutil.copy2(template, primary)
+                logger.debug(f"[PROMPT] Created {filename} from template")
+            except Exception as e:
+                logger.debug(f"[PROMPT] Failed to copy template for {filename}: {e}")
+    
     paths = [
-        os.path.join(SOMA, filename),
+        primary,
         os.path.join(os.getcwd(), filename),
     ]
     for p in paths:
