@@ -26,19 +26,37 @@ logger = logging.getLogger(__name__)
 
 # Soma (project root)
 SOMA = Path(__file__).parent.parent.parent
-CIRCUITS_PATH = SOMA / "CIRCUITS.md"
+CIRCUITS_TEMPLATE = SOMA / "installer" / "templates" / "CIRCUITS.md"
+
+
+def _get_circuits_path() -> Path:
+    """Resolve CIRCUITS.md path with copy-on-first-use from template.
+    
+    If CIRCUITS.md doesn't exist at the project root, copies the default
+    template so users get a starter file without overwriting existing data.
+    """
+    user_path = SOMA / "CIRCUITS.md"
+    if not user_path.exists() and CIRCUITS_TEMPLATE.exists():
+        try:
+            import shutil
+            shutil.copy2(CIRCUITS_TEMPLATE, user_path)
+            logger.info(f"Created CIRCUITS.md from template")
+        except Exception as e:
+            logger.warning(f"Failed to copy CIRCUITS.md template: {e}")
+    return user_path
 
 
 def _read_circuits() -> str:
     """Read CIRCUITS.md content."""
-    if not CIRCUITS_PATH.exists():
+    p = _get_circuits_path()
+    if not p.exists():
         return ""
-    return CIRCUITS_PATH.read_text(encoding='utf-8')
+    return p.read_text(encoding='utf-8')
 
 
 def _write_circuits(content: str):
     """Write CIRCUITS.md content."""
-    CIRCUITS_PATH.write_text(content, encoding='utf-8')
+    _get_circuits_path().write_text(content, encoding='utf-8')
 
 
 def _parse_sections(content: str) -> Dict[str, List[str]]:

@@ -370,9 +370,23 @@ class CircuitsRunner:
             return True
     
     def _get_circuits_path(self) -> Path:
-        """Resolve CIRCUITS.md path (in soma / project root)."""
+        """Resolve CIRCUITS.md path with copy-on-first-use from template.
+        
+        If CIRCUITS.md doesn't exist at the project root, copies the default
+        template so users get a starter file without overwriting existing data.
+        """
         soma = Path(__file__).parent.parent.parent
-        return soma / "CIRCUITS.md"
+        user_path = soma / "CIRCUITS.md"
+        if not user_path.exists():
+            template = soma / "installer" / "templates" / "CIRCUITS.md"
+            if template.exists():
+                try:
+                    import shutil
+                    shutil.copy2(template, user_path)
+                    logger.info("Created CIRCUITS.md from template")
+                except Exception as e:
+                    logger.warning(f"Failed to copy CIRCUITS.md template: {e}")
+        return user_path
     
     def _read_circuits_file_raw(self) -> Optional[str]:
         """Read raw CIRCUITS.md content. Returns None if file doesn't exist."""
