@@ -78,11 +78,6 @@ Think of it as an always-on AI co-pilot that lives on your machine, learns from 
 - **Followup queues** — Priority queue system for chaining autonomous actions
 - **Screenshot observation** — Periodically observe and react to screen content
 
-### Image Generation
-- **DALL-E 3** — OpenAI image generation with prompt revision
-- **Google Imagen** — Alternative image generation provider
-- **Inline rendering** — Generated images appear directly in the chat with click-to-zoom
-
 ### Interfaces
 - **Electron desktop app** — Animated avatar, retro-styled chat, radial config panel
 - **WebUI** — PWA-capable browser UI accessible from any device on your network
