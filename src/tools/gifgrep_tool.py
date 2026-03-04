@@ -10,15 +10,29 @@ Features:
 - Return URLs or embed codes
 """
 
+import json
 import logging
+import os
 import requests
 from typing import Dict, Any, Optional, List
 
 logger = logging.getLogger(__name__)
 
 # Giphy API configuration
-GIPHY_API_KEY = "QbjC1FoDYr9C4y7ef2kLm0WnrYfB5ckv"
 GIPHY_BASE_URL = "https://api.giphy.com/v1/gifs"
+
+def _get_giphy_key() -> str:
+    """Load Giphy API key from custom_settings.json."""
+    try:
+        config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'custom_settings.json')
+        if os.path.exists(config_path):
+            with open(config_path, 'r', encoding='utf-8') as f:
+                return json.load(f).get('giphy_api_key', '')
+    except Exception:
+        pass
+    return ''
+
+GIPHY_API_KEY = _get_giphy_key()
 
 
 def search(
