@@ -1,11 +1,23 @@
 import aiohttp
 import json
+import os
 from typing import List, Dict, Optional
+
+def _load_config_key(key: str, default: str = "") -> str:
+    """Load a key from custom_settings.json."""
+    try:
+        config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'custom_settings.json')
+        if os.path.exists(config_path):
+            with open(config_path, 'r', encoding='utf-8') as f:
+                return json.load(f).get(key, default)
+    except Exception:
+        pass
+    return default
 
 class SearchClient:
     def __init__(self):
-        self.api_key = 'AIzaSyA4yp06k5NAJ78s-Fiz7tcCWhlE9Va1QsQ'
-        self.cx = 'e564a942a48974e52'
+        self.api_key = _load_config_key('google_cse_api_key')
+        self.cx = _load_config_key('google_cse_cx')
         self.base_url = 'https://www.googleapis.com/customsearch/v1'
         
     async def search(self, 

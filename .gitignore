@@ -87,6 +87,10 @@ workspace/recordings/
 /CIRCUITS.md
 profiles/
 
+# TLS certs (generated per-machine)
+certs/server.key
+certs/server.crt
+
 # Config (contains personal settings)
 config.json
 
