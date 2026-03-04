@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#06060b"/>
+      <stop offset="100%" stop-color="#0a0a18"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#0a70e8"/>
+      <stop offset="100%" stop-color="#51c5ff"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect x="0" y="0" width="1200" height="4" fill="url(#accent)"/>
+  <rect x="80" y="180" width="64" height="64" rx="16" fill="#0a70e8"/>
+  <text x="112" y="228" text-anchor="middle" fill="white" font-family="Inter,system-ui,sans-serif" font-size="36" font-weight="bold">S</text>
+  <text x="80" y="310" fill="white" font-family="Inter,system-ui,sans-serif" font-size="72" font-weight="900" letter-spacing="-2">Substrate</text>
+  <text x="80" y="370" fill="#9ca3af" font-family="Inter,system-ui,sans-serif" font-size="28" font-weight="500">The Intelligence Layer: A Mind for Your Machine.</text>
+  <text x="80" y="430" fill="#6b7280" font-family="Inter,system-ui,sans-serif" font-size="20" font-weight="400">Source-available autonomous desktop agent · 17 tools · Model-independent</text>
+  <rect x="80" y="480" width="200" height="3" rx="1.5" fill="#0a70e8" opacity="0.5"/>
+  <text x="80" y="530" fill="#4b5563" font-family="JetBrains Mono,monospace" font-size="16">substrate.propagation.house</text>
+</svg>
