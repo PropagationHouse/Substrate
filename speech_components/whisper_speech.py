@@ -19,7 +19,6 @@ import time
 import queue
 import numpy as np
 import sounddevice as sd
-from faster_whisper import WhisperModel
 import os
 import base64
 import io
@@ -46,28 +45,45 @@ audio_buffer = np.zeros(0, dtype=np.float32)
 buffer_lock = threading.Lock()
 processing_queue = queue.Queue()
 _muted = False  # Toggled by stop/start commands from mute button
+selected_device_index = None  # None = system default; set via set_device command
+_active_stream = None  # Reference to the active sd.InputStream for device switching
 
 # Directory to monitor for XGO audio files
 XGO_AUDIO_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'xgo_audio_input')
 os.makedirs(XGO_AUDIO_DIR, exist_ok=True)
 print(f"Monitoring for XGO audio files in: {XGO_AUDIO_DIR}")
-# Initialize model at module level to avoid delay during speech
-print("Pre-loading whisper model... this may take a few seconds")
-# Try to use GPU if available, otherwise fall back to CPU
-try:
-    import torch
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    compute_type = "float16" if device == "cuda" else "int8"
-    print(f"Using device: {device} with compute_type: {compute_type}")
-    model = WhisperModel("small", device=device, compute_type=compute_type)
-    # Run a quick inference to fully initialize the model and keep it warm
-    model.transcribe(np.zeros(1600, dtype=np.float32), beam_size=1)
-    print("Model pre-loaded and warmed up successfully on " + device)
-except Exception as e:
-    print(f"Error initializing model on GPU, falling back to CPU: {e}")
-    model = WhisperModel("small", device="cpu", compute_type="int8")
-    model.transcribe(np.zeros(1600, dtype=np.float32), beam_size=1)
-    print("Model pre-loaded and warmed up successfully on CPU")
+
+# Whisper model — lazy-loaded only when stt_provider == "whisper"
+model = None
+_whisper_load_lock = threading.Lock()
+
+def _get_whisper_model():
+    """Lazy-load the FasterWhisper model on first use."""
+    global model
+    if model is not None:
+        return model
+    with _whisper_load_lock:
+        if model is not None:
+            return model
+        print_json({"status": "info", "message": "Loading FasterWhisper model (first whisper request)..."})
+        try:
+            from faster_whisper import WhisperModel
+            import torch
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            compute_type = "float16" if device == "cuda" else "int8"
+            print(f"Using device: {device} with compute_type: {compute_type}")
+            model = WhisperModel("small", device=device, compute_type=compute_type)
+            model.transcribe(np.zeros(1600, dtype=np.float32), beam_size=1)
+            print_json({"status": "info", "message": f"Whisper model loaded on {device}"})
+        except Exception as e:
+            print(f"Error initializing model on GPU, falling back to CPU: {e}")
+            from faster_whisper import WhisperModel
+            model = WhisperModel("small", device="cpu", compute_type="int8")
+            model.transcribe(np.zeros(1600, dtype=np.float32), beam_size=1)
+            print_json({"status": "info", "message": "Whisper model loaded on CPU"})
+        return model
+
+print(f"STT provider: {stt_provider} (whisper model will load on demand if needed)")
 is_running = True
 last_voice_time = 0
 voice_cooldown = 0.2  # Cooldown period in seconds after system speaks
@@ -85,7 +101,7 @@ max_buffer_size = int(16000 * 8)  # Maximum buffer size (~8 seconds)
 no_buffer_limit = False  # When True, disables chunk trigger and raises max buffer to ~10 min
 _nbl_sent_samples = 0  # Track how many samples we've already sent during no_buffer_limit mode
 
-# Load Google API key from custom_settings.json at startup
+# Load Google API key and mic device from custom_settings.json at startup
 try:
     settings_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'custom_settings.json')
     if os.path.exists(settings_path):
@@ -96,6 +112,11 @@ try:
             print(f"Loaded Google API key from custom_settings.json (length: {len(google_api_key)})")
         else:
             print("No Google API key found in custom_settings.json")
+        # Load saved mic device index
+        saved_mic = settings.get('mic_device_index', None)
+        if saved_mic is not None:
+            selected_device_index = int(saved_mic)
+            print(f"Loaded saved mic device index: {selected_device_index}")
     else:
         print(f"custom_settings.json not found at {settings_path}")
 except Exception as e:
@@ -295,8 +316,9 @@ def transcribe_audio(audio_data, sample_rate=16000):
             sys.stdout.flush()
         return text or ""
     
-    # whisper (local fallback)
-    segments, info = model.transcribe(
+    # whisper (local fallback — lazy-loads model on first call)
+    whisper_model = _get_whisper_model()
+    segments, info = whisper_model.transcribe(
         audio_data,
         beam_size=5,
         language="en",
@@ -718,9 +740,64 @@ def check_xgo_audio_files():
     # Return True to indicate the function completed successfully
     return True
 
+def _send_device_list():
+    """Query sounddevice for input devices and send to frontend."""
+    try:
+        devices = sd.query_devices()
+        inputs = []
+        default_idx = sd.default.device[0]  # default input device index
+        for i, d in enumerate(devices):
+            if d['max_input_channels'] > 0:
+                inputs.append({
+                    "index": i,
+                    "name": d['name'],
+                    "channels": d['max_input_channels'],
+                    "default": (i == default_idx),
+                })
+        print_json({
+            "type": "mic_devices",
+            "devices": inputs,
+            "selected": selected_device_index,
+        })
+    except Exception as e:
+        print_json({"status": "error", "message": f"Failed to list audio devices: {e}"})
+
+
+def _switch_device(new_index):
+    """Switch the audio input stream to a different device."""
+    global selected_device_index, _active_stream, audio_buffer
+    try:
+        # Stop current stream
+        if _active_stream and _active_stream.active:
+            _active_stream.stop()
+            _active_stream.close()
+
+        # Clear buffer
+        with buffer_lock:
+            audio_buffer = np.zeros(0, dtype=np.float32)
+
+        selected_device_index = new_index
+
+        # Start new stream on the selected device
+        _active_stream = sd.InputStream(
+            samplerate=16000,
+            channels=1,
+            callback=audio_callback,
+            dtype='float32',
+            device=selected_device_index
+        )
+        _active_stream.start()
+
+        dev_name = "system default" if selected_device_index is None else f"device {selected_device_index}"
+        print_json({"status": "info", "message": f"Switched microphone to {dev_name}"})
+        print_json({"type": "mic_device_changed", "selected": selected_device_index})
+    except Exception as e:
+        print_json({"status": "error", "message": f"Failed to switch mic device: {e}"})
+
+
 def main():
     """Main function"""
-    global model, is_running, last_voice_time, stt_provider, google_api_key, gcloud_credentials, gcloud_project_id, energy_threshold, mic_gain, last_transcription, silence_timeout, chunk_trigger_samples, min_chunk_samples, voice_cooldown, _muted, no_buffer_limit, _nbl_sent_samples
+    global model, is_running, last_voice_time, stt_provider, google_api_key, gcloud_credentials, gcloud_project_id, energy_threshold, mic_gain, last_transcription, silence_timeout, chunk_trigger_samples, min_chunk_samples, voice_cooldown, _muted, no_buffer_limit, _nbl_sent_samples, _active_stream, selected_device_index
     
     try:
         # Check if another instance is running by creating a lock file
@@ -745,8 +822,7 @@ def main():
         
         print_json({"status": "info", "message": "Starting speech recognition"})
         
-        # Model is already initialized at module level
-        print_json({"status": "info", "message": "Using pre-initialized whisper model"})
+        print_json({"status": "info", "message": f"STT provider: {stt_provider} (whisper loads on demand if needed)"})
         
         # Start processing thread
         processing_thread = threading.Thread(target=process_audio_thread)
@@ -756,17 +832,23 @@ def main():
         # Start audio stream
         print_json({"status": "info", "message": "Starting audio stream..."})
         
-        # Use default input device
+        # Use selected device (or system default if None)
         stream = sd.InputStream(
             samplerate=16000,
             channels=1,
             callback=audio_callback,
-            dtype='float32'
+            dtype='float32',
+            device=selected_device_index
         )
+        _active_stream = stream
         
         stream.start()
-        print_json({"status": "info", "message": "Audio stream started"})
+        dev_name = "default" if selected_device_index is None else f"device {selected_device_index}"
+        print_json({"status": "info", "message": f"Audio stream started on {dev_name}"})
         print_json({"status": "info", "message": "Microphone activated"})
+        
+        # Send available devices list on startup
+        _send_device_list()
         print_json({"status": "info", "message": f"Also monitoring XGO audio directory: {XGO_AUDIO_DIR}"})
         
         # Last time we checked for XGO audio files
@@ -808,9 +890,6 @@ def main():
                                         processing_queue.task_done()
                                     except:
                                         break
-                                        
-                                # Keep the model warm with a quick inference
-                                threading.Thread(target=lambda: model.transcribe(np.zeros(1600, dtype=np.float32), beam_size=1)).start()
                                         
                                 print_json({"status": "info", "message": "System speaking - cleared audio buffers"})
                             
@@ -898,6 +977,15 @@ def main():
                                 google_api_key = data.get("value", "")
                                 print_json({"status": "info", "message": f"Google API key updated (length: {len(google_api_key)})"})
                             
+                            elif data.get("command") == "list_devices":
+                                _send_device_list()
+                            
+                            elif data.get("command") == "set_device":
+                                new_idx = data.get("value")  # None = default
+                                if new_idx is not None:
+                                    new_idx = int(new_idx)
+                                _switch_device(new_idx)
+                            
                             elif data.get("command") == "exit":
                                 break
                     except:
@@ -911,9 +999,9 @@ def main():
     finally:
         # Clean up
         is_running = False
-        if 'stream' in locals() and stream.active:
-            stream.stop()
-            stream.close()
+        if _active_stream and _active_stream.active:
+            _active_stream.stop()
+            _active_stream.close()
         print_json({"status": "info", "message": "Speech recognition stopped"})
 
 if __name__ == "__main__":

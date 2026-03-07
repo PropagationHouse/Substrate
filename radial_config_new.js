@@ -839,6 +839,51 @@
               document.addEventListener('touchend', () => { dragging = false; });
             }
             
+            // Mic device selector — uses browser enumerateDevices() for reliability
+            const micDeviceSelect = document.getElementById('mic-device-select');
+            if (micDeviceSelect) {
+              console.log('Setting up mic device selector');
+              // Populate dropdown with audio input devices
+              async function populateMicDevices() {
+                try {
+                  // Request mic permission first so labels are visible
+                  try { const s = await navigator.mediaDevices.getUserMedia({audio: true}); s.getTracks().forEach(t => t.stop()); } catch(e) {}
+                  const devices = await navigator.mediaDevices.enumerateDevices();
+                  const savedDevice = localStorage.getItem('substrate_mic_device') || '';
+                  micDeviceSelect.innerHTML = '';
+                  const defaultOpt = document.createElement('option');
+                  defaultOpt.value = '';
+                  defaultOpt.textContent = 'System Default';
+                  micDeviceSelect.appendChild(defaultOpt);
+                  let idx = 0;
+                  devices.forEach(d => {
+                    if (d.kind === 'audioinput') {
+                      const opt = document.createElement('option');
+                      opt.value = String(idx);
+                      opt.textContent = d.label || ('Microphone ' + (idx + 1));
+                      micDeviceSelect.appendChild(opt);
+                      idx++;
+                    }
+                  });
+                  micDeviceSelect.value = savedDevice;
+                  console.log('Mic devices populated:', idx, 'devices found');
+                } catch(e) {
+                  console.error('Failed to enumerate mic devices:', e);
+                  micDeviceSelect.innerHTML = '<option value="">Could not list devices</option>';
+                }
+              }
+              populateMicDevices();
+
+              micDeviceSelect.addEventListener('change', () => {
+                const val = micDeviceSelect.value;
+                const deviceIndex = val === '' ? null : parseInt(val, 10);
+                localStorage.setItem('substrate_mic_device', val);
+                if (window.api && window.api.send) {
+                  window.api.send('set-mic-device', deviceIndex);
+                }
+              });
+            }
+
             // STT provider dropdown
             const sttProviderSelect = document.getElementById('stt-provider-select');
             const sttProviderStatus = document.getElementById('stt-provider-status');
@@ -1206,13 +1251,19 @@
                 <div class="mic-sensitivity-section" style="margin-top:8px;">
                     <h4>Microphone <span id="mic-level-readout" style="font-size:9px; color:rgba(255,255,255,0.5); font-weight:normal; margin-left:6px;">--</span></h4>
                     <div style="display:flex; align-items:center; gap:6px; margin-bottom:8px;">
+                        <span style="font-size:9px; color:rgba(79,195,247,0.7); min-width:28px;">Input</span>
+                        <select id="mic-device-select" style="flex:1; background:rgba(0,0,0,0.4); color:#fff; border:1px solid rgba(79,195,247,0.3); border-radius:4px; padding:3px 6px; font-size:11px; outline:none; cursor:pointer;">
+                            <option value="">Loading devices...</option>
+                        </select>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:6px; margin-bottom:8px;">
                         <span style="font-size:9px; color:rgba(79,195,247,0.7); min-width:28px;">STT</span>
                         <select id="stt-provider-select" style="flex:1; background:rgba(0,0,0,0.4); color:#fff; border:1px solid rgba(79,195,247,0.3); border-radius:4px; padding:3px 6px; font-size:11px; outline:none; cursor:pointer;">
                             <option value="whisper">Whisper (Local)</option>
                             <option value="gemini">Gemini (Cloud)</option>
-                            <option value="google-cloud">Google Cloud STT</option>
+                            <option value="google-cloud" selected>Google Cloud STT</option>
                         </select>
-                        <span id="stt-provider-status" style="font-size:9px; color:rgba(255,255,255,0.4); min-width:28px; text-align:right;">local</span>
+                        <span id="stt-provider-status" style="font-size:9px; color:#4fc3f7; min-width:28px; text-align:right;">cloud</span>
                     </div>
                     <div style="display:flex; align-items:center; gap:6px; margin-bottom:6px;">
                         <span style="font-size:9px; color:rgba(79,195,247,0.7); min-width:28px;">Gain</span>

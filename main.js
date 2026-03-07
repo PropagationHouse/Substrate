@@ -1828,6 +1828,16 @@ function startSpeechRecognition() {
                     if (mainWindow) {
                         mainWindow.webContents.send('mic-timing-updated', jsonData);
                     }
+                } else if (jsonData.type === 'mic_devices') {
+                    // Forward available mic device list to renderer
+                    if (mainWindow) {
+                        mainWindow.webContents.send('mic-devices', jsonData);
+                    }
+                } else if (jsonData.type === 'mic_device_changed') {
+                    // Forward device change confirmation to renderer
+                    if (mainWindow) {
+                        mainWindow.webContents.send('mic-device-changed', jsonData);
+                    }
                 } else if (jsonData.status === 'info') {
                     console.log('Speech info:', jsonData.message);
                 } else if (jsonData.status === 'error') {
@@ -2136,6 +2146,36 @@ ipcMain.on('set-stt-provider', (event, value) => {
 ipcMain.on('get-stt-provider', (event) => {
     if (speechProcess && speechProcess.stdin) {
         safeSpeechWrite(JSON.stringify({ command: 'get_stt_provider' }) + '\n');
+    }
+});
+
+ipcMain.on('list-mic-devices', (event) => {
+    console.log('list-mic-devices requested, speechProcess:', !!speechProcess);
+    if (speechProcess && speechProcess.stdin) {
+        safeSpeechWrite(JSON.stringify({ command: 'list_devices' }) + '\n');
+    } else {
+        console.log('Speech process not available for list-mic-devices');
+    }
+});
+
+ipcMain.on('set-mic-device', (event, value) => {
+    console.log('Setting mic device to:', value);
+    if (speechProcess && speechProcess.stdin) {
+        safeSpeechWrite(JSON.stringify({ command: 'set_device', value: value }) + '\n');
+    }
+    // Persist to custom_settings.json
+    try {
+        const settingsPath = path.join(__dirname, 'custom_settings.json');
+        const fs = require('fs');
+        let settings = {};
+        if (fs.existsSync(settingsPath)) {
+            settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
+        }
+        settings.mic_device_index = value;
+        fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf-8');
+        console.log('Mic device preference saved:', value);
+    } catch (e) {
+        console.error('Failed to save mic device preference:', e);
     }
 });
 
