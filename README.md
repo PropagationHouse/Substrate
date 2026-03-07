@@ -336,7 +336,7 @@ With the backend running, open `http://localhost:8765/ui` in any browser — wor
 | `media` | GIF search, PDF text extraction |
 | `obsidian` | Obsidian vault operations (notes, search, tags, backlinks) |
 | `agent` | Spawn and manage background sub-agents |
-| `generate_image` | Generate images via DALL-E 3 or Google Imagen |
+| `generate_image` | Generate images via selected models or leverage rowser automations for sites like Midjjourney |
 | `notify` | Send Windows toast notifications |
 
 Tools from external **MCP servers** are also supported and appear with a server-name prefix (e.g., `github_create_issue`).
