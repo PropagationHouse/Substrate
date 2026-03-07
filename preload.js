@@ -14,7 +14,8 @@ contextBridge.exposeInMainWorld(
                 'open-external-link', 'start-listening', 'stop-listening', 'record-start', 'record-stop', 'minimize-to-tray', 'show-window',
                 'set-mic-threshold', 'get-mic-threshold', 'set-mic-gain', 'get-mic-gain',
                 'set-stt-provider', 'get-stt-provider',
-                'set-silence-timeout', 'set-chunk-trigger', 'set-min-chunk', 'set-voice-cooldown', 'get-mic-timing'
+                'set-silence-timeout', 'set-chunk-trigger', 'set-min-chunk', 'set-voice-cooldown', 'get-mic-timing',
+                'list-mic-devices', 'set-mic-device'
             ];
             if (validSendChannels.includes(channel)) {
                 console.log(`Sending message through channel: ${channel}`);
@@ -41,6 +42,7 @@ contextBridge.exposeInMainWorld(
                 'error', 'config-update', 'profile-manager-message', 'voice-status', 'debug-config-update', 'config-panel-update',
                 'mic-energy-level', 'mic-threshold-updated', 'mic-gain-updated', 'speech-message',
                 'stt-provider-updated', 'mic-timing-updated',
+                'mic-devices', 'mic-device-changed',
                 'avatar-emotions'
             ];
             if (validReceiveChannels.includes(channel)) {
