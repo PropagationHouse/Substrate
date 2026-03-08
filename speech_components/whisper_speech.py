@@ -97,7 +97,7 @@ last_transcription = ""  # Store the last final transcription to avoid duplicate
 last_partial_text = ""  # Track most recent partial to prevent repeats
 is_processing = False  # Flag to indicate if we're currently processing audio
 last_speech_time = 0  # Track when we last detected speech
-max_buffer_size = int(16000 * 8)  # Maximum buffer size (~8 seconds)
+max_buffer_size = int(16000 * 30)  # Maximum buffer size (~30 seconds)
 no_buffer_limit = False  # When True, disables chunk trigger and raises max buffer to ~10 min
 _nbl_sent_samples = 0  # Track how many samples we've already sent during no_buffer_limit mode
 
@@ -416,7 +416,8 @@ def process_audio_thread():
                 
                 # Only send final transcriptions (no partials — wait for full utterance)
                 if text and is_final_chunk:
-                    if text == last_transcription:
+                    # Skip dedup in brainstorm mode — all chunks must be preserved
+                    if not no_buffer_limit and text == last_transcription:
                         print_json({"status": "info", "message": f"Skipped duplicate transcription: {text}"})
                     else:
                         last_transcription = text
@@ -478,21 +479,21 @@ def audio_callback(indata, frames, time_info, status):
         if len(audio_buffer) > 0:
             with buffer_lock:
                 audio_buffer = np.concatenate((audio_buffer, audio_data))
-                # Cap buffer size
-                effective_max = int(16000 * 600) if no_buffer_limit else max_buffer_size
-                if len(audio_buffer) > effective_max:
-                    audio_buffer = audio_buffer[-effective_max:]
+                # Cap buffer size (no cap in brainstorm mode)
+                if not no_buffer_limit and len(audio_buffer) > max_buffer_size:
+                    audio_buffer = audio_buffer[-max_buffer_size:]
         # When no_buffer_limit is active (brainstorm mode), send partial transcriptions
         # on silence so main.js can accumulate text in recordingBuffer.
-        # The buffer is NOT cleared — audio keeps accumulating for the final flush.
+        # Buffer IS cleared after each send — main.js accumulates the text segments.
         if no_buffer_limit:
             current_time = time.time()
             if len(audio_buffer) >= min_chunk_samples and last_speech_time > 0 and current_time - last_speech_time > silence_timeout:
                 with buffer_lock:
-                    audio_to_send = audio_buffer[_nbl_sent_samples:].copy() if _nbl_sent_samples < len(audio_buffer) else None
-                    if audio_to_send is not None and len(audio_to_send) >= min_chunk_samples:
-                        _nbl_sent_samples = len(audio_buffer)
-                        enqueue_audio(audio_to_send, is_final=True)
+                    audio_to_send = audio_buffer.copy()
+                    audio_buffer = np.zeros(0, dtype=np.float32)
+                if len(audio_to_send) >= min_chunk_samples:
+                    enqueue_audio(audio_to_send, is_final=True)
+                    print_json({"status": "debug", "message": f"Brainstorm partial: sent {len(audio_to_send)/16000:.1f}s of audio"})
                 last_speech_time = 0
             return
         current_time = time.time()
@@ -511,10 +512,9 @@ def audio_callback(indata, frames, time_info, status):
     with buffer_lock:
         audio_buffer = np.concatenate((audio_buffer, audio_data))
         
-        # Limit buffer size to prevent memory issues
-        effective_max = int(16000 * 600) if no_buffer_limit else max_buffer_size
-        if len(audio_buffer) > effective_max:
-            audio_buffer = audio_buffer[-effective_max:]
+        # Limit buffer size to prevent memory issues (no cap in brainstorm mode)
+        if not no_buffer_limit and len(audio_buffer) > max_buffer_size:
+            audio_buffer = audio_buffer[-max_buffer_size:]
     
     # If buffer is very large, send what we have (prevents unbounded growth)
     # Skip chunk trigger when no_buffer_limit is active — only send on silence or explicit stop
@@ -958,7 +958,6 @@ def main():
                             elif data.get("command") == "set_no_buffer_limit":
                                 was_on = no_buffer_limit
                                 no_buffer_limit = bool(data.get("value", False))
-                                _nbl_sent_samples = 0  # Reset tracking for new session
                                 print_json({"status": "info", "message": f"No-buffer-limit mode: {'ON' if no_buffer_limit else 'OFF'}"})
                                 print_json({"type": "no_buffer_limit_updated", "enabled": no_buffer_limit})
                                 # Flush remaining unsent audio when turning OFF (brainstorm stop)

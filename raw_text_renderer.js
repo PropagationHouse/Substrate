@@ -9,6 +9,9 @@ class RawTextRenderer {
         this.isReplacing = false;
         this.lastAudioUrl = null;
         
+        // Tool step expand/collapse preference: persisted across sessions
+        this._toolStepsExpanded = localStorage.getItem('substrate_tool_steps_expanded') === 'true';
+        
         // Smart auto-scroll: enabled by default, disabled when user scrolls up
         this._autoScrollEnabled = true;
         this._scrollListenerAttached = false;
@@ -669,10 +672,18 @@ class RawTextRenderer {
         `;
         step.appendChild(outputDiv);
         
-        // Click to expand/collapse output
+        // Click to expand/collapse ALL step outputs globally and save preference
         headerRow.addEventListener('click', () => {
-            if (!outputDiv.textContent) return;
-            outputDiv.style.display = outputDiv.style.display === 'none' ? 'block' : 'none';
+            // Toggle preference
+            this._toolStepsExpanded = !this._toolStepsExpanded;
+            localStorage.setItem('substrate_tool_steps_expanded', String(this._toolStepsExpanded));
+            const newDisplay = this._toolStepsExpanded ? 'block' : 'none';
+            // Apply to ALL step outputs across the entire document
+            const allOutputs = document.querySelectorAll('.step-output');
+            console.log(`[ToolSteps] Toggle ${this._toolStepsExpanded ? 'OPEN' : 'CLOSED'} — found ${allOutputs.length} step outputs`);
+            allOutputs.forEach(o => {
+                o.style.display = newDisplay;
+            });
         });
         
         body.appendChild(step);
@@ -772,7 +783,9 @@ class RawTextRenderer {
                 } else {
                     // Generic output for non-exec tools
                     outputDiv.textContent = outputText;
-                    if (outputDiv.style.display === 'none' || !outputDiv.style.display) {
+                    if (this._toolStepsExpanded) {
+                        outputDiv.style.display = 'block';
+                    } else if (outputDiv.style.display === 'none' || !outputDiv.style.display) {
                         // Keep collapsed for non-exec, add expand hint
                         const headerRow = lastStep.querySelector('.step-header');
                         if (headerRow && !headerRow.querySelector('.expand-hint')) {
@@ -896,7 +909,8 @@ class RawTextRenderer {
                     if (toolName === 'exec') {
                         // Terminal-style panel for exec commands
                         const cmdText = message.code_preview;
-                        outputDiv.style.cssText = 'display:block;margin:2px 0 4px 26px;padding:0;background:rgba(0,0,0,0.4);border-radius:6px;font-size:11px;line-height:1.5;color:rgba(255,255,255,0.7);max-height:300px;overflow-y:auto;overflow-x:auto;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.15) transparent;border:1px solid rgba(255,255,255,0.08);font-family:Consolas,Monaco,"Courier New",monospace;';
+                        const execDisplay = this._toolStepsExpanded ? 'block' : 'none';
+                        outputDiv.style.cssText = `display:${execDisplay};margin:2px 0 4px 26px;padding:0;background:rgba(0,0,0,0.4);border-radius:6px;font-size:11px;line-height:1.5;color:rgba(255,255,255,0.7);max-height:300px;overflow-y:auto;overflow-x:auto;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.15) transparent;border:1px solid rgba(255,255,255,0.08);font-family:Consolas,Monaco,"Courier New",monospace;`;
                         // Terminal header bar
                         const termHeader = document.createElement('div');
                         termHeader.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:4px 10px;background:rgba(255,255,255,0.05);border-bottom:1px solid rgba(255,255,255,0.06);border-radius:6px 6px 0 0;';
@@ -924,7 +938,8 @@ class RawTextRenderer {
                         const meta = message.code_preview_meta;
                         const codeText = message.code_preview;
                         const lines = codeText.split('\n');
-                        outputDiv.style.cssText = 'display:block;margin:2px 0 4px 26px;padding:0;background:rgba(0,0,0,0.35);border-radius:6px;font-size:11px;line-height:1.5;color:rgba(255,255,255,0.7);max-height:350px;overflow-y:auto;overflow-x:auto;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.15) transparent;border:1px solid rgba(80,200,120,0.15);font-family:Consolas,Monaco,"Courier New",monospace;';
+                        const writeDisplay = this._toolStepsExpanded ? 'block' : 'none';
+                        outputDiv.style.cssText = `display:${writeDisplay};margin:2px 0 4px 26px;padding:0;background:rgba(0,0,0,0.35);border-radius:6px;font-size:11px;line-height:1.5;color:rgba(255,255,255,0.7);max-height:350px;overflow-y:auto;overflow-x:auto;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.15) transparent;border:1px solid rgba(80,200,120,0.15);font-family:Consolas,Monaco,"Courier New",monospace;`;
                         // Editor header bar
                         const editorHeader = document.createElement('div');
                         editorHeader.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:4px 10px;background:rgba(80,200,120,0.08);border-bottom:1px solid rgba(80,200,120,0.1);border-radius:6px 6px 0 0;';
@@ -977,7 +992,8 @@ class RawTextRenderer {
                         try { diffData = JSON.parse(message.code_preview); } catch(e) { diffData = {old:'',new:''}; }
                         const oldLines = (diffData.old || '').split('\n');
                         const newLines = (diffData.new || '').split('\n');
-                        outputDiv.style.cssText = 'display:block;margin:2px 0 4px 26px;padding:0;background:rgba(0,0,0,0.35);border-radius:6px;font-size:11px;line-height:1.5;color:rgba(255,255,255,0.7);max-height:350px;overflow-y:auto;overflow-x:auto;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.15) transparent;border:1px solid rgba(100,180,255,0.15);font-family:Consolas,Monaco,"Courier New",monospace;';
+                        const diffDisplay = this._toolStepsExpanded ? 'block' : 'none';
+                        outputDiv.style.cssText = `display:${diffDisplay};margin:2px 0 4px 26px;padding:0;background:rgba(0,0,0,0.35);border-radius:6px;font-size:11px;line-height:1.5;color:rgba(255,255,255,0.7);max-height:350px;overflow-y:auto;overflow-x:auto;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.15) transparent;border:1px solid rgba(100,180,255,0.15);font-family:Consolas,Monaco,"Courier New",monospace;`;
                         // Diff header bar
                         const diffHeader = document.createElement('div');
                         diffHeader.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:4px 10px;background:rgba(100,180,255,0.08);border-bottom:1px solid rgba(100,180,255,0.1);border-radius:6px 6px 0 0;';
