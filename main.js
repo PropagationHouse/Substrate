@@ -2017,7 +2017,7 @@ ipcMain.on('record-stop', (event) => {
     }
 
     // Wait briefly for the flush transcription to arrive, then collect everything
-    const maxWait = 2500;  // ms
+    const maxWait = 4000;  // ms — enough for Google Cloud STT to process final chunk
     const checkInterval = 200;
     let waited = 0;
 

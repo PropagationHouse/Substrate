@@ -2052,6 +2052,20 @@ class AnimatedAvatar {
     // Enable pointer events for dragging
     this.container.style.pointerEvents = 'auto';
     
+    // Set avatar to bottom-left default position
+    const setDefaultPosition = () => {
+      self.container.style.position = 'fixed';
+      self.container.style.left = '20px';
+      self.container.style.bottom = '80px';
+      self.container.style.top = 'auto';
+      self.container.style.right = 'auto';
+      self.container.style.transform = 'none';
+      // Clear any stale saved position so default sticks
+      localStorage.removeItem('avatarX');
+      localStorage.removeItem('avatarY');
+      console.log('Set avatar to bottom-left default position');
+    };
+
     // Store avatar position in localStorage if available
     const loadSavedPosition = () => {
       if (window.localStorage) {
@@ -2059,6 +2073,19 @@ class AnimatedAvatar {
         const savedY = localStorage.getItem('avatarY');
         
         if (savedX !== null && savedY !== null) {
+          // Validate saved position is within current viewport
+          const x = parseInt(savedX, 10);
+          const y = parseInt(savedY, 10);
+          const vw = window.innerWidth;
+          const vh = window.innerHeight;
+          const margin = 50; // avatar must be at least this many px inside viewport
+          
+          if (isNaN(x) || isNaN(y) || x < -margin || y < -margin || x > vw - margin || y > vh - margin) {
+            console.log(`Saved position out of bounds (${savedX}, ${savedY}) for viewport ${vw}x${vh} — resetting to default`);
+            setDefaultPosition();
+            return;
+          }
+          
           self.container.style.position = 'fixed';
           self.container.style.left = savedX;
           self.container.style.top = savedY;
@@ -2067,14 +2094,7 @@ class AnimatedAvatar {
           self.container.style.transform = 'none';
           console.log(`Loaded saved position: X=${savedX}, Y=${savedY}`);
         } else {
-          // Set initial position above and behind the chat bar
-          self.container.style.position = 'fixed';
-          self.container.style.bottom = '80px';  // Position above chat input
-          self.container.style.left = '50%';     // Center horizontally
-          self.container.style.transform = 'translateX(-50%)'; // Center adjustment
-          self.container.style.right = 'auto';
-          self.container.style.top = 'auto';
-          console.log('Set initial position above chat bar');
+          setDefaultPosition();
         }
       }
     };
