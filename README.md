@@ -12,7 +12,7 @@
 
 ---
 
-Substrate is a fully autonomous desktop agent that gives an LLM complete control over your computer — shell commands, file operations, browser automation, mouse/keyboard, screen capture, voice I/O, memory, scheduling, and more. It runs locally with Ollama or connects to cloud providers (OpenAI, Anthropic, Google, Perplexity), and ships with both an Electron desktop app and a PWA-capable WebUI.
+Substrate is a fully autonomous desktop agent that gives an LLM complete control over your computer — shell commands, file operations, browser automation, mouse/keyboard, screen capture, voice I/O, MIDI/hardware device control, memory, scheduling, and more. It runs locally with Ollama or connects to cloud providers (OpenAI, Anthropic, Google, Perplexity), and ships with both an Electron desktop app and a PWA-capable WebUI.
 
 Think of it as an always-on AI co-pilot that lives on your machine, learns from your interactions, runs tasks on a schedule, and can operate autonomously in the background — all while keeping your data local.
 
@@ -91,6 +91,7 @@ Think of it as an always-on AI co-pilot that lives on your machine, learns from 
 - **Obsidian integration** — Vault operations, daily notes, search, backlinks, tags
 - **RSS intelligence** — Automated news/feed monitoring and briefing generation
 - **Intent classification** — Smart routing of user messages to appropriate handlers
+- **MIDI & hardware control** — Control connected MIDI instruments (synthesizers, drum machines) through Python scripts the agent writes and executes — an emergent capability, not a hardcoded tool
 
 ---
 
@@ -351,7 +352,7 @@ Skills are reusable workflows stored as markdown files in `skills/`.
 2. **Promoted** — After user confirmation, the skill is moved to `skills/` as a finalized `.md` file
 3. **Discovered** — The agent can search and execute existing skills via `find_skill`
 
-Example skills: Reddit posting, RSS intelligence checks, YouTube transcript scraping, Obsidian workflows, virtual desktop management, and more.
+Example skills: Reddit posting, RSS intelligence checks, YouTube transcript scraping, Obsidian workflows, virtual desktop management, MIDI instrument performance, and more.
 
 ---
 
