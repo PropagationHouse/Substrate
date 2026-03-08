@@ -332,6 +332,15 @@
                     <p class="text-gray-400 text-base leading-relaxed">Access your agent from any device on your ZeroTier network &mdash; phone, tablet, or another PC. The built-in WebUI and mobile PWA connect securely over your private overlay network without exposing anything to the public internet. Chat, use voice, and control your desktop remotely.</p>
                 </div>
 
+                <!-- Card: MIDI & Hardware -->
+                <div class="bg-white/[0.025] border border-white/[0.06] rounded-3xl p-8 card-hover">
+                    <div class="w-14 h-14 rounded-2xl bg-violet-500/10 flex items-center justify-center mb-6">
+                        <svg class="w-7 h-7 text-violet-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+                    </div>
+                    <h3 class="text-white font-bold text-xl mb-3">MIDI &amp; Hardware Control</h3>
+                    <p class="text-gray-400 text-base leading-relaxed">Control connected MIDI instruments &mdash; synthesizers, drum machines, hardware &mdash; through Python scripts the agent writes and runs autonomously. Not a hardcoded feature; an emergent property of shell access, scripting, and the skill system.</p>
+                </div>
+
             </div>
 
             <!-- Autonomy detail panel -->
@@ -1543,7 +1552,7 @@
                     </div>
                 </div>
 
-                <p class="text-gray-400 text-base leading-relaxed mb-8">When the agent encounters a complex multi-step workflow, it can autonomously write scripts, save them as reusable skills, and invoke them in future tasks. Your toolset grows organically from real usage &mdash; no manual configuration needed.</p>
+                <p class="text-gray-400 text-base leading-relaxed mb-8">When the agent encounters a complex multi-step workflow, it can autonomously write scripts, save them as reusable skills, and invoke them in future tasks. Your toolset grows organically from real usage &mdash; no manual configuration needed. A real-world example: the agent taught itself to perform generative music on a connected MIDI synthesizer, composing and playing jazz, ambient, and chill progressions in real time &mdash; a capability that was never explicitly programmed.</p>
 
                 <!-- Flow: 3 steps -->
                 <div class="grid md:grid-cols-3 gap-5 mb-8">
