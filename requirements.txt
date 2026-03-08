@@ -11,6 +11,7 @@ pillow>=9.1.0
 
 # Desktop automation
 pyautogui>=0.9.53
+pywinauto>=0.6.8
 pyperclip>=1.8.2
 pywin32>=303
 pynput>=1.7.6
