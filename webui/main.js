@@ -22,6 +22,192 @@
   try { window.proxyBase = proxyBase; } catch(_) {}
   hostInfo.textContent = `Proxy: ${proxyBase}`;
 
+  // ===================== Authentication =====================
+  let _authToken = sessionStorage.getItem('substrate_token') || '';
+  // Expose getter for other scripts
+  try { window.getAuthToken = () => _authToken; } catch(_) {}
+
+  function _setAuthToken(token) {
+    _authToken = token || '';
+    try { sessionStorage.setItem('substrate_token', _authToken); } catch(_) {}
+  }
+
+  // Wrapper: inject Authorization header into every fetch call
+  function authFetch(url, opts) {
+    opts = opts || {};
+    opts.headers = opts.headers || {};
+    if (_authToken) opts.headers['Authorization'] = 'Bearer ' + _authToken;
+    return fetch(url, opts);
+  }
+
+  // Build a WebSocket URL with token as query param
+  function authWsUrl(path) {
+    const p = new URL(proxyBase);
+    const proto = p.protocol === 'https:' ? 'wss:' : 'ws:';
+    let wsUrl = `${proto}//${p.host}${path}`;
+    if (_authToken) wsUrl += (wsUrl.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(_authToken);
+    return wsUrl;
+  }
+
+  // Auth UI elements
+  const authOverlay = document.getElementById('authOverlay');
+  const authLoginCard = document.getElementById('authLogin');
+  const authSetupCard = document.getElementById('authSetup');
+
+  function _showAuthOverlay(mode) {
+    if (!authOverlay) return;
+    authOverlay.classList.remove('hidden');
+    if (mode === 'setup') {
+      if (authLoginCard) authLoginCard.style.display = 'none';
+      if (authSetupCard) authSetupCard.style.display = 'block';
+    } else {
+      if (authSetupCard) authSetupCard.style.display = 'none';
+      if (authLoginCard) authLoginCard.style.display = 'block';
+    }
+  }
+  function _hideAuthOverlay() {
+    if (authOverlay) authOverlay.classList.add('hidden');
+  }
+
+  // Check auth status on page load — determines whether to show login, setup, or proceed
+  let _authReady = false;
+  async function _checkAuth() {
+    try {
+      // If OTP is in URL, try auto-login first
+      const otpParam = url.searchParams.get('otp');
+      if (otpParam) {
+        try {
+          const otpRes = await fetch(`${proxyBase}/api/auth/login-otp`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ otp: otpParam })
+          });
+          if (otpRes.ok) {
+            const otpData = await otpRes.json();
+            if (otpData.token) {
+              _setAuthToken(otpData.token);
+              // Clean OTP from URL
+              try { const u = new URL(window.location.href); u.searchParams.delete('otp'); window.history.replaceState({}, '', u.toString()); } catch(_) {}
+              _authReady = true;
+              _hideAuthOverlay();
+              return;
+            }
+          }
+        } catch(_) {}
+      }
+      // Check if Electron preload can provide a token
+      if (!_authToken) {
+        try {
+          const apiObj = window.api || window.electronAPI;
+          if (apiObj && typeof apiObj.getAuthToken === 'function') {
+            const et = await apiObj.getAuthToken();
+            if (et) _setAuthToken(et);
+          }
+        } catch(_) {}
+      }
+      // Check current session validity
+      const statusRes = await fetch(`${proxyBase}/api/auth/status`, {
+        headers: _authToken ? { 'Authorization': 'Bearer ' + _authToken } : {}
+      });
+      if (statusRes.ok) {
+        const statusData = await statusRes.json();
+        if (statusData.authenticated) {
+          _authReady = true;
+          _hideAuthOverlay();
+          return;
+        }
+        if (statusData.needs_setup) {
+          _showAuthOverlay('setup');
+          return;
+        }
+      }
+      // Need login
+      _showAuthOverlay('login');
+    } catch(e) {
+      // Server not reachable yet — retry after delay
+      console.warn('[Auth] status check failed, retrying...', e.message);
+      setTimeout(_checkAuth, 2000);
+    }
+  }
+
+  // Wire up login form
+  (function wireAuthForms() {
+    const loginBtn = document.getElementById('authLoginBtn');
+    const loginUser = document.getElementById('authLoginUser');
+    const loginPass = document.getElementById('authLoginPass');
+    const loginErr = document.getElementById('authLoginError');
+    const setupBtn = document.getElementById('authSetupBtn');
+    const setupUser = document.getElementById('authSetupUser');
+    const setupPass = document.getElementById('authSetupPass');
+    const setupPass2 = document.getElementById('authSetupPass2');
+    const setupErr = document.getElementById('authSetupError');
+
+    async function doLogin() {
+      if (!loginUser || !loginPass) return;
+      const u = loginUser.value.trim();
+      const p = loginPass.value;
+      if (!u || !p) { if (loginErr) loginErr.textContent = 'Enter username and password'; return; }
+      try {
+        if (loginBtn) loginBtn.disabled = true;
+        const res = await fetch(`${proxyBase}/api/auth/login`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: u, password: p })
+        });
+        const data = await res.json();
+        if (data.token) {
+          _setAuthToken(data.token);
+          _authReady = true;
+          _hideAuthOverlay();
+          if (loginErr) loginErr.textContent = '';
+        } else {
+          if (loginErr) loginErr.textContent = data.message || 'Login failed';
+        }
+      } catch(e) {
+        if (loginErr) loginErr.textContent = 'Connection error';
+      } finally {
+        if (loginBtn) loginBtn.disabled = false;
+      }
+    }
+
+    async function doSetup() {
+      if (!setupUser || !setupPass || !setupPass2) return;
+      const u = setupUser.value.trim();
+      const p = setupPass.value;
+      const p2 = setupPass2.value;
+      if (!u) { if (setupErr) setupErr.textContent = 'Enter a username'; return; }
+      if (p.length < 4) { if (setupErr) setupErr.textContent = 'Password must be at least 4 characters'; return; }
+      if (p !== p2) { if (setupErr) setupErr.textContent = 'Passwords do not match'; return; }
+      try {
+        if (setupBtn) setupBtn.disabled = true;
+        const res = await fetch(`${proxyBase}/api/auth/setup`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: u, password: p })
+        });
+        const data = await res.json();
+        if (data.token) {
+          _setAuthToken(data.token);
+          _authReady = true;
+          _hideAuthOverlay();
+          if (setupErr) setupErr.textContent = '';
+        } else {
+          if (setupErr) setupErr.textContent = data.message || 'Setup failed';
+        }
+      } catch(e) {
+        if (setupErr) setupErr.textContent = 'Connection error';
+      } finally {
+        if (setupBtn) setupBtn.disabled = false;
+      }
+    }
+
+    if (loginBtn) loginBtn.addEventListener('click', doLogin);
+    if (loginPass) loginPass.addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
+    if (loginUser) loginUser.addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
+    if (setupBtn) setupBtn.addEventListener('click', doSetup);
+    if (setupPass2) setupPass2.addEventListener('keydown', (e) => { if (e.key === 'Enter') doSetup(); });
+  })();
+
+  // Kick off auth check
+  _checkAuth();
+
   // Ensure a reusable hidden audio element for Kokoro playback
   function ensureAudio(){
     let audio = document.getElementById('kokoro-audio');
@@ -48,9 +234,7 @@
 
   function connectTtsStream() {
     try {
-      const p = new URL(proxyBase);
-      const proto = p.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${proto}//${p.host}/api/tts/stream`;
+      const wsUrl = authWsUrl('/api/tts/stream');
       ttsWs = new WebSocket(wsUrl);
       ttsWs.binaryType = 'arraybuffer';
 
@@ -542,7 +726,7 @@
     localStorage.setItem = function(k, v){
       _origSetItem(k, v);
       if (k === 'avatarConfig'){
-        fetch(`${proxyBase}/ui/face-config`, { method:'POST', headers:{'Content-Type':'application/json'}, body: v }).catch(()=>{});
+        authFetch(`${proxyBase}/ui/face-config`, { method:'POST', headers:{'Content-Type':'application/json'}, body: v }).catch(()=>{});
         // Re-apply immediately
         try { const cfg = JSON.parse(v); if (cfg) applyFaceConfig(cfg); } catch(_) {}
       }
@@ -551,7 +735,7 @@
 
   async function applyFaceConfigFromServer(){
     try {
-      const res = await fetch(`${proxyBase}/ui/face-config`);
+      const res = await authFetch(`${proxyBase}/ui/face-config`);
       if (!res.ok) return;
       const cfg = await res.json();
       if (!cfg || !avatar || !avatar.avatarEl) return;
@@ -695,7 +879,7 @@
     let lastBody = '', lastFace = '', lastExpr = '';
     setInterval(async () => {
       try {
-        const res = await fetch(`${proxyBase}/api/ui/color`);
+        const res = await authFetch(`${proxyBase}/api/ui/color`);
         if (!res.ok) return;
         const c = await res.json();
         // Color sync
@@ -1437,7 +1621,7 @@
   let lastIndex = 0;
   async function poll(){
     try {
-      const res = await fetch(`${proxyBase}/api/messages?since=${lastIndex}`);
+      const res = await authFetch(`${proxyBase}/api/messages?since=${lastIndex}`);
       if (!res.ok) throw new Error('poll failed');
       statusEl.textContent = 'Connected';
       const data = await res.json();
@@ -1631,7 +1815,7 @@
       body.mime = pendingImage.mime;
     }
     console.log('[SEND] POST to', `${proxyBase}/api/input`, 'body:', JSON.stringify(body).slice(0,200));
-    fetch(`${proxyBase}/api/input`, {
+    authFetch(`${proxyBase}/api/input`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
@@ -1729,9 +1913,7 @@
       let lastTranscript = '';
 
       function getWsUrl() {
-        const p = new URL(proxyBase);
-        const proto = p.protocol === 'https:' ? 'wss:' : 'ws:';
-        return `${proto}//${p.host}/api/stt/stream`;
+        return authWsUrl('/api/stt/stream');
       }
 
       async function startStreaming() {
@@ -1896,7 +2078,7 @@
 
     async function loadCameraConfig(){
       try {
-        const res = await fetch(`${proxyBase}/api/camera/config`);
+        const res = await authFetch(`${proxyBase}/api/camera/config`);
         if (res.ok) {
           const cam = await res.json();
           if (cam) {
@@ -1928,7 +2110,7 @@
       const dataUrl = captureFrame();
       if (!dataUrl) return;
       const b64 = dataUrl.split(',')[1];
-      fetch(`${proxyBase}/api/camera/snapshot`, {
+      authFetch(`${proxyBase}/api/camera/snapshot`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ image_base64: b64, mime: 'image/jpeg' })
@@ -1989,7 +2171,7 @@
       heroPanel.classList.remove('camera-on');
       visionBtn.classList.remove('active');
       // Reset first-look flag so next toggle gets "opening eyes" prompt
-      fetch(`${proxyBase}/api/camera/reset`, { method: 'POST' }).catch(() => {});
+      authFetch(`${proxyBase}/api/camera/reset`, { method: 'POST' }).catch(() => {});
       console.log('[Vision] camera stopped');
     }
 
@@ -2234,7 +2416,7 @@
     // Load config from server
     async function loadFromServer(){
       try {
-        const res = await fetch(proxyBase + '/ui/face-config', { cache: 'no-store' });
+        const res = await authFetch(proxyBase + '/ui/face-config', { cache: 'no-store' });
         if (!res.ok) return;
         const data = await res.json();
         if (!data || !Object.keys(data).length) return;
@@ -2292,7 +2474,7 @@
         body: { color: cfg.body.color, width: '120px', height: '120px' },
       };
       try {
-        await fetch(proxyBase + '/ui/face-config', {
+        await authFetch(proxyBase + '/ui/face-config', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)

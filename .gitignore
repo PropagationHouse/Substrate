@@ -109,6 +109,10 @@ reddit_poster_pyautogui.py
 tiny_pirate.jpg
 cleanup_unused_files.ps1
 
+# Personal macros / scripts
+macros/
+kill_piano.py
+
 # OS
 Thumbs.db
 .DS_Store

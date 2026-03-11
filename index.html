@@ -9,8 +9,11 @@
     <link rel="stylesheet" href="static/css/avatar-editor.css">
     <link rel="stylesheet" href="radial_config.css">
     <link rel="stylesheet" href="radial_panel_fix.css">
-    <link rel="stylesheet" href="font_fix.css">
+    <link rel="stylesheet" href="static/css/font_fix.css">
+    <link rel="stylesheet" href="static/css/intelligence_feed.css">
     <script src="auto_save_config.js"></script>
+    <script src="static/js/intelligence_feed.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
       // On load, export avatarConfig from localStorage to proxy so WebUI can sync face layout
       (function(){
@@ -18,7 +21,7 @@
           const postFace = () => {
             const cfg = localStorage.getItem('avatarConfig');
             if (!cfg) return;
-            fetch('http://localhost:8765/ui/face-config', {
+            fetch((window.location.origin || 'http://localhost:8765') + '/ui/face-config', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: cfg
@@ -190,6 +193,9 @@
                     general_note: document.getElementById('general-note-prompt-input')?.value || "",
                     autonomous: document.getElementById('autonomous-note-prompt-input')?.value || ""
                 };
+                
+                // Auto-continue setting
+                config.auto_continue = document.getElementById('auto-continue')?.checked || false;
                 
                 // Autonomy settings
                 config.autonomy = {
@@ -3866,6 +3872,15 @@ REQUIREMENTS:
     </script>
     <script src="camera_button.js"></script>
     <!-- All HTML rendering scripts removed -->
+    <!-- Article Modal -->
+    <div id="article-modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.8);">
+        <div style="background-color: #fefefe; margin: 10% auto; padding: 20px; border: 1px solid #888; width: 80%; max-width: 700px; box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2), 0 6px 20px 0 rgba(0,0,0,0.19); animation-name: animatetop; animation-duration: 0.4s;">
+            <span class="close-button" style="color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer;">&times;</span>
+            <h2 id="article-modal-title"></h2>
+            <p id="article-modal-content"></p>
+        </div>
+    </div>
+
 </body>
     <!-- Config Panel (Added from restore point) -->
     <div id="config-panel">
@@ -3978,6 +3993,14 @@ REQUIREMENTS:
 - Thorough coverage of all points"></textarea>
                 <div class="config-help">This prompt guides how general notes are structured and formatted.</div>
                 <button class="save-button-small" onclick="window.saveGeneralNotePrompt()">Save</button>
+            </div>
+
+            <div class="setting-group" style="display:none;">
+                <h4>Auto-Continue</h4>
+                <div class="config-row">
+                    <label for="auto-continue">Enable Auto-Continue:</label>
+                    <input type="checkbox" id="auto-continue">
+                </div>
             </div>
 
             <div class="setting-group">
@@ -4107,5 +4130,33 @@ REQUIREMENTS:
     </div>
     
     <div id="config-overlay"></div>
+    <div id="intelligence-feed" class="intelligence-feed-container">
+        <h2>Intelligence Feed</h2>
+        <ul id="feed-list">
+            <!-- Feed items will be loaded here by JavaScript -->
+            <li>Loading feed...</li>
+        </ul>
+    
+    <div id="market-pulse-section" style="margin-top: 20px; padding: 20px; border: 1px solid #ccc;">
+        <h2>Market Pulse Watchlist</h2>
+        <canvas id="market-pulse-graph"></canvas>
+    </div>
+
+    <div id="featured-articles" style="margin-top: 20px; padding: 20px; border: 1px solid #ccc;">
+        <h2>Featured Articles</h2>
+        <!-- Articles will be dynamically loaded here by market_pulse.js -->
+    </div>
+
+    <script src="static/js/market_pulse.js"></script>
+</div>
+    <!-- Article Modal -->
+    <div id="article-modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.8);">
+        <div style="background-color: #fefefe; margin: 10% auto; padding: 20px; border: 1px solid #888; width: 80%; max-width: 700px; box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2), 0 6px 20px 0 rgba(0,0,0,0.19); animation-name: animatetop; animation-duration: 0.4s;">
+            <span class="close-button" style="color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer;">&times;</span>
+            <h2 id="article-modal-title"></h2>
+            <p id="article-modal-content"></p>
+        </div>
+    </div>
+
 </body>
 </html>

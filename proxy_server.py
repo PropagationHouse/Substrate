@@ -26,7 +26,7 @@ from datetime import datetime
 from pathlib import Path
 from io import BytesIO
 from PIL import Image
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, make_response
 from flask_cors import CORS
 from flask_sock import Sock
 import webbrowser
@@ -89,6 +89,12 @@ from src.infra.prompt_builder import build_system_prompt, SILENT_TOKEN, CIRCUITS
 from src.memory.memory_manager import MemoryManager
 from src.memory.code_memory import CodeMemory
 from src.memory.unified_memory import UnifiedMemoryManager, MemoryType, get_unified_memory
+from src.auth import (
+    hash_password, verify_password, create_session, validate_session,
+    destroy_session, cleanup_expired_sessions,
+    create_otp, validate_otp, cleanup_expired_otps,
+    has_credentials, set_credentials, authenticate, get_auth_config,
+)
 
 # Import tools module for full computer access
 try:
@@ -106,8 +112,243 @@ sonar_handler = None
 
 # Initialize Flask early so routes can register safely
 app = Flask(__name__)
-CORS(app)
+
+# Build CORS origin allowlist — restrict to known local/LAN origins
+_cors_origins = [
+    "http://localhost:8765",
+    "https://localhost:8766",
+    "http://127.0.0.1:8765",
+    "https://127.0.0.1:8766",
+    "file://",  # Electron
+]
+# Add machine's LAN IP dynamically
+try:
+    import socket as _cors_sock
+    _s = _cors_sock.socket(_cors_sock.AF_INET, _cors_sock.SOCK_DGRAM)
+    _s.connect(('8.8.8.8', 80))
+    _local_ip = _s.getsockname()[0]
+    _s.close()
+    _cors_origins.append(f"http://{_local_ip}:8765")
+    _cors_origins.append(f"https://{_local_ip}:8766")
+except Exception:
+    pass
+CORS(app, origins=_cors_origins, supports_credentials=True)
 sock = Sock(app)
+
+# ---------------------------------------------------------------------------
+# Authentication: before_request hook + auth endpoints
+# ---------------------------------------------------------------------------
+# Paths that never require auth (static assets, login, setup, health)
+_AUTH_EXEMPT_PREFIXES = (
+    '/ui', '/static/', '/sw.js', '/manifest.json', '/certs/',
+    '/audio/', '/uploads/', '/api/auth/login', '/api/auth/setup',
+    '/api/auth/login-otp', '/api/auth/electron-login', '/api/auth/status', '/api/test',
+    '/api/substrate', '/api/circuits', '/api/prime',
+    '/api/commands',
+)
+
+def _get_agent_config():
+    """Safely get agent config dict (agent may not be initialised yet)."""
+    try:
+        if 'agent' in globals() and agent and hasattr(agent, 'config'):
+            return agent.config
+    except Exception:
+        pass
+    return None
+
+
+@app.before_request
+def enforce_auth():
+    """Require a valid session token on all /api/* routes except auth endpoints."""
+    path = request.path
+    # Skip auth for exempt paths
+    for prefix in _AUTH_EXEMPT_PREFIXES:
+        if path == prefix or path.startswith(prefix):
+            return None
+    # Only enforce on /api/* routes
+    if not path.startswith('/api/'):
+        return None
+    # If no credentials configured yet (first-run), allow all access so desktop app works
+    cfg = _get_agent_config()
+    if cfg and not has_credentials(cfg):
+        return None
+    # Extract bearer token from Authorization header
+    auth_header = request.headers.get('Authorization', '')
+    if auth_header.startswith('Bearer '):
+        token = auth_header[7:].strip()
+        if validate_session(token):
+            return None
+    return jsonify({"status": "error", "message": "Authentication required"}), 401
+
+
+@app.route('/api/auth/status', methods=['GET'])
+def api_auth_status():
+    """Check whether auth is configured and whether the caller is authenticated."""
+    cfg = _get_agent_config()
+    configured = bool(cfg and has_credentials(cfg))
+    auth_header = request.headers.get('Authorization', '')
+    authenticated = False
+    if auth_header.startswith('Bearer '):
+        authenticated = validate_session(auth_header[7:].strip())
+    auth = get_auth_config(cfg) if cfg else {}
+    return jsonify({
+        "configured": configured,
+        "authenticated": authenticated,
+        "needs_setup": not configured,
+        "username": auth.get("username", "") if configured else "",
+    })
+
+
+@app.route('/api/auth/setup', methods=['POST'])
+def api_auth_setup():
+    """First-run: set initial username and password. Only works when no credentials exist."""
+    cfg = _get_agent_config()
+    if cfg is None:
+        return jsonify({"status": "error", "message": "Server not ready"}), 503
+    if has_credentials(cfg):
+        return jsonify({"status": "error", "message": "Credentials already configured"}), 403
+    data = request.get_json(force=True, silent=True) or {}
+    username = (data.get('username') or '').strip()
+    password = data.get('password') or ''
+    if not username or len(password) < 4:
+        return jsonify({"status": "error", "message": "Username required; password must be at least 4 characters"}), 400
+    set_credentials(cfg, username, password)
+    try:
+        agent.save_config()
+    except Exception as e:
+        logger.error(f"Failed to save auth config: {e}")
+    token = create_session(username)
+    return jsonify({"status": "success", "token": token, "username": username})
+
+
+@app.route('/api/auth/login', methods=['POST'])
+def api_auth_login():
+    """Authenticate with username/password, returns a session token."""
+    cfg = _get_agent_config()
+    if cfg is None:
+        return jsonify({"status": "error", "message": "Server not ready"}), 503
+    if not has_credentials(cfg):
+        return jsonify({"status": "error", "message": "No credentials configured — use /api/auth/setup first"}), 400
+    data = request.get_json(force=True, silent=True) or {}
+    username = (data.get('username') or '').strip()
+    password = data.get('password') or ''
+    if authenticate(cfg, username, password):
+        token = create_session(username)
+        return jsonify({"status": "success", "token": token, "username": username})
+    return jsonify({"status": "error", "message": "Invalid username or password"}), 401
+
+
+@app.route('/api/auth/logout', methods=['POST'])
+def api_auth_logout():
+    """Invalidate the current session token."""
+    auth_header = request.headers.get('Authorization', '')
+    if auth_header.startswith('Bearer '):
+        destroy_session(auth_header[7:].strip())
+    return jsonify({"status": "success"})
+
+
+@app.route('/api/auth/change-password', methods=['POST'])
+def api_auth_change_password():
+    """Change password (requires valid session)."""
+    cfg = _get_agent_config()
+    if cfg is None:
+        return jsonify({"status": "error", "message": "Server not ready"}), 503
+    data = request.get_json(force=True, silent=True) or {}
+    old_password = data.get('old_password') or ''
+    new_password = data.get('new_password') or ''
+    if len(new_password) < 4:
+        return jsonify({"status": "error", "message": "Password must be at least 4 characters"}), 400
+    auth = get_auth_config(cfg)
+    username = auth.get('username', 'admin')
+    if has_credentials(cfg) and not authenticate(cfg, username, old_password):
+        return jsonify({"status": "error", "message": "Current password is incorrect"}), 403
+    set_credentials(cfg, username, new_password)
+    try:
+        agent.save_config()
+    except Exception as e:
+        logger.error(f"Failed to save updated password: {e}")
+    return jsonify({"status": "success", "message": "Password updated"})
+
+
+@app.route('/api/auth/otp', methods=['POST'])
+def api_auth_otp():
+    """Generate a one-time password for QR-code mobile login (requires valid session)."""
+    code = create_otp()
+    return jsonify({"status": "success", "otp": code, "ttl": 60})
+
+
+@app.route('/api/auth/qr', methods=['GET'])
+def api_auth_qr():
+    """Generate a QR code PNG containing the WebUI URL with a fresh OTP embedded.
+    The authenticated user can display this QR on their desktop for mobile scanning."""
+    import io as _io
+    try:
+        import qrcode
+    except ImportError:
+        return jsonify({"status": "error", "message": "qrcode package not installed"}), 500
+    code = create_otp()
+    # Build the WebUI URL using the request host (LAN IP or hostname)
+    scheme = 'https' if request.is_secure else 'http'
+    port = '8766' if request.is_secure else '8765'
+    host = request.host.split(':')[0]  # strip port from Host header
+    webui_url = f"{scheme}://{host}:{port}/ui/?otp={code}"
+    # Generate QR code PNG
+    qr = qrcode.QRCode(version=1, error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=8, border=2)
+    qr.add_data(webui_url)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white")
+    buf = _io.BytesIO()
+    img.save(buf, format='PNG')
+    buf.seek(0)
+    resp = make_response(buf.read())
+    resp.headers['Content-Type'] = 'image/png'
+    resp.headers['Cache-Control'] = 'no-store'
+    return resp
+
+
+@app.route('/api/auth/electron-login', methods=['POST'])
+def api_auth_electron_login():
+    """Auto-login for the Electron desktop app — only from localhost."""
+    remote = request.remote_addr or ''
+    if remote not in ('127.0.0.1', '::1', 'localhost'):
+        return jsonify({"status": "error", "message": "Forbidden"}), 403
+    cfg = _get_agent_config()
+    if cfg is None:
+        return jsonify({"status": "error", "message": "Server not ready"}), 503
+    auth = get_auth_config(cfg) if cfg else {}
+    username = auth.get('username', 'electron')
+    token = create_session(username)
+    return jsonify({"status": "success", "token": token})
+
+
+@app.route('/api/auth/login-otp', methods=['POST'])
+def api_auth_login_otp():
+    """Login with a one-time password (from QR code scan)."""
+    cfg = _get_agent_config()
+    if cfg is None:
+        return jsonify({"status": "error", "message": "Server not ready"}), 503
+    data = request.get_json(force=True, silent=True) or {}
+    code = (data.get('otp') or '').strip()
+    if validate_otp(code):
+        auth = get_auth_config(cfg)
+        username = auth.get('username', 'user')
+        token = create_session(username)
+        return jsonify({"status": "success", "token": token, "username": username})
+    return jsonify({"status": "error", "message": "Invalid or expired OTP"}), 401
+
+
+# Periodic cleanup of expired sessions/OTPs (every 10 minutes)
+def _auth_cleanup_loop():
+    while True:
+        time.sleep(600)
+        try:
+            cleanup_expired_sessions()
+            cleanup_expired_otps()
+        except Exception:
+            pass
+
+_auth_cleanup_thread = threading.Thread(target=_auth_cleanup_loop, daemon=True)
+_auth_cleanup_thread.start()
 
 # Allow motion sensors, camera, microphone, notifications for mobile WebUI
 @app.after_request
@@ -256,10 +497,26 @@ def _mask_remote_keys(config):
     if not isinstance(config, dict):
         return config
     masked = copy.deepcopy(config)
+    # Mask explicitly listed key paths
     for path in REMOTE_KEY_FIELDS.values():
         token = _get_nested(masked, path)
         if token:
             _set_nested(masked, path, _mask_value(token))
+    # Pattern-based catch-all: mask any key containing sensitive terms
+    _SENSITIVE_PATTERNS = ('api_key', 'secret', 'password', '_token')
+    def _mask_dict_recursive(d):
+        if not isinstance(d, dict):
+            return
+        for key in list(d.keys()):
+            key_lower = key.lower()
+            if any(p in key_lower for p in _SENSITIVE_PATTERNS):
+                if isinstance(d[key], str) and d[key]:
+                    d[key] = _mask_value(d[key])
+            elif isinstance(d[key], dict):
+                _mask_dict_recursive(d[key])
+    _mask_dict_recursive(masked)
+    # Strip auth credentials entirely (never send hashes to frontend)
+    masked.pop('auth', None)
     return masked
 
 
@@ -2056,6 +2313,12 @@ class ChatAgent:
         
         # Migrate legacy data to unified memory on first run
         self._migrate_legacy_memory()
+        
+        # Bootstrap foundational memory from ORIGIN.md (idempotent)
+        try:
+            self.unified_memory.bootstrap_foundational_memory()
+        except Exception as e:
+            logger.warning(f"Failed to bootstrap foundational memory: {e}")
         self.command_parser = CommandParser()
         self.command_executor = CommandExecutor()
         # Pass the config to the CommandExecutor
@@ -2392,6 +2655,7 @@ class ChatAgent:
             "system_prompt": DEFAULT_SYSTEM_PROMPT,
             "screenshot_prompt": DEFAULT_SCREENSHOT_PROMPT,
             "note_prompts": DEFAULT_NOTE_PROMPTS,
+            "auto_continue": False,
             "autonomy": {
                 "messages": {
                     "enabled": False,
@@ -5146,6 +5410,9 @@ class ChatAgent:
             _isolated_messages: Pre-built message list for isolated execution (subagents).
                                 When set, skips all context/history injection and uses these
                                 messages directly.
+        
+        Note: When auto_continue is enabled in config, max_tool_rounds is bypassed
+              and the agent runs until it decides it's finished (capped at 9999 rounds).
             
         Returns:
             Final response dict with tool execution history
@@ -5260,6 +5527,10 @@ class ChatAgent:
             messages = []
             
             # Build single unified system prompt — everything in one message
+            # chat_mode controls which prompt sections are included:
+            #   'code'    → file editing rules + CODING.md, skip desktop docs
+            #   'desktop' → desktop/mouse/vision docs, skip file editing
+            #   'general' → balanced subset
             system_prompt = build_system_prompt(
                 config=self.config,
                 tool_registry=registry,
@@ -5268,6 +5539,7 @@ class ChatAgent:
                 include_skills=True,
                 include_memory=True,
                 include_circuits=True,
+                chat_mode=chat_mode,
             )
             
             # Plan mode: collaborative brainstorming & planning
@@ -5380,6 +5652,15 @@ class ChatAgent:
             overflow_retries = 0  # Guard against infinite compaction loops
             auto_continue_count = 0  # Track auto-continues for logging
             _null_retries = 0  # Consecutive null-response retries
+        
+        # Auto-continue: when enabled, drop the loop limit so the agent runs
+        # until it decides it's finished (user can still interrupt at any time)
+        _auto_continue = self.config.get('auto_continue', False)
+        if isinstance(_auto_continue, str):
+            _auto_continue = _auto_continue.lower() not in ('false', '0', 'no', '')
+        if _auto_continue:
+            max_tool_rounds = 9999
+            logger.info(f"[TOOLS] Auto-continue enabled — loop limit bypassed (cap {max_tool_rounds})")
         
         while round_count < max_tool_rounds:
             # Check for user interrupt before each round
@@ -8702,7 +8983,9 @@ def api_notify():
 @app.route('/api/network/qr', methods=['GET'])
 def api_network_qr():
     """Generate a QR code PNG for the given URL."""
-    url = request.args.get('url', 'http://localhost:8765/ui')
+    # Default to the caller's host (not localhost) so QR works for remote clients
+    _default_qr_url = f"{request.scheme}://{request.host}/ui"
+    url = request.args.get('url', _default_qr_url)
     try:
         import io as _qr_io
         try:
@@ -8742,6 +9025,57 @@ def _generate_qr_svg_fallback(url):
     from flask import Response
     return Response(svg, mimetype='image/svg+xml')
 
+@app.route('/api/midi/ports', methods=['GET'])
+def api_midi_ports():
+    """List available MIDI input and output ports."""
+    try:
+        from src.tools.midi_tool import list_ports
+        return jsonify(list_ports())
+    except ImportError:
+        return jsonify({"status": "error", "error": "MIDI tool not available (mido/rtmidi not installed)"}), 500
+    except Exception as e:
+        return jsonify({"status": "error", "error": str(e)}), 500
+
+@app.route('/api/midi/test', methods=['POST'])
+def api_midi_test():
+    """Send a C major chord to a specified output port for testing."""
+    data = request.get_json(silent=True) or {}
+    port = data.get('port', '')
+    if not port:
+        return jsonify({"status": "error", "error": "port is required"}), 400
+    try:
+        from src.tools.midi_tool import send_chord
+        result = send_chord(port=port, notes=[60, 64, 67], velocity=90, channel=0, duration_ms=600)
+        return jsonify(result)
+    except ImportError:
+        return jsonify({"status": "error", "error": "MIDI tool not available"}), 500
+    except Exception as e:
+        return jsonify({"status": "error", "error": str(e)}), 500
+
+@app.route('/api/midi/sessions', methods=['GET'])
+def api_midi_sessions():
+    """List active MIDI playback sessions."""
+    try:
+        from src.tools.midi_tool import get_sessions
+        return jsonify(get_sessions())
+    except ImportError:
+        return jsonify({"status": "success", "sessions": [], "count": 0})
+    except Exception as e:
+        return jsonify({"status": "error", "error": str(e)}), 500
+
+@app.route('/api/midi/stop', methods=['POST'])
+def api_midi_stop():
+    """Stop MIDI playback sessions."""
+    data = request.get_json(silent=True) or {}
+    session_id = data.get('session_id')
+    try:
+        from src.tools.midi_tool import stop
+        return jsonify(stop(session_id=session_id))
+    except ImportError:
+        return jsonify({"status": "error", "error": "MIDI tool not available"}), 500
+    except Exception as e:
+        return jsonify({"status": "error", "error": str(e)}), 500
+
 @app.route('/api/network/info', methods=['GET'])
 def api_network_info():
     """Return local network info for WebUI connection display."""
@@ -8753,16 +9087,38 @@ def api_network_info():
         s.close()
     except Exception:
         local_ip = '127.0.0.1'
+    # Detect ZeroTier IP (zt* interfaces)
+    zerotier_ip = None
+    try:
+        import psutil
+        for iface, addrs in psutil.net_if_addrs().items():
+            if iface.lower().startswith('zt'):
+                for addr in addrs:
+                    if addr.family == _nsock.AF_INET and addr.address != '127.0.0.1':
+                        zerotier_ip = addr.address
+                        break
+                if zerotier_ip:
+                    break
+    except Exception:
+        pass
     _cert_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'certs')
     has_https = os.path.exists(os.path.join(_cert_dir, 'server.crt')) and os.path.exists(os.path.join(_cert_dir, 'server.key'))
+    # Pick the best IP for remote access: ZeroTier > LAN
+    best_ip = zerotier_ip or local_ip
+    # Build URLs — prefer HTTPS (required for mobile camera/notifications)
+    best_url = f'https://{best_ip}:8766/ui' if has_https else f'http://{best_ip}:8765/ui'
     return jsonify({
         'status': 'ok',
         'local_ip': local_ip,
+        'zerotier_ip': zerotier_ip,
         'http_port': 8765,
         'https_port': 8766,
         'https_enabled': has_https,
         'webui_http': f'http://{local_ip}:8765/ui',
         'webui_https': f'https://{local_ip}:8766/ui' if has_https else None,
+        'webui_zt_http': f'http://{zerotier_ip}:8765/ui' if zerotier_ip else None,
+        'webui_zt_https': f'https://{zerotier_ip}:8766/ui' if zerotier_ip and has_https else None,
+        'best_url': best_url,
     })
 
 # === Serve Thin WebUI ===
@@ -9186,6 +9542,17 @@ def tts_stream_end():
 def tts_stream(ws):
     """WebSocket for streaming TTS audio to WebUI. Client connects on page load,
     receives PCM int16 audio chunks in real-time as speech is synthesized."""
+    # Authenticate WebSocket: check token query param (if auth is configured)
+    cfg = _get_agent_config()
+    if cfg and has_credentials(cfg):
+        ws_token = request.args.get('token', '')
+        if not validate_session(ws_token):
+            try:
+                ws.send(json.dumps({"type": "error", "message": "Authentication required"}))
+                ws.close()
+            except Exception:
+                pass
+            return
     print("[TTS-WS] Client connected", file=sys.stderr, flush=True)
     with _tts_clients_lock:
         _tts_clients.add(ws)
@@ -9211,6 +9578,17 @@ def tts_stream(ws):
 def stt_stream(ws):
     """WebSocket streaming STT — browser streams 16kHz mono PCM int16 chunks,
     backend accumulates with VAD, transcribes via Chirp 2 on silence or stop."""
+    # Authenticate WebSocket: check token query param (if auth is configured)
+    cfg = _get_agent_config()
+    if cfg and has_credentials(cfg):
+        ws_token = request.args.get('token', '')
+        if not validate_session(ws_token):
+            try:
+                ws.send(json.dumps({"type": "error", "message": "Authentication required"}))
+                ws.close()
+            except Exception:
+                pass
+            return
     import numpy as np
     import struct
 
@@ -9572,19 +9950,15 @@ def api_models():
             route = REMOTE_KEY_ROUTE_ALLOWLIST.get(prov)
             if not route:
                 return False
-            field = route.get('field', '')
-            val = _cfg
-            if isinstance(val, dict) and '/' in field:
-                for p in field.split('/'):
-                    val = val.get(p, '') if isinstance(val, dict) else ''
-            elif isinstance(val, dict):
-                val = val.get(field, '')
-            else:
-                val = ''
-            if isinstance(val, str) and val.strip() and not val.strip().startswith('••'):
-                return True
+            # Environment variable is the source of truth (synced on startup)
             env_var = route.get('env', '')
-            return bool(env_var and os.environ.get(env_var, '').strip())
+            if env_var and os.environ.get(env_var, '').strip():
+                return True
+            # Fallback: check config (••-masked means key was set, real value is in env)
+            val = _get_nested(_cfg, route.get('field', ''))
+            if isinstance(val, str) and val.strip():
+                return True
+            return False
 
         # Append remote models with key_active status
         for model_name, meta in SUPPORTED_MODELS.items():
@@ -9616,19 +9990,16 @@ def api_discover_models():
         route = REMOTE_KEY_ROUTE_ALLOWLIST.get(provider)
         if not route:
             return None
-        field = route.get('field', '')
-        val = _cfg
-        if isinstance(val, dict) and '/' in field:
-            for p in field.split('/'):
-                val = val.get(p, '') if isinstance(val, dict) else ''
-        elif isinstance(val, dict):
-            val = val.get(field, '')
-        else:
-            val = ''
+        # Environment variable is the source of truth (synced on startup)
+        env_var = route.get('env', '')
+        env_val = os.environ.get(env_var, '').strip() if env_var else ''
+        if env_val:
+            return env_val
+        # Fallback: config value (skip ••-masked values — real key should be in env)
+        val = _get_nested(_cfg, route.get('field', ''))
         if isinstance(val, str) and val.strip() and not val.strip().startswith('••'):
             return val.strip()
-        env_var = route.get('env', '')
-        return os.environ.get(env_var, '').strip() or None
+        return None
 
     def _discover_anthropic():
         key = _resolve_key('anthropic')
@@ -11052,6 +11423,7 @@ def main():
         flask_thread.daemon = True
         flask_thread.start()
         print("Flask server started on http://0.0.0.0:8765")
+
 
         # Start HTTPS server on port 8766 for mobile (camera/notifications require secure context)
         # Uses werkzeug directly since Flask's app.run() can't be called twice on the same app

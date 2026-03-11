@@ -181,25 +181,71 @@ def _build_tooling_section(tool_registry=None) -> List[str]:
     return lines
 
 
-def _build_tool_style_section() -> List[str]:
-    """Build tool call style instructions."""
-    return [
+def _build_tool_style_section(chat_mode: str = 'general') -> List[str]:
+    """Build tool call style instructions, conditional on chat_mode.
+    
+    chat_mode: 'code' | 'desktop' | 'general' | 'ask' | 'plan'
+    - code: file editing rules + coding focus, skip desktop/vision docs
+    - desktop: desktop/mouse/vision/browser docs, skip file editing rules
+    - general/ask/plan: minimal — just core style + web research
+    """
+    lines = [
         "## Tool Call Style",
         "- Simplicity first — fewest tool calls possible. Direct action over research-then-action.",
         "- `exec` is your primary tool — use it for anything you can do from a terminal.",
         "- Read before editing. Verify after acting.",
         "",
-        "## File Editing Rules (saves tokens)",
-        "1. **grep first**: Before reading a file, use `grep` to find which files and line numbers are relevant.",
-        "2. **Line ranges**: When reading large files (>100 lines), ALWAYS use `start_line`/`end_line`.",
-        "3. **edit_file over write_file**: To modify existing files, use `edit_file` (surgical find-and-replace). Never rewrite entire files.",
-        "4. **Small edits**: Keep `old_string`/`new_string` as small as possible while staying unique.",
-        "5. **Discovery**: Use `exec` with `dir`, `find`, or `tree` commands to explore project structure.",
-        "",
+    ]
+
+    # File editing rules — always useful but especially for code mode
+    if chat_mode in ('code', 'general'):
+        lines.extend([
+            "## File Editing Rules (saves tokens)",
+            "1. **grep first**: Before reading a file, use `grep` to find which files and line numbers are relevant.",
+            "2. **Line ranges**: When reading large files (>100 lines), ALWAYS use `start_line`/`end_line`.",
+            "3. **edit_file over write_file**: To modify existing files, use `edit_file` (surgical find-and-replace). Never rewrite entire files.",
+            "4. **Small edits**: Keep `old_string`/`new_string` as small as possible while staying unique.",
+            "5. **Discovery**: Use `exec` with `dir`, `find`, or `tree` commands to explore project structure.",
+            "",
+        ])
+
+    # Code mode: truncation awareness
+    if chat_mode == 'code':
+        lines.extend([
+            "## Output Handling",
+            "- Bash output is automatically truncated to the last 200 lines / 50KB.",
+            "- If output is truncated, the full log is saved to `workspace/temp/exec_<id>.log`.",
+            "- Use `text_editor(action='read', path='workspace/temp/exec_<id>.log', start_line=..., end_line=...)` to read specific sections of the full output.",
+            "",
+        ])
+
+    # Web research — always useful
+    lines.extend([
         "## Web Research Rules",
         "1. **web_search first**: For any web research, use `web_search`. It returns a summarized answer with citations.",
         "2. **exec for fetching**: If you need raw page content, use `exec` with `curl` or similar.",
         "",
+    ])
+
+    # Desktop/vision/browser docs — only for desktop mode
+    if chat_mode == 'desktop':
+        lines.extend(_build_desktop_docs())
+
+    # Documents & Memory — always useful
+    lines.extend([
+        "## Documents & Memory",
+        "- `pdf(action='extract', path='...')` — read text from a PDF file.",
+        "- `memory(action='search', query='...')` — search past conversations by topic.",
+        "- `obsidian(action='create', title='...', content='...')` — create notes in Obsidian vault.",
+        "",
+    ])
+
+    return lines
+
+
+def _build_desktop_docs() -> List[str]:
+    """Build desktop automation documentation section (heavy, ~1500 tokens)."""
+    return [
         "## Desktop Automation (PRIMARY approach)",
         "For ALL desktop and browser UI automation, prefer `desktop` + `screen` + `mouse`. This works on ANY window — browsers, native apps, dialogs, everything — without requiring special setup.",
         "",
@@ -259,11 +305,6 @@ def _build_tool_style_section() -> List[str]:
         "- `mouse(action='click', x=..., y=...)` — click at pixel coordinates. Use AFTER a screenshot to click what you see.",
         "- `mouse(action='scroll', clicks=-3)` — scroll down (negative) or up (positive).",
         "- Vision workflow: `screen(screenshot)` → analyze image → `mouse(click, x, y)` → `screen(screenshot)` to verify.",
-        "",
-        "## Documents & Memory",
-        "- `pdf(action='extract', path='...')` — read text from a PDF file.",
-        "- `memory(action='search', query='...')` — search past conversations by topic.",
-        "- `obsidian(action='create', title='...', content='...')` — create notes in Obsidian vault.",
         "",
     ]
 
@@ -406,10 +447,9 @@ def _build_circuits_section() -> List[str]:
     ]
 
 
-def _build_context_files_section() -> List[str]:
+def _build_context_files_section(chat_mode: str = 'general') -> List[str]:
     """Auto-load project context files (SUBSTRATE.md handled separately as identity)."""
     lines = []
-    # Load non-SUBSTRATE context files
     for filename in CONTEXT_FILES:
         if filename == "SUBSTRATE.md":
             continue  # Handled in identity section
@@ -452,6 +492,7 @@ def build_system_prompt(
     include_skills: bool = True,
     include_memory: bool = True,
     include_circuits: bool = True,
+    chat_mode: str = 'general',
 ) -> str:
     """
     Build the complete agent system prompt.
@@ -464,6 +505,11 @@ def build_system_prompt(
         include_skills: Include skills scanning section
         include_memory: Include memory recall instructions
         include_circuits: Include circuits/silent reply instructions
+        chat_mode: 'code' | 'desktop' | 'general' | 'ask' | 'plan'
+                   Controls which prompt sections are included.
+                   'code' = file editing + coding context, skip desktop docs
+                   'desktop' = desktop/mouse/vision docs, skip file editing
+                   'general' = balanced subset
 
     Returns:
         Complete system prompt string
@@ -488,7 +534,7 @@ def build_system_prompt(
     # 2. Tooling (dynamic)
     if include_tools:
         sections.extend(_build_tooling_section(tool_registry))
-        sections.extend(_build_tool_style_section())
+        sections.extend(_build_tool_style_section(chat_mode=chat_mode))
 
     # 3. Macros (deterministic scripts — checked before skills)
     if macros:
@@ -510,7 +556,7 @@ def build_system_prompt(
         sections.extend(_build_circuits_section())
 
     # 8. Project Context (auto-loaded files)
-    context_lines = _build_context_files_section()
+    context_lines = _build_context_files_section(chat_mode=chat_mode)
     if context_lines:
         sections.append("# Project Context")
         sections.append("")

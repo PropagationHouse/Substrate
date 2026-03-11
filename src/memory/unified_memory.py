@@ -50,6 +50,7 @@ class MemoryType(str, Enum):
     NOTE = "note"
     COMMAND = "command"
     SYSTEM = "system"
+    FOUNDATIONAL = "foundational"
 
 
 # Constants
@@ -389,7 +390,7 @@ class UnifiedMemoryManager:
         
         Args:
             limit: Maximum number of entries to retrieve
-            memory_types: Filter by memory types (None = all)
+            memory_types: Filter by memory types (None = all, excludes FOUNDATIONAL by default)
             include_metadata: Include action metadata in context
             
         Returns:
@@ -411,13 +412,15 @@ class UnifiedMemoryManager:
                         (*type_values, limit)
                     )
                 else:
+                    # Exclude FOUNDATIONAL memories from recent context by default
                     cursor = conn.execute(
                         """
                         SELECT * FROM memories 
+                        WHERE type != ?
                         ORDER BY timestamp DESC 
                         LIMIT ?
                         """,
-                        (limit,)
+                        (MemoryType.FOUNDATIONAL.value, limit)
                     )
                 
                 rows = cursor.fetchall()
@@ -909,6 +912,66 @@ class UnifiedMemoryManager:
         except Exception as e:
             logger.error(f"Error importing legacy memories: {e}")
             return 0
+    
+    def bootstrap_foundational_memory(self) -> bool:
+        """
+        Bootstrap foundational memory from "Note to self (now you).md" on first run.
+        Idempotent - won't duplicate if already exists.
+        
+        Returns:
+            True if foundational memory was added, False if already exists or failed
+        """
+        # Check if foundational memory already exists
+        with self._db_lock:
+            conn = self._get_connection()
+            try:
+                cursor = conn.execute(
+                    "SELECT COUNT(*) FROM memories WHERE type = ?",
+                    (MemoryType.FOUNDATIONAL.value,)
+                )
+                count = cursor.fetchone()[0]
+                if count > 0:
+                    logger.debug("Foundational memory already exists, skipping bootstrap")
+                    return False
+            finally:
+                conn.close()
+        
+        # Load "Note to self (now you).md" from project root
+        soma = Path(__file__).parent.parent.parent
+        origin_path = soma / "Note to self (now you).md"
+        
+        if not origin_path.exists():
+            logger.warning(f"Note to self (now you).md not found at {origin_path}, skipping foundational memory bootstrap")
+            return False
+        
+        try:
+            with open(origin_path, 'r', encoding='utf-8') as f:
+                origin_content = f.read().strip()
+            
+            if not origin_content:
+                logger.warning("ORIGIN.md is empty, skipping foundational memory bootstrap")
+                return False
+            
+            # Add as foundational memory with high importance
+            memory_id = self.add_memory(
+                user_message="",
+                assistant_response=origin_content,
+                model="system",
+                memory_type=MemoryType.FOUNDATIONAL,
+                metadata={"source": "Note to self (now you).md", "bootstrap": True},
+                importance_score=0.95  # High importance for semantic search
+            )
+            
+            if memory_id:
+                logger.info(f"Bootstrapped foundational memory from 'Note to self (now you).md' (id={memory_id})")
+                return True
+            else:
+                logger.warning("Failed to add foundational memory (possible duplicate)")
+                return False
+                
+        except Exception as e:
+            logger.error(f"Error bootstrapping foundational memory: {e}")
+            return False
 
 
 # Singleton instance

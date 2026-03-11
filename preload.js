@@ -25,7 +25,8 @@ contextBridge.exposeInMainWorld(
         invoke: (channel, data) => {
             // Whitelist channels for invoke
             const validInvokeChannels = [
-                'start-listening', 'stop-listening', 'speaking-start', 'speaking-stop'
+                'start-listening', 'stop-listening', 'speaking-start', 'speaking-stop',
+                'get-auth-token'
             ];
             if (validInvokeChannels.includes(channel)) {
                 console.log(`Invoking IPC handler for channel: ${channel}`);
@@ -43,13 +44,15 @@ contextBridge.exposeInMainWorld(
                 'mic-energy-level', 'mic-threshold-updated', 'mic-gain-updated', 'speech-message',
                 'stt-provider-updated', 'mic-timing-updated',
                 'mic-devices', 'mic-device-changed',
-                'avatar-emotions'
+                'avatar-emotions',
+                'auth-token'
             ];
             if (validReceiveChannels.includes(channel)) {
                 // Deliberately strip event as it includes `sender` 
                 ipcRenderer.on(channel, (event, ...args) => func(...args));
             }
         },
+        getAuthToken: () => ipcRenderer.invoke('get-auth-token'),
         handleVoiceStatus: (status) => {
             console.log(`Handling voice status in preload: ${status}`);
             // Forward to window
@@ -147,6 +150,15 @@ contextBridge.exposeInMainWorld(
             if (config.note_prompts) {
                 success = updateElement('general_note', config.note_prompts.general_note) || success;
                 success = updateElement('autonomous_note', config.note_prompts.autonomous) || success;
+            }
+            
+            // Update auto-continue setting
+            if (config.auto_continue !== undefined) {
+                const autoContinueEl = document.getElementById('auto-continue');
+                if (autoContinueEl) {
+                    autoContinueEl.checked = !!config.auto_continue;
+                    success = true;
+                }
             }
             
             // Update autonomous settings

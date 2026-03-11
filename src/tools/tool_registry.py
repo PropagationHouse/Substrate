@@ -1405,7 +1405,107 @@ _ON_DEMAND_TOOLS = {
             },
         ),
     },
+    "midi": {
+        "keywords": ["midi", "music", "play music", "synth", "synthesizer", "yamaha", "maschine", "ableton", "piano", "notes", "chord", "melody", "daw", "instrument", "midi port", "midi file", "play a song", "play some", "play the"],
+        "register": lambda reg: reg.register(
+            name="midi",
+            execute=lambda action, **kwargs: _midi_dispatch(action, **kwargs),
+            description=(
+                "MIDI I/O for hardware synths and DAWs. "
+                "Actions: list_ports (discover devices), send_note (single note), send_chord (multiple notes), "
+                "play_sequence (timed events with BPM, runs in background), play_file (play .mid file, background), "
+                "cc (control change), program_change (switch patch/instrument), stop (halt playback), "
+                "listen (capture incoming MIDI from a port). "
+                "Port names are matched by substring (e.g. 'yamaha', 'maschine')."
+            ),
+            schema={
+                "type": "object",
+                "properties": {
+                    "action": {"type": "string", "enum": ["list_ports", "send_note", "send_chord", "play_sequence", "play_file", "cc", "program_change", "stop", "listen", "sessions"]},
+                    "port": {"type": "string", "description": "MIDI port name or substring (e.g. 'yamaha', 'loopmidi')"},
+                    "note": {"type": "integer", "description": "MIDI note number 0-127 (60=middle C)"},
+                    "notes": {"type": "array", "items": {"type": "integer"}, "description": "Array of MIDI note numbers for chords"},
+                    "velocity": {"type": "integer", "description": "Note velocity 0-127 (default 100)"},
+                    "channel": {"type": "integer", "description": "MIDI channel 0-15 (default 0)"},
+                    "duration_ms": {"type": "integer", "description": "Note duration in milliseconds"},
+                    "events": {"type": "array", "items": {"type": "object"}, "description": "Sequence events: [{note, time (beats), duration (beats), velocity, channel}]"},
+                    "bpm": {"type": "integer", "description": "Tempo for sequence playback"},
+                    "loop": {"type": "boolean", "description": "Loop sequence playback"},
+                    "path": {"type": "string", "description": "Path to .mid file"},
+                    "controller": {"type": "integer", "description": "CC controller number 0-127"},
+                    "value": {"type": "integer", "description": "CC value or program number 0-127"},
+                    "program": {"type": "integer", "description": "Program number 0-127"},
+                    "session_id": {"type": "string", "description": "Playback session ID to stop"},
+                    "duration_sec": {"type": "number", "description": "Listen duration in seconds"},
+                    "max_events": {"type": "integer", "description": "Max events to capture when listening"},
+                },
+                "required": ["action"],
+            },
+            category="midi",
+        ),
+    },
 }
+
+
+def _midi_dispatch(action: str, **kwargs) -> Dict[str, Any]:
+    """Dispatch MIDI tool actions."""
+    try:
+        from .midi_tool import (
+            list_ports, send_note, send_chord, play_sequence,
+            play_file, midi_cc, program_change, stop, listen, get_sessions,
+        )
+    except Exception as _import_exc:
+        return {"status": "error", "error": f"MIDI tool import failed: {type(_import_exc).__name__}: {_import_exc}. Try: pip install mido python-rtmidi"}
+
+    actions = {
+        "list_ports": lambda: list_ports(),
+        "send_note": lambda: send_note(
+            port=kwargs.get("port", ""),
+            note=kwargs.get("note", 60),
+            velocity=kwargs.get("velocity", 100),
+            channel=kwargs.get("channel", 0),
+            duration_ms=kwargs.get("duration_ms", 500),
+        ),
+        "send_chord": lambda: send_chord(
+            port=kwargs.get("port", ""),
+            notes=kwargs.get("notes"),
+            velocity=kwargs.get("velocity", 100),
+            channel=kwargs.get("channel", 0),
+            duration_ms=kwargs.get("duration_ms", 500),
+        ),
+        "play_sequence": lambda: play_sequence(
+            port=kwargs.get("port", ""),
+            events=kwargs.get("events"),
+            bpm=kwargs.get("bpm", 120),
+            loop=kwargs.get("loop", False),
+        ),
+        "play_file": lambda: play_file(
+            path=kwargs.get("path", ""),
+            port=kwargs.get("port", ""),
+        ),
+        "cc": lambda: midi_cc(
+            port=kwargs.get("port", ""),
+            controller=kwargs.get("controller", 1),
+            value=kwargs.get("value", 64),
+            channel=kwargs.get("channel", 0),
+        ),
+        "program_change": lambda: program_change(
+            port=kwargs.get("port", ""),
+            program=kwargs.get("program", 0),
+            channel=kwargs.get("channel", 0),
+        ),
+        "stop": lambda: stop(session_id=kwargs.get("session_id")),
+        "listen": lambda: listen(
+            port=kwargs.get("port", ""),
+            duration_sec=kwargs.get("duration_sec", 5.0),
+            max_events=kwargs.get("max_events", 200),
+        ),
+        "sessions": lambda: get_sessions(),
+    }
+    fn = actions.get(action)
+    if not fn:
+        return {"status": "error", "error": f"Unknown midi action: {action}. Available: {', '.join(actions.keys())}"}
+    return fn()
 
 
 def _notify_dispatch(title="Substrate", body="", tag=""):

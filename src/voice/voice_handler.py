@@ -748,6 +748,13 @@ def speak(text):
                     # Combine all audio segments into a single file
                     if audio_segments:
                         combined_audio = np.concatenate(audio_segments)
+                        
+                        # Normalize audio to use full int16 range (Kokoro often outputs quiet waveforms)
+                        peak = np.abs(combined_audio).max()
+                        if peak > 0:
+                            target_peak = 30000  # ~91% of int16 max, leaves headroom
+                            combined_audio = (combined_audio.astype(np.float32) * (target_peak / peak)).astype(np.int16)
+                        
                         timestamp = int(time.time() * 1000)
                         filename = os.path.join(TEMP_DIR, f'combined_audio_{timestamp}.wav')
                         
