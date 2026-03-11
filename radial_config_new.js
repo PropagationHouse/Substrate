@@ -2635,6 +2635,19 @@
                     <input type="password" id="perplexity-api-key-input-radial" placeholder="Enter Perplexity API key" autocomplete="off" spellcheck="false">
                 </div>
                 <div class="config-help">Keys are masked in the UI after saving. Remove the value to clear it.</div>
+                
+                <h4>Gmail / Google Voice</h4>
+                <div class="config-row">
+                    <label for="gmail-address-input-radial">Gmail Address:</label>
+                    <input type="text" id="gmail-address-input-radial" placeholder="agent@gmail.com" autocomplete="off" spellcheck="false">
+                </div>
+                <div class="config-row">
+                    <label for="gmail-app-password-input-radial">App Password:</label>
+                    <input type="password" id="gmail-app-password-input-radial" placeholder="Enter Gmail App Password" autocomplete="off" spellcheck="false">
+                </div>
+                <div class="config-help">Enable 2FA on the Gmail account, then generate an App Password at <a href="https://myaccount.google.com/apppasswords" target="_blank">myaccount.google.com/apppasswords</a>. Enables email + Google Voice SMS.</div>
+                <div id="gmail-status-radial" class="config-help" style="display:none"></div>
+                
                 <div class="config-help">Advanced settings for the AI model and API endpoint.</div>
             </div>
             
@@ -3245,6 +3258,8 @@
             { original: 'anthropic-api-key-input', radial: 'anthropic-api-key-input-radial' },
             { original: 'google-api-key-input', radial: 'google-api-key-input-radial' },
             { original: 'perplexity-api-key-input', radial: 'perplexity-api-key-input-radial' },
+            { original: 'gmail-address-input', radial: 'gmail-address-input-radial' },
+            { original: 'gmail-app-password-input', radial: 'gmail-app-password-input-radial' },
             { original: 'elevenlabs-api-key-input', radial: 'elevenlabs-api-key-radial' },
             { original: 'elevenlabs-voice-id-input', radial: 'elevenlabs-voice-id-radial' },
             { original: 'elevenlabs-agent-id-input', radial: 'elevenlabs-agent-id-radial' },
@@ -3752,6 +3767,57 @@
         if (pplxKeyEl) {
             pplxKeyEl.addEventListener('input', _autoSavePerplexityKey);
             pplxKeyEl.addEventListener('change', _autoSavePerplexityKey);
+        }
+        
+        // Auto-save Gmail credentials on input with debounce
+        let _gmailSaveTimer = null;
+        const _autoSaveGmailCreds = () => {
+            if (_gmailSaveTimer) clearTimeout(_gmailSaveTimer);
+            _gmailSaveTimer = setTimeout(() => {
+                const addr = (document.getElementById('gmail-address-input-radial') || {}).value || '';
+                const pw = (document.getElementById('gmail-app-password-input-radial') || {}).value || '';
+                if (addr.length > 0 || pw.length > 0) {
+                    console.log('[Gmail AUTO-SAVE] Saving credentials, email:', addr);
+                    const keys = {};
+                    if (addr) keys.gmail_address = addr;
+                    if (pw) keys.gmail_app_password = pw;
+                    window.api.send('config', { action: 'save', config: { remote_api_keys: keys } });
+                    // Check connection status after save
+                    const statusEl = document.getElementById('gmail-status-radial');
+                    if (statusEl && addr && pw) {
+                        statusEl.style.display = 'block';
+                        statusEl.textContent = 'Checking connection...';
+                        statusEl.style.color = 'rgba(255,255,255,0.5)';
+                        setTimeout(() => {
+                            (window._authFetch || fetch)('http://localhost:8765/api/gmail/status')
+                                .then(r => r.json())
+                                .then(data => {
+                                    if (data.status === 'success') {
+                                        statusEl.textContent = 'Connected ✓ (' + data.email + ')';
+                                        statusEl.style.color = '#4CAF50';
+                                    } else {
+                                        statusEl.textContent = 'Error: ' + (data.error || 'Connection failed');
+                                        statusEl.style.color = '#f44336';
+                                    }
+                                })
+                                .catch(() => {
+                                    statusEl.textContent = 'Could not check status';
+                                    statusEl.style.color = '#f44336';
+                                });
+                        }, 2000);
+                    }
+                }
+            }, 1500);
+        };
+        const gmailAddrEl = document.getElementById('gmail-address-input-radial');
+        const gmailPwEl = document.getElementById('gmail-app-password-input-radial');
+        if (gmailAddrEl) {
+            gmailAddrEl.addEventListener('input', _autoSaveGmailCreds);
+            gmailAddrEl.addEventListener('change', _autoSaveGmailCreds);
+        }
+        if (gmailPwEl) {
+            gmailPwEl.addEventListener('input', _autoSaveGmailCreds);
+            gmailPwEl.addEventListener('change', _autoSaveGmailCreds);
         }
         
         // Set up event listeners for each element

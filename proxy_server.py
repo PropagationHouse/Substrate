@@ -426,6 +426,14 @@ REMOTE_KEY_ROUTE_ALLOWLIST = {
     "openai": {
         "field": "remote_api_keys/openai_api_key",
         "env": "OPENAI_API_KEY"
+    },
+    "gmail_address": {
+        "field": "remote_api_keys/gmail_address",
+        "env": "GMAIL_ADDRESS"
+    },
+    "gmail_app_password": {
+        "field": "remote_api_keys/gmail_app_password",
+        "env": "GMAIL_APP_PASSWORD"
     }
 }
 
@@ -10053,6 +10061,62 @@ def api_discover_models():
                 logger.warning(f"[DISCOVER] {provider} failed: {e}")
 
     return jsonify({"status": "success", "providers": discovered})
+
+# ============== GMAIL API ==============
+
+@app.route('/api/gmail/status', methods=['GET'])
+def api_gmail_status():
+    """Check Gmail configuration and connectivity."""
+    try:
+        from src.tools.gmail_tool import check_status
+        return jsonify(check_status())
+    except Exception as e:
+        return jsonify({"status": "error", "error": str(e)}), 500
+
+@app.route('/api/gmail/inbox', methods=['GET'])
+def api_gmail_inbox():
+    """Read recent emails from Gmail inbox."""
+    try:
+        from src.tools.gmail_tool import read_inbox
+        max_results = request.args.get('max_results', 10, type=int)
+        unread_only = request.args.get('unread_only', 'false').lower() == 'true'
+        folder = request.args.get('folder', 'INBOX')
+        return jsonify(read_inbox(max_results=max_results, unread_only=unread_only, folder=folder))
+    except Exception as e:
+        return jsonify({"status": "error", "error": str(e)}), 500
+
+@app.route('/api/gmail/search', methods=['GET'])
+def api_gmail_search():
+    """Search emails by query."""
+    try:
+        from src.tools.gmail_tool import search_emails
+        query = request.args.get('query', '')
+        if not query:
+            return jsonify({"status": "error", "error": "query parameter required"}), 400
+        max_results = request.args.get('max_results', 10, type=int)
+        folder = request.args.get('folder', 'INBOX')
+        return jsonify(search_emails(query=query, max_results=max_results, folder=folder))
+    except Exception as e:
+        return jsonify({"status": "error", "error": str(e)}), 500
+
+@app.route('/api/gmail/send', methods=['POST'])
+def api_gmail_send():
+    """Send an email via Gmail."""
+    try:
+        from src.tools.gmail_tool import send_email
+        data = request.get_json(silent=True) or {}
+        to = data.get('to', '')
+        subject = data.get('subject', '')
+        body = data.get('body', '')
+        if not to:
+            return jsonify({"status": "error", "error": "to is required"}), 400
+        return jsonify(send_email(
+            to=to, subject=subject, body=body,
+            reply_to_message_id=data.get('reply_to_message_id'),
+            html=data.get('html', False)
+        ))
+    except Exception as e:
+        return jsonify({"status": "error", "error": str(e)}), 500
 
 @app.route('/api/memory/reset', methods=['POST'])
 def api_memory_reset():
