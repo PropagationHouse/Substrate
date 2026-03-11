@@ -253,15 +253,16 @@ class RawTextRenderer {
         const activeMsg = this.outputContainer.querySelector('.message.assistant.active-streaming');
         if (activeMsg) {
             activeMsg.classList.remove('active-streaming');
-            // Collapse its activity panel if it has one
+            // Finalize activity panel — respect user's expand/collapse preference
             const panel = activeMsg.querySelector('.agent-activity-panel');
             if (panel) {
                 const body = panel.querySelector('.activity-body');
                 const toggle = panel.querySelector('.activity-toggle');
-                if (body) body.style.display = 'none';
-                if (toggle) toggle.style.transform = 'rotate(-90deg)';
+                if (!this._toolStepsExpanded) {
+                    if (body) body.style.display = 'none';
+                    if (toggle) toggle.style.transform = 'rotate(-90deg)';
+                }
                 panel.style.opacity = '0.6';
-                // Hide stop button on finalized panels
                 const stopBtn = panel.querySelector('.activity-stop-btn');
                 if (stopBtn) stopBtn.style.display = 'none';
             }
@@ -313,8 +314,10 @@ class RawTextRenderer {
             if (panel) {
                 const body = panel.querySelector('.activity-body');
                 const toggle = panel.querySelector('.activity-toggle');
-                if (body) body.style.display = 'none';
-                if (toggle) toggle.style.transform = 'rotate(-90deg)';
+                if (!this._toolStepsExpanded) {
+                    if (body) body.style.display = 'none';
+                    if (toggle) toggle.style.transform = 'rotate(-90deg)';
+                }
                 panel.style.opacity = '0.6';
                 const stopBtn = panel.querySelector('.activity-stop-btn');
                 if (stopBtn) stopBtn.style.display = 'none';
@@ -570,7 +573,7 @@ class RawTextRenderer {
                 }
             });
             
-            // Collapse toggle (on header click, not stop button)
+            // Collapse toggle (on header click, not stop button) — syncs with global preference
             header.addEventListener('click', (e) => {
                 if (e.target.closest('.activity-stop-btn')) return;
                 const body = panel.querySelector('.activity-body');
@@ -578,10 +581,13 @@ class RawTextRenderer {
                 if (body.style.display === 'none') {
                     body.style.display = 'block';
                     toggle.style.transform = 'rotate(0deg)';
+                    this._toolStepsExpanded = true;
                 } else {
                     body.style.display = 'none';
                     toggle.style.transform = 'rotate(-90deg)';
+                    this._toolStepsExpanded = false;
                 }
+                localStorage.setItem('substrate_tool_steps_expanded', String(this._toolStepsExpanded));
             });
             panel.appendChild(header);
             
@@ -649,11 +655,11 @@ class RawTextRenderer {
         headerRow.appendChild(textSpan);
         step.appendChild(headerRow);
         
-        // Output container (hidden by default, shown on click after result arrives)
+        // Output container (respects user's expand/collapse preference)
         const outputDiv = document.createElement('div');
         outputDiv.className = 'step-output';
         outputDiv.style.cssText = `
-            display: none;
+            display: ${this._toolStepsExpanded ? 'block' : 'none'};
             margin: 2px 0 4px 26px;
             padding: 6px 10px;
             background: rgba(0, 0, 0, 0.25);
@@ -783,19 +789,7 @@ class RawTextRenderer {
                 } else {
                     // Generic output for non-exec tools
                     outputDiv.textContent = outputText;
-                    if (this._toolStepsExpanded) {
-                        outputDiv.style.display = 'block';
-                    } else if (outputDiv.style.display === 'none' || !outputDiv.style.display) {
-                        // Keep collapsed for non-exec, add expand hint
-                        const headerRow = lastStep.querySelector('.step-header');
-                        if (headerRow && !headerRow.querySelector('.expand-hint')) {
-                            const hint = document.createElement('span');
-                            hint.className = 'expand-hint';
-                            hint.style.cssText = 'color:rgba(255,255,255,0.2);font-size:9px;margin-left:auto;flex-shrink:0;';
-                            hint.textContent = '▸';
-                            headerRow.appendChild(hint);
-                        }
-                    }
+                    outputDiv.style.display = this._toolStepsExpanded ? 'block' : 'none';
                 }
             }
         }
@@ -812,13 +806,14 @@ class RawTextRenderer {
         
         const panel = lastAssistant.querySelector('.agent-activity-panel');
         if (panel) {
-            // Collapse the panel and dim it
+            // Dim panel and hide stop button; respect user's expand/collapse preference
             const body = panel.querySelector('.activity-body');
             const toggle = panel.querySelector('.activity-toggle');
-            if (body) body.style.display = 'none';
-            if (toggle) toggle.style.transform = 'rotate(-90deg)';
+            if (!this._toolStepsExpanded) {
+                if (body) body.style.display = 'none';
+                if (toggle) toggle.style.transform = 'rotate(-90deg)';
+            }
             panel.style.opacity = '0.6';
-            // Hide stop button
             const stopBtn = panel.querySelector('.activity-stop-btn');
             if (stopBtn) stopBtn.style.display = 'none';
         }
