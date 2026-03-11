@@ -145,6 +145,7 @@ _AUTH_EXEMPT_PREFIXES = (
     '/api/auth/login-otp', '/api/auth/electron-login', '/api/auth/status', '/api/test',
     '/api/substrate', '/api/circuits', '/api/prime',
     '/api/commands',
+    '/api/models', '/api/discover-models',
 )
 
 def _get_agent_config():
@@ -9025,56 +9026,6 @@ def _generate_qr_svg_fallback(url):
     from flask import Response
     return Response(svg, mimetype='image/svg+xml')
 
-@app.route('/api/midi/ports', methods=['GET'])
-def api_midi_ports():
-    """List available MIDI input and output ports."""
-    try:
-        from src.tools.midi_tool import list_ports
-        return jsonify(list_ports())
-    except ImportError:
-        return jsonify({"status": "error", "error": "MIDI tool not available (mido/rtmidi not installed)"}), 500
-    except Exception as e:
-        return jsonify({"status": "error", "error": str(e)}), 500
-
-@app.route('/api/midi/test', methods=['POST'])
-def api_midi_test():
-    """Send a C major chord to a specified output port for testing."""
-    data = request.get_json(silent=True) or {}
-    port = data.get('port', '')
-    if not port:
-        return jsonify({"status": "error", "error": "port is required"}), 400
-    try:
-        from src.tools.midi_tool import send_chord
-        result = send_chord(port=port, notes=[60, 64, 67], velocity=90, channel=0, duration_ms=600)
-        return jsonify(result)
-    except ImportError:
-        return jsonify({"status": "error", "error": "MIDI tool not available"}), 500
-    except Exception as e:
-        return jsonify({"status": "error", "error": str(e)}), 500
-
-@app.route('/api/midi/sessions', methods=['GET'])
-def api_midi_sessions():
-    """List active MIDI playback sessions."""
-    try:
-        from src.tools.midi_tool import get_sessions
-        return jsonify(get_sessions())
-    except ImportError:
-        return jsonify({"status": "success", "sessions": [], "count": 0})
-    except Exception as e:
-        return jsonify({"status": "error", "error": str(e)}), 500
-
-@app.route('/api/midi/stop', methods=['POST'])
-def api_midi_stop():
-    """Stop MIDI playback sessions."""
-    data = request.get_json(silent=True) or {}
-    session_id = data.get('session_id')
-    try:
-        from src.tools.midi_tool import stop
-        return jsonify(stop(session_id=session_id))
-    except ImportError:
-        return jsonify({"status": "error", "error": "MIDI tool not available"}), 500
-    except Exception as e:
-        return jsonify({"status": "error", "error": str(e)}), 500
 
 @app.route('/api/network/info', methods=['GET'])
 def api_network_info():
