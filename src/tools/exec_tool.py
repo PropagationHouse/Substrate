@@ -102,6 +102,16 @@ class ExecSession:
             self.truncated = True
             self.error = self.error[-MAX_ERROR_CHARS:]
     
+    def _truncated_output(self) -> str:
+        """Return output truncated for LLM consumption."""
+        combined = self.output
+        if self.error and self.status == ExecStatus.FAILED:
+            combined = combined + '\n--- stderr ---\n' + self.error if combined else self.error
+        text, was_trunc, path = _truncate_for_llm(combined, self.session_id)
+        if was_trunc:
+            self.truncated = True
+        return text
+    
     def to_dict(self) -> Dict[str, Any]:
         return {
             "session_id": self.session_id,
@@ -112,9 +122,9 @@ class ExecSession:
             "started_at": self.started_at,
             "ended_at": self.ended_at,
             "exit_code": self.exit_code,
-            "output": self.output[-5000:] if len(self.output) > 5000 else self.output,
+            "output": self._truncated_output(),
             "tail": self.tail,
-            "error": self.error[-1000:] if len(self.error) > 1000 else self.error,
+            "error": self.error[-2000:] if len(self.error) > 2000 else self.error,
             "duration_ms": self.duration_ms,
             "background": self.background,
             "truncated": self.truncated,
@@ -193,6 +203,64 @@ MAX_OUTPUT_CHARS = 100_000    # Cap total output at 100K chars
 MAX_ERROR_CHARS = 20_000      # Cap stderr at 20K chars
 TAIL_CHARS = 2000             # Always keep last 2K chars regardless of truncation
 FINISHED_SESSION_TTL_SEC = 1800  # Auto-prune finished sessions after 30 minutes
+
+# Output truncation for LLM return (prevents context blowout)
+MAX_RETURN_LINES = 200        # Max lines returned to the agent
+MAX_RETURN_BYTES = 50_000     # Max bytes returned to the agent (~50KB)
+TEMP_DIR = os.path.join(WORKSPACE_DIR, 'temp')
+
+
+def _truncate_for_llm(output: str, session_id: str) -> tuple:
+    """Truncate output for LLM consumption.
+    
+    Returns (truncated_text, was_truncated, full_output_path).
+    Keeps the LAST N lines / bytes so the agent sees the most recent output.
+    If truncated, saves full output to a temp file.
+    """
+    if not output:
+        return ('(no output)', False, None)
+    
+    total_bytes = len(output.encode('utf-8', errors='replace'))
+    lines = output.split('\n')
+    total_lines = len(lines)
+    
+    # Check if truncation is needed
+    if total_lines <= MAX_RETURN_LINES and total_bytes <= MAX_RETURN_BYTES:
+        return (output, False, None)
+    
+    # Save full output to temp file
+    full_path = None
+    try:
+        os.makedirs(TEMP_DIR, exist_ok=True)
+        full_path = os.path.join(TEMP_DIR, f'exec_{session_id}.log')
+        with open(full_path, 'w', encoding='utf-8', errors='replace') as f:
+            f.write(output)
+    except Exception as e:
+        logger.warning(f'[EXEC] Failed to save full output: {e}')
+        full_path = None
+    
+    # Tail-truncate by lines first
+    tail_lines = lines[-MAX_RETURN_LINES:]
+    truncated = '\n'.join(tail_lines)
+    
+    # Then check bytes — trim further if still too large
+    if len(truncated.encode('utf-8', errors='replace')) > MAX_RETURN_BYTES:
+        # Binary search-ish: keep trimming lines from the front
+        while tail_lines and len('\n'.join(tail_lines).encode('utf-8', errors='replace')) > MAX_RETURN_BYTES:
+            tail_lines = tail_lines[max(1, len(tail_lines) // 4):]
+        truncated = '\n'.join(tail_lines)
+    
+    shown_lines = len(tail_lines)
+    start_line = total_lines - shown_lines + 1
+    
+    # Build truncation notice
+    notice = f'\n\n[Showing lines {start_line}-{total_lines} of {total_lines}'
+    if full_path:
+        notice += f'. Full output: {full_path}'
+    notice += ']'
+    truncated += notice
+    
+    return (truncated, True, full_path)
 
 
 def exec_command(

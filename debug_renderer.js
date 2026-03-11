@@ -621,7 +621,7 @@ document.addEventListener('DOMContentLoaded', function() {
             stopBtn.textContent = '·';
             stopBtn.style.opacity = '0.15';
             stopBtn.disabled = true;
-            fetch('http://localhost:8765/api/interrupt', { method: 'POST' })
+            (window._authFetch || fetch)('http://localhost:8765/api/interrupt', { method: 'POST' })
                 .then(r => r.json())
                 .then(data => {
                     console.log('[STOP] Interrupt response:', data);

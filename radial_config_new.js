@@ -12,6 +12,51 @@
       t = setTimeout(() => { t = null; fn.apply(lastThis, lastArgs); }, wait);
     };
   }
+  // --- Auth token + backend readiness gate ---
+  // Register the IPC listener IMMEDIATELY so we never miss the token event.
+  let _rcAuthToken = '';
+  try {
+      if (window.api && typeof window.api.getAuthToken === 'function') {
+          window.api.getAuthToken().then(t => { if (t) _rcAuthToken = t; });
+      }
+      if (window.api && typeof window.api.receive === 'function') {
+          window.api.receive('auth-token', (token) => {
+              console.log('[RC] Auth token received via IPC');
+              _rcAuthToken = token || '';
+          });
+      }
+  } catch(_) {}
+
+  // Wait for the backend server to be reachable. Config endpoints are auth-exempt
+  // so we only need the server to be up, not the auth token.
+  let _backendOk = false;
+  async function _waitForBackend() {
+      if (_backendOk) return;
+      const url = 'http://localhost:8765/api/test';
+      for (let i = 0; i < 120; i++) {
+          try {
+              const r = await fetch(url);
+              if (r.ok) {
+                  console.log('[RC] Backend reachable (attempt ' + (i+1) + ')');
+                  _backendOk = true;
+                  return;
+              }
+          } catch (_) { /* server not up */ }
+          await new Promise(r => setTimeout(r, 500));
+      }
+      console.error('[RC] Backend never became reachable');
+      _backendOk = true;
+  }
+
+  function _authFetch(url, opts) {
+      opts = opts || {};
+      opts.headers = opts.headers || {};
+      if (_rcAuthToken) opts.headers['Authorization'] = 'Bearer ' + _rcAuthToken;
+      return fetch(url, opts);
+  }
+  window._authFetch = _authFetch;
+  window._waitForBackend = _waitForBackend;
+
   // Track last sent values to avoid redundant saves
   const lastSent = { system_prompt: null, screenshot_prompt: null, temperature: null, max_tokens: null, context_retrieval_limit: null };
     
@@ -459,7 +504,7 @@
         document.addEventListener('click', async function(e){
             if (e.target && e.target.id === 'reset-memory-btn') {
                 try {
-                    const res = await fetch('http://localhost:8765/api/memory/reset', { method: 'POST' });
+                    const res = await _authFetch('http://localhost:8765/api/memory/reset', { method: 'POST' });
                     const data = await res.json().catch(()=>({}));
                     const ok = res.ok && data && data.status === 'success';
                     const msg = ok ? 'Memory reset.' : ('Memory reset failed' + (data && data.message ? ': ' + data.message : ''));
@@ -489,7 +534,7 @@
                 const proceed = confirm('Wipe ALL memory? This deletes long-term DB and semantic index. This cannot be undone.');
                 if (!proceed) return;
                 try {
-                    const res = await fetch('http://localhost:8765/api/memory/wipe-all', { method: 'POST' });
+                    const res = await _authFetch('http://localhost:8765/api/memory/wipe-all', { method: 'POST' });
                     const data = await res.json().catch(()=>({}));
                     const ok = res.ok && data && data.status === 'success';
                     const msg = ok ? 'All memory wiped.' : ('Wipe failed' + (data && data.message ? ': ' + data.message : ''));
@@ -588,13 +633,13 @@
                 const qrCanvas = document.getElementById('webui-qr-canvas');
                 if (!urlDisplay) return;
 
-                fetch('http://localhost:8765/api/network/info')
+                _authFetch('http://localhost:8765/api/network/info')
                     .then(r => r.json())
                     .then(data => {
-                        const url = data.webui_https || data.webui_http || 'http://localhost:8765/ui';
+                        const url = data.best_url || data.webui_https || data.webui_http || 'http://localhost:8765/ui';
                         urlDisplay.value = url;
                         if (statusDot) { statusDot.style.background = '#4CAF50'; }
-                        if (statusText) { statusText.textContent = 'Server running \u2014 ' + data.local_ip; statusText.style.color = 'rgba(255,255,255,0.7)'; }
+                        if (statusText) { statusText.textContent = 'Server running \u2014 ' + (data.zerotier_ip || data.local_ip) + (data.https_enabled ? ' (HTTPS)' : ''); statusText.style.color = 'rgba(255,255,255,0.7)'; }
                         if (httpsBadge) {
                             if (data.https_enabled) {
                                 httpsBadge.textContent = 'HTTPS: enabled';
@@ -607,6 +652,18 @@
                             }
                         }
                         if (qrCanvas) drawQR(qrCanvas, url);
+                        // ZeroTier status
+                        const ztConnected = document.getElementById('zt-connected');
+                        const ztNotDetected = document.getElementById('zt-not-detected');
+                        const ztIpDisplay = document.getElementById('zt-ip-display');
+                        if (data.zerotier_ip) {
+                            if (ztConnected) ztConnected.style.display = 'block';
+                            if (ztNotDetected) ztNotDetected.style.display = 'none';
+                            if (ztIpDisplay) ztIpDisplay.value = data.zerotier_ip + ':8765';
+                        } else {
+                            if (ztConnected) ztConnected.style.display = 'none';
+                            if (ztNotDetected) ztNotDetected.style.display = 'block';
+                        }
                     })
                     .catch(() => {
                         urlDisplay.value = 'http://localhost:8765/ui';
@@ -653,6 +710,124 @@
                         ctx.textAlign = 'center';
                         ctx.fillText('QR unavailable', canvas.width/2, canvas.height/2);
                     }
+                }
+
+                // --- Authentication section ---
+                const authStatusMsg = document.getElementById('auth-status-msg');
+                const authSetupSection = document.getElementById('auth-setup-section');
+                const authChangeSection = document.getElementById('auth-change-section');
+                const authUsernameDisplay = document.getElementById('auth-username-display');
+
+                function checkAuthStatus() {
+                    _authFetch('http://localhost:8765/api/auth/status')
+                        .then(r => r.json())
+                        .then(data => {
+                            if (authStatusMsg) authStatusMsg.style.display = 'none';
+                            if (data.needs_setup) {
+                                if (authSetupSection) authSetupSection.style.display = 'block';
+                                if (authChangeSection) authChangeSection.style.display = 'none';
+                            } else {
+                                if (authSetupSection) authSetupSection.style.display = 'none';
+                                if (authChangeSection) authChangeSection.style.display = 'block';
+                                if (authUsernameDisplay) authUsernameDisplay.textContent = 'Signed in as ' + (data.username || 'user');
+                            }
+                        })
+                        .catch(() => {
+                            if (authStatusMsg) { authStatusMsg.textContent = 'Server unreachable'; authStatusMsg.style.display = 'block'; }
+                        });
+                }
+                checkAuthStatus();
+
+                // Setup form
+                const setupBtn = document.getElementById('auth-setup-btn');
+                if (setupBtn) {
+                    setupBtn.addEventListener('click', () => {
+                        const u = (document.getElementById('auth-setup-user') || {}).value || '';
+                        const p = (document.getElementById('auth-setup-pass') || {}).value || '';
+                        const p2 = (document.getElementById('auth-setup-pass2') || {}).value || '';
+                        const errEl = document.getElementById('auth-setup-err');
+                        if (!u.trim()) { if (errEl) errEl.textContent = 'Enter a username'; return; }
+                        if (p.length < 4) { if (errEl) errEl.textContent = 'Password must be at least 4 characters'; return; }
+                        if (p !== p2) { if (errEl) errEl.textContent = 'Passwords do not match'; return; }
+                        setupBtn.disabled = true;
+                        fetch('http://localhost:8765/api/auth/setup', {
+                            method: 'POST', headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ username: u.trim(), password: p })
+                        }).then(r => r.json()).then(data => {
+                            if (data.token) {
+                                _rcAuthToken = data.token;
+                                if (errEl) errEl.textContent = '';
+                                checkAuthStatus();
+                            } else {
+                                if (errEl) errEl.textContent = data.message || 'Setup failed';
+                            }
+                        }).catch(() => {
+                            if (errEl) errEl.textContent = 'Connection error';
+                        }).finally(() => { setupBtn.disabled = false; });
+                    });
+                }
+
+                // Change password form
+                const changeBtn = document.getElementById('auth-change-btn');
+                if (changeBtn) {
+                    changeBtn.addEventListener('click', () => {
+                        const oldP = (document.getElementById('auth-old-pass') || {}).value || '';
+                        const newP = (document.getElementById('auth-new-pass') || {}).value || '';
+                        const newP2 = (document.getElementById('auth-new-pass2') || {}).value || '';
+                        const errEl = document.getElementById('auth-change-err');
+                        if (!oldP) { if (errEl) errEl.textContent = 'Enter current password'; return; }
+                        if (newP.length < 4) { if (errEl) errEl.textContent = 'New password must be at least 4 characters'; return; }
+                        if (newP !== newP2) { if (errEl) errEl.textContent = 'Passwords do not match'; return; }
+                        changeBtn.disabled = true;
+                        _authFetch('http://localhost:8765/api/auth/change-password', {
+                            method: 'POST', headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ old_password: oldP, new_password: newP })
+                        }).then(r => r.json()).then(data => {
+                            if (data.status === 'success') {
+                                if (errEl) { errEl.style.color = 'rgba(76,175,80,0.9)'; errEl.textContent = 'Password updated'; }
+                                // Clear inputs
+                                ['auth-old-pass', 'auth-new-pass', 'auth-new-pass2'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+                                setTimeout(() => { if (errEl) { errEl.textContent = ''; errEl.style.color = '#ff8a8a'; } }, 3000);
+                            } else {
+                                if (errEl) errEl.textContent = data.message || 'Update failed';
+                            }
+                        }).catch(() => {
+                            if (errEl) errEl.textContent = 'Connection error';
+                        }).finally(() => { changeBtn.disabled = false; });
+                    });
+                }
+
+                // QR Refresh button — generates OTP-embedded QR for mobile auto-login
+                const qrRefreshBtn = document.getElementById('qr-refresh-btn');
+                const qrHelpText = document.getElementById('qr-help-text');
+                if (qrRefreshBtn) {
+                    qrRefreshBtn.addEventListener('click', () => {
+                        qrRefreshBtn.disabled = true;
+                        qrRefreshBtn.textContent = 'Generating...';
+                        _authFetch('http://localhost:8765/api/auth/otp', { method: 'POST' })
+                            .then(r => r.json())
+                            .then(data => {
+                                if (data.otp && urlDisplay && qrCanvas) {
+                                    const baseUrl = urlDisplay.value || 'http://localhost:8765/ui';
+                                    const sep = baseUrl.includes('?') ? '&' : '?';
+                                    const otpUrl = baseUrl + sep + 'otp=' + encodeURIComponent(data.otp);
+                                    drawQR(qrCanvas, otpUrl);
+                                    if (qrHelpText) qrHelpText.textContent = 'Scan to open & auto-login (expires in 60s)';
+                                    // Auto-revert after 60s
+                                    setTimeout(() => {
+                                        if (urlDisplay && qrCanvas) drawQR(qrCanvas, urlDisplay.value);
+                                        if (qrHelpText) qrHelpText.textContent = 'Scan with your phone to open the WebUI.';
+                                    }, 60000);
+                                }
+                            })
+                            .catch(() => {
+                                if (qrHelpText) qrHelpText.textContent = 'Failed to generate OTP';
+                            })
+                            .finally(() => {
+                                qrRefreshBtn.disabled = false;
+                                qrRefreshBtn.textContent = 'Refresh QR (with login)';
+                            });
+                    });
                 }
             })();
 
@@ -1454,8 +1629,8 @@
                 try {
                     // Fetch static models + discover live models in parallel
                     const [staticRes, discoverRes] = await Promise.allSettled([
-                        fetch('http://localhost:8765/api/models').then(r => r.json()),
-                        fetch('http://localhost:8765/api/discover-models').then(r => r.json())
+                        _authFetch('http://localhost:8765/api/models').then(r => r.json()),
+                        _authFetch('http://localhost:8765/api/discover-models').then(r => r.json())
                     ]);
 
                     let models = [];
@@ -1860,7 +2035,8 @@
     
     // Load SUBSTRATE.md content into the editor (with retry)
     async function loadSubstrateContent(retries) {
-        if (retries === undefined) retries = 8;
+        if (retries === undefined) retries = 3;
+        await _waitForBackend();
         const textarea = document.getElementById('substrate-input-radial');
         const status = document.getElementById('substrate-status');
         if (!textarea) { console.warn('SUBSTRATE textarea not found'); return; }
@@ -1868,7 +2044,7 @@
         for (let attempt = 0; attempt <= retries; attempt++) {
             try {
                 console.log('Loading SUBSTRATE.md content from /api/substrate (attempt ' + (attempt+1) + '/' + (retries+1) + ')...');
-                const res = await fetch('http://localhost:8765/api/substrate');
+                const res = await _authFetch('http://localhost:8765/api/substrate');
                 console.log('SUBSTRATE.md fetch response status:', res.status);
                 const data = await res.json();
                 console.log('SUBSTRATE.md response data:', JSON.stringify(data).substring(0, 200));
@@ -1903,7 +2079,7 @@
         if (!textarea) return;
         
         try {
-            const res = await fetch('http://localhost:8765/api/substrate', {
+            const res = await _authFetch('http://localhost:8765/api/substrate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ content: textarea.value })
@@ -1932,7 +2108,8 @@
     
     // Load CIRCUITS.md content into the editor (with retry)
     async function loadCircuitsContent(retries) {
-        if (retries === undefined) retries = 8;
+        if (retries === undefined) retries = 3;
+        await _waitForBackend();
         const textarea = document.getElementById('circuits-input-radial');
         const status = document.getElementById('circuits-status');
         if (!textarea) {
@@ -1943,7 +2120,7 @@
         for (let attempt = 0; attempt <= retries; attempt++) {
             try {
                 console.log('Loading CIRCUITS.md from /api/circuits (attempt ' + (attempt+1) + '/' + (retries+1) + ')...');
-                const res = await fetch('http://localhost:8765/api/circuits');
+                const res = await _authFetch('http://localhost:8765/api/circuits');
                 console.log('CIRCUITS.md response status:', res.status, res.statusText);
                 if (!res.ok) {
                     throw new Error('HTTP ' + res.status + ' ' + res.statusText);
@@ -1989,7 +2166,7 @@
         if (!textarea) return;
         
         try {
-            const res = await fetch('http://localhost:8765/api/circuits', {
+            const res = await _authFetch('http://localhost:8765/api/circuits', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ content: textarea.value })
@@ -2049,7 +2226,7 @@
 
     async function loadCircuitsConfig() {
         try {
-            const res = await fetch('http://localhost:8765/api/circuits-config');
+            const res = await _authFetch('http://localhost:8765/api/circuits-config');
             if (!res.ok) return;
             const data = await res.json();
             if (data.status !== 'success') return;
@@ -2076,7 +2253,7 @@
             if (interval && interval.value.trim()) body.interval = interval.value.trim();
             if (activeStart) body.active_start = activeStart.value || '';
             if (activeEnd) body.active_end = activeEnd.value || '';
-            const res = await fetch('http://localhost:8765/api/circuits-config', {
+            const res = await _authFetch('http://localhost:8765/api/circuits-config', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(body),
@@ -2191,7 +2368,8 @@
 
     // Load PRIME.md content into the editor (with retry)
     async function loadPrimeContent(retries) {
-        if (retries === undefined) retries = 8;
+        if (retries === undefined) retries = 3;
+        await _waitForBackend();
         const textarea = document.getElementById('prime-input-radial');
         const status = document.getElementById('prime-status');
         if (!textarea) {
@@ -2202,7 +2380,7 @@
         for (let attempt = 0; attempt <= retries; attempt++) {
             try {
                 console.log('Loading PRIME.md from /api/prime (attempt ' + (attempt+1) + '/' + (retries+1) + ')...');
-                const res = await fetch('http://localhost:8765/api/prime');
+                const res = await _authFetch('http://localhost:8765/api/prime');
                 if (!res.ok) {
                     throw new Error('HTTP ' + res.status + ' ' + res.statusText);
                 }
@@ -2239,7 +2417,7 @@
         if (!textarea) return;
         
         try {
-            const res = await fetch('http://localhost:8765/api/prime', {
+            const res = await _authFetch('http://localhost:8765/api/prime', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ content: textarea.value })
@@ -2272,6 +2450,14 @@
             <div class="autonomy-settings-card">
                 <h3>Autonomy Settings</h3>
                 <div class="autonomy-settings-content">
+                    <section>
+                        <h4>Auto-Continue</h4>
+                        <div class="config-row simple-row">
+                            <label for="auto-continue-radial">Enable:</label>
+                            <input type="checkbox" id="auto-continue-radial">
+                        </div>
+                        <div class="config-help" style="margin-bottom: 15px;">When enabled, the agent can run as many tool steps as it needs without hitting the loop limit. You can still interrupt at any time.</div>
+                    </section>
                     <section>
                         <h4>Vision Client</h4>
                         <div class="config-row simple-row">
@@ -2523,12 +2709,71 @@
                 <div style="margin-top:6px; display:flex; align-items:center; gap:6px;">
                     <span id="https-status-badge" style="font-size:11px; padding:2px 8px; border-radius:999px; background:rgba(255,255,255,0.08); color:rgba(255,255,255,0.4);">HTTPS: checking...</span>
                 </div>
+
+                <div style="margin-top:12px; padding-top:10px; border-top:1px solid rgba(79,195,247,0.15);">
+                    <h4 style="font-size:12px; margin-bottom:6px;">Remote Access</h4>
+                    <div id="zt-status-section">
+                        <div id="zt-connected" style="display:none;">
+                            <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
+                                <div style="width:8px;height:8px;border-radius:50%;background:#4CAF50;flex-shrink:0;"></div>
+                                <span style="font-size:12px; color:rgba(255,255,255,0.7);">ZeroTier connected</span>
+                            </div>
+                            <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
+                                <input type="text" id="zt-ip-display" readonly style="flex:1; background:rgba(0,0,0,0.4); color:rgba(255,255,255,0.85); border:1px solid rgba(79,195,247,0.25); border-radius:5px; padding:6px 10px; font-size:12px; font-family:monospace; outline:none; cursor:text;">
+                            </div>
+                            <div class="config-help">Use this IP from any device on your ZeroTier network.</div>
+                        </div>
+                        <div id="zt-not-detected" style="display:none;">
+                            <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
+                                <div style="width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,0.25);flex-shrink:0;"></div>
+                                <span style="font-size:12px; color:rgba(255,255,255,0.4);">ZeroTier not detected</span>
+                            </div>
+                            <div class="config-help">For remote access outside your local network, install <a href="https://zerotier.com" target="_blank" style="color:rgba(79,195,247,0.8);">ZeroTier</a> on both machines and join the same network.</div>
+                        </div>
+                    </div>
+                </div>
                 
+                <div style="margin-top:12px; padding-top:10px; border-top:1px solid rgba(79,195,247,0.15);">
+                    <h4 style="font-size:12px; margin-bottom:6px;">Authentication</h4>
+                    <div id="auth-status-section">
+                        <div id="auth-status-msg" class="config-help" style="margin-bottom:8px;">Checking...</div>
+                    </div>
+                    <!-- Setup form (shown when no credentials exist) -->
+                    <div id="auth-setup-section" style="display:none;">
+                        <div class="config-help" style="margin-bottom:8px; color:rgba(255,152,0,0.9);">No password set. Create credentials to secure remote access.</div>
+                        <input type="text" id="auth-setup-user" placeholder="Username" autocomplete="username" style="width:100%; box-sizing:border-box; padding:6px 10px; font-size:12px; background:rgba(0,0,0,0.4); border:1px solid rgba(79,195,247,0.25); border-radius:5px; color:#e6f2ff; outline:none; margin-bottom:6px;">
+                        <input type="password" id="auth-setup-pass" placeholder="Password (4+ chars)" autocomplete="new-password" style="width:100%; box-sizing:border-box; padding:6px 10px; font-size:12px; background:rgba(0,0,0,0.4); border:1px solid rgba(79,195,247,0.25); border-radius:5px; color:#e6f2ff; outline:none; margin-bottom:6px;">
+                        <input type="password" id="auth-setup-pass2" placeholder="Confirm password" autocomplete="new-password" style="width:100%; box-sizing:border-box; padding:6px 10px; font-size:12px; background:rgba(0,0,0,0.4); border:1px solid rgba(79,195,247,0.25); border-radius:5px; color:#e6f2ff; outline:none; margin-bottom:6px;">
+                        <button id="auth-setup-btn" class="config-button-small" style="width:100%; padding:6px; font-size:12px;">Create Account</button>
+                        <div id="auth-setup-err" style="font-size:11px; color:#ff8a8a; margin-top:4px; min-height:14px;"></div>
+                    </div>
+                    <!-- Change password (shown when credentials exist) -->
+                    <div id="auth-change-section" style="display:none;">
+                        <div style="display:flex; align-items:center; gap:6px; margin-bottom:8px;">
+                            <div style="width:8px;height:8px;border-radius:50%;background:#4CAF50;flex-shrink:0;"></div>
+                            <span id="auth-username-display" style="font-size:12px; color:rgba(255,255,255,0.7);">Logged in</span>
+                        </div>
+                        <details style="margin-bottom:4px;">
+                            <summary style="font-size:11px; color:rgba(79,195,247,0.7); cursor:pointer; user-select:none;">Change Password</summary>
+                            <div style="margin-top:8px;">
+                                <input type="password" id="auth-old-pass" placeholder="Current password" style="width:100%; box-sizing:border-box; padding:6px 10px; font-size:12px; background:rgba(0,0,0,0.4); border:1px solid rgba(79,195,247,0.25); border-radius:5px; color:#e6f2ff; outline:none; margin-bottom:6px;">
+                                <input type="password" id="auth-new-pass" placeholder="New password (4+ chars)" autocomplete="new-password" style="width:100%; box-sizing:border-box; padding:6px 10px; font-size:12px; background:rgba(0,0,0,0.4); border:1px solid rgba(79,195,247,0.25); border-radius:5px; color:#e6f2ff; outline:none; margin-bottom:6px;">
+                                <input type="password" id="auth-new-pass2" placeholder="Confirm new password" autocomplete="new-password" style="width:100%; box-sizing:border-box; padding:6px 10px; font-size:12px; background:rgba(0,0,0,0.4); border:1px solid rgba(79,195,247,0.25); border-radius:5px; color:#e6f2ff; outline:none; margin-bottom:6px;">
+                                <button id="auth-change-btn" class="config-button-small" style="width:100%; padding:6px; font-size:12px;">Update Password</button>
+                                <div id="auth-change-err" style="font-size:11px; color:#ff8a8a; margin-top:4px; min-height:14px;"></div>
+                            </div>
+                        </details>
+                    </div>
+                </div>
+
                 <h4 style="font-size:12px; margin-top:14px; margin-bottom:6px;">QR Code</h4>
                 <div style="display:flex; justify-content:center; padding:10px; background:rgba(255,255,255,0.95); border-radius:8px; width:fit-content; margin:0 auto;">
                     <canvas id="webui-qr-canvas" width="150" height="150" style="image-rendering:pixelated;"></canvas>
                 </div>
-                <div class="config-help" style="text-align:center; margin-top:4px;">Scan with your phone to open the WebUI.</div>
+                <div id="qr-help-text" class="config-help" style="text-align:center; margin-top:4px;">Scan with your phone to open the WebUI.</div>
+                <div style="text-align:center; margin-top:6px;">
+                    <button id="qr-refresh-btn" class="config-button-small" style="font-size:11px; padding:4px 12px;" title="Generate a fresh QR code with one-time login">Refresh QR (with login)</button>
+                </div>
             </div>
         `;
     }
@@ -2566,6 +2811,7 @@
     }
 
     async function loadCommandsData() {
+        await _waitForBackend();
         const listEl = document.getElementById('commands-list');
         const appsSection = document.getElementById('commands-apps-section');
         const appListEl = document.getElementById('commands-app-list');
@@ -2578,9 +2824,9 @@
 
         try {
             const [cmdRes, sugRes, cfgRes] = await Promise.all([
-                fetch('http://localhost:8765/api/commands'),
-                fetch('http://localhost:8765/api/commands/suggestions'),
-                fetch('http://localhost:8765/api/commands/config')
+                _authFetch('http://localhost:8765/api/commands'),
+                _authFetch('http://localhost:8765/api/commands/suggestions'),
+                _authFetch('http://localhost:8765/api/commands/config')
             ]);
             const cmdData = await cmdRes.json();
             const sugData = await sugRes.json();
@@ -2914,7 +3160,7 @@
                     btn.addEventListener('click', async () => {
                         const id = btn.dataset.id;
                         try {
-                            await fetch('http://localhost:8765/api/commands/suggestions/' + id, { method: 'DELETE' });
+                            await _authFetch('http://localhost:8765/api/commands/suggestions/' + id, { method: 'DELETE' });
                             btn.closest('div[style]').remove();
                             const remaining = sugListEl.children.length;
                             if (sugCountEl) sugCountEl.textContent = remaining;
@@ -2940,7 +3186,7 @@
     async function saveCommandsConfig() {
         const statusEl = document.getElementById('cmd-settings-status');
         try {
-            const res = await fetch('http://localhost:8765/api/commands/config', {
+            const res = await _authFetch('http://localhost:8765/api/commands/config', {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(_cmdConfig)
@@ -2962,6 +3208,7 @@
     function syncPanelData() {
         // Create a mapping between original and radial panel elements
         const elementMappings = [
+            { original: 'auto-continue', radial: 'auto-continue-radial' },
             { original: 'model-input', radial: 'model-input-radial' },
             { original: 'api-endpoint-input', radial: 'api-endpoint-input-radial' },
             { original: 'system-prompt-input', radial: 'system-prompt-input-radial' },
@@ -3253,6 +3500,7 @@
     function setupRadialAutoSave() {
         // Create a mapping between radial and original panel elements
         const elementMappings = [
+            { radial: 'auto-continue-radial', original: 'auto-continue' },
             { radial: 'model-input-radial', original: 'model-input' },
             { radial: 'api-endpoint-input-radial', original: 'api-endpoint-input' },
             { radial: 'system-prompt-input-radial', original: 'system-prompt-input' },
@@ -3833,7 +4081,7 @@
         if (cTA && !cDone && !_circuitsLoadPending) {
             console.log('[AutoLoad] Found circuits textarea, triggering load...');
             _circuitsLoadPending = true;
-            loadCircuitsContent(8).finally(() => { _circuitsLoadPending = false; });
+            loadCircuitsContent().finally(() => { _circuitsLoadPending = false; });
         }
 
         const sTA = document.getElementById('substrate-input-radial');
@@ -3841,7 +4089,7 @@
         if (sTA && !sDone && !_substrateLoadPending) {
             console.log('[AutoLoad] Found substrate textarea, triggering load...');
             _substrateLoadPending = true;
-            loadSubstrateContent(8).finally(() => { _substrateLoadPending = false; });
+            loadSubstrateContent().finally(() => { _substrateLoadPending = false; });
         }
 
         const pTA = document.getElementById('prime-input-radial');
@@ -3849,12 +4097,12 @@
         if (pTA && !pDone && !_primeLoadPending) {
             console.log('[AutoLoad] Found prime textarea, triggering load...');
             _primeLoadPending = true;
-            loadPrimeContent(8).finally(() => { _primeLoadPending = false; });
+            loadPrimeContent().finally(() => { _primeLoadPending = false; });
         }
 
         if (cDone && sDone && pDone) {
             console.log('[AutoLoad] All MD files loaded successfully, stopping interval.');
             clearInterval(_autoLoadCheck);
         }
-    }, 3000);
+    }, 1500);
 })();

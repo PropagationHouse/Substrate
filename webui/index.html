@@ -309,9 +309,71 @@
       }
     }
   </style>
+  <!-- Login / Setup overlay styles -->
+  <style>
+    #authOverlay {
+      position: fixed; inset: 0; z-index: 99999;
+      display: flex; align-items: center; justify-content: center;
+      background: radial-gradient(120% 120% at 50% 30%, rgba(255,255,255,0.10), transparent 50%),
+                  var(--avatar-body-color, #5bbfdd);
+      backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+      transition: opacity 0.4s ease;
+    }
+    #authOverlay.hidden { opacity: 0; pointer-events: none; }
+    .auth-card {
+      width: 340px; max-width: 92vw; padding: 32px 28px;
+      background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.22);
+      border-radius: 18px; backdrop-filter: blur(18px) saturate(1.2);
+      box-shadow: 0 10px 40px rgba(0,0,0,0.25), 0 0 30px rgba(255,255,255,0.15);
+      text-align: center; color: #fff;
+    }
+    .auth-card h2 { margin: 0 0 6px; font-size: 22px; font-weight: 700; letter-spacing: 0.5px; }
+    .auth-card .auth-sub { font-size: 13px; color: rgba(255,255,255,0.6); margin-bottom: 20px; }
+    .auth-card input {
+      display: block; width: 100%; box-sizing: border-box;
+      padding: 12px 14px; margin-bottom: 12px;
+      border: 1px solid rgba(255,255,255,0.3); border-radius: 10px;
+      background: rgba(255,255,255,0.15); color: #fff; font-size: 14px; outline: none;
+    }
+    .auth-card input::placeholder { color: rgba(255,255,255,0.5); }
+    .auth-card input:focus { border-color: rgba(255,255,255,0.55); background: rgba(255,255,255,0.22); }
+    .auth-card .auth-btn {
+      display: block; width: 100%; padding: 12px; margin-top: 4px;
+      border: none; border-radius: 10px; font-size: 15px; font-weight: 600;
+      cursor: pointer; color: #0a2430;
+      background: rgba(255,255,255,0.7); transition: background 0.2s;
+    }
+    .auth-card .auth-btn:hover { background: rgba(255,255,255,0.9); }
+    .auth-card .auth-error {
+      font-size: 12px; color: #ff8a8a; margin-top: 8px; min-height: 16px;
+    }
+  </style>
   <link rel="stylesheet" href="/static/css/avatar.css?v=20260215f" />
 </head>
 <body>
+  <!-- Auth overlay (login / first-time setup) -->
+  <div id="authOverlay" class="hidden">
+    <!-- Login form (shown when credentials already configured) -->
+    <div id="authLogin" class="auth-card" style="display:none;">
+      <h2>Substrate</h2>
+      <div class="auth-sub">Sign in to continue</div>
+      <input id="authLoginUser" type="text" placeholder="Username" autocomplete="username" />
+      <input id="authLoginPass" type="password" placeholder="Password" autocomplete="current-password" />
+      <button class="auth-btn" id="authLoginBtn">Sign In</button>
+      <div class="auth-error" id="authLoginError"></div>
+    </div>
+    <!-- Setup form (shown on first run when no credentials exist) -->
+    <div id="authSetup" class="auth-card" style="display:none;">
+      <h2>Welcome to Substrate</h2>
+      <div class="auth-sub">Create your login credentials</div>
+      <input id="authSetupUser" type="text" placeholder="Choose a username" autocomplete="username" />
+      <input id="authSetupPass" type="password" placeholder="Choose a password (4+ chars)" autocomplete="new-password" />
+      <input id="authSetupPass2" type="password" placeholder="Confirm password" autocomplete="new-password" />
+      <button class="auth-btn" id="authSetupBtn">Create Account</button>
+      <div class="auth-error" id="authSetupError"></div>
+    </div>
+  </div>
+
   <div class="hero" id="heroPanel">
     <div id="bodyBg"><div class="bgSquare"></div></div>
     <video id="cameraVideo" autoplay playsinline muted></video>

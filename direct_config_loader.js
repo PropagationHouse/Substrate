@@ -46,6 +46,11 @@
             updateElement('autonomous-note-prompt-input', config.note_prompts.autonomous);
         }
         
+        // Update auto-continue setting
+        if (config.auto_continue !== undefined) {
+            updateCheckbox('auto-continue', config.auto_continue);
+        }
+        
         // Update autonomy settings
         if (config.autonomy) {
             // Notes

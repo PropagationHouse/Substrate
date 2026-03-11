@@ -545,7 +545,7 @@ class RawTextRenderer {
                 stopBtn.disabled = true;
                 
                 // Call the interrupt API
-                fetch('http://localhost:8765/api/interrupt', { method: 'POST' })
+                (window._authFetch || fetch)('http://localhost:8765/api/interrupt', { method: 'POST' })
                     .then(r => r.json())
                     .then(data => {
                         console.log('[STOP] Interrupt response:', data);

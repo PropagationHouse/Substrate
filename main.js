@@ -34,6 +34,47 @@ let pythonProcess;
 let profileManagerWindow = null;
 let latestRemoteKeyStatus = {};
 let tray = null;
+let electronAuthToken = ''; // Session token for HTTP API auth
+
+// Auto-login: after Python backend starts, request a session token via the local-only endpoint
+function acquireAuthToken(retries = 0) {
+    const http = require('http');
+    const postData = JSON.stringify({ electron: true });
+    const req = http.request({
+        hostname: '127.0.0.1', port: 8765,
+        path: '/api/auth/electron-login', method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) }
+    }, (res) => {
+        let body = '';
+        res.on('data', (chunk) => { body += chunk; });
+        res.on('end', () => {
+            try {
+                const data = JSON.parse(body);
+                if (data.token) {
+                    electronAuthToken = data.token;
+                    debugLog('[Auth] Acquired electron auth token');
+                    // Send to renderer if window is ready
+                    if (mainWindow && !mainWindow.isDestroyed()) {
+                        mainWindow.webContents.send('auth-token', electronAuthToken);
+                    }
+                } else if (retries < 20) {
+                    setTimeout(() => acquireAuthToken(retries + 1), 1000);
+                }
+            } catch(e) {
+                if (retries < 20) setTimeout(() => acquireAuthToken(retries + 1), 1000);
+            }
+        });
+    });
+    req.on('error', () => {
+        // Backend not ready yet, retry
+        if (retries < 20) setTimeout(() => acquireAuthToken(retries + 1), 1000);
+    });
+    req.write(postData);
+    req.end();
+}
+
+// IPC: renderer can request the auth token
+ipcMain.handle('get-auth-token', () => electronAuthToken);
 
 // Speech recognition variables
 let speechProcess = null;
@@ -128,6 +169,8 @@ if (!gotTheLock) {
         runFirstRunCheck().then(() => {
             debugLog('runFirstRunCheck completed, calling startPythonBackend');
             startPythonBackend();
+            // Auto-acquire auth token — start trying quickly; acquireAuthToken retries on its own
+            setTimeout(() => acquireAuthToken(), 1000);
             startSpeechRecognition();
             checkVisionClientAutoStart();
 
