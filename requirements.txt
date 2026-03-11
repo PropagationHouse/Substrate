@@ -35,6 +35,8 @@ openai>=0.27.0
 transformers>=4.18.0
 # NOTE: torch is installed separately with CUDA support — see setup.bat / first_run.py
 google-auth>=2.22.0
+google-auth-oauthlib>=1.0.0
+google-api-python-client>=2.0.0
 sentence-transformers>=2.2.0
 anthropic>=0.18.0
 
