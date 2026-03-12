@@ -113,6 +113,18 @@ cleanup_unused_files.ps1
 macros/
 kill_piano.py
 
+# Gmail / OAuth2 credentials (personal to each machine)
+config/client_secret*.json
+config/gmail_token.json
+config/auth_gmail.py
+config/test_sms_parse.py
+
+# Test scripts with personal data
+reply_sms.py
+
+# Local backups
+backups/
+
 # OS
 Thumbs.db
 .DS_Store

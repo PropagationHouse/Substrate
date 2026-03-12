@@ -1097,6 +1097,12 @@ document.addEventListener('DOMContentLoaded', function() {
     // Listen for Python messages
     window.api.receive('python-message', (data) => {
         try {
+            // Render backend-injected user messages (e.g. inbound SMS) on the user side
+            if (data.type === 'user_message' && data.text) {
+                addUserMessage(data.text);
+                return;
+            }
+            
             // Skip startup and thinking messages
             if (data.status === 'success' && 
                 (data.result === 'Agent ready! Type /help for available commands.' ||

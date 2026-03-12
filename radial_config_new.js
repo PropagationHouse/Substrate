@@ -2636,7 +2636,7 @@
                 </div>
                 <div class="config-help">Keys are masked in the UI after saving. Remove the value to clear it.</div>
                 
-                <h4>Gmail / Google Voice</h4>
+                <h4>Gmail / Google Voice SMS</h4>
                 <div class="config-row">
                     <label for="gmail-address-input-radial">Gmail Address:</label>
                     <input type="text" id="gmail-address-input-radial" placeholder="agent@gmail.com" autocomplete="off" spellcheck="false">
@@ -2645,7 +2645,18 @@
                     <label for="gmail-app-password-input-radial">App Password:</label>
                     <input type="password" id="gmail-app-password-input-radial" placeholder="Enter Gmail App Password" autocomplete="off" spellcheck="false">
                 </div>
-                <div class="config-help">Enable 2FA on the Gmail account, then generate an App Password at <a href="https://myaccount.google.com/apppasswords" target="_blank">myaccount.google.com/apppasswords</a>. Enables email + Google Voice SMS.</div>
+                <details style="margin:6px 0 4px;border:1px solid rgba(255,255,255,0.08);border-radius:6px;background:rgba(255,255,255,0.03);overflow:hidden;">
+                    <summary style="padding:5px 8px;cursor:pointer;font-size:11px;color:rgba(255,255,255,0.45);user-select:none;">&#9881; Setup Guide</summary>
+                    <div style="padding:6px 8px 8px;font-size:11px;line-height:1.65;color:rgba(255,255,255,0.5);border-top:1px solid rgba(255,255,255,0.06);word-wrap:break-word;overflow-wrap:break-word;">
+                        1. Enable <b style="color:rgba(255,255,255,0.7);">2-Step Verification</b> on the Gmail account<br>
+                        2. Create an <b style="color:rgba(255,255,255,0.7);">App Password</b> (<a href="https://myaccount.google.com/apppasswords" target="_blank" style="color:#4a90e2;">link</a>) &mdash; select "Mail", paste above<br>
+                        3. Get <b style="color:rgba(255,255,255,0.7);">OAuth2 credentials</b> from <a href="https://console.cloud.google.com/apis/credentials" target="_blank" style="color:#4a90e2;">Cloud Console</a> (enable Gmail API). Save as:<br>
+                        <code style="display:block;margin:3px 0;padding:3px 6px;background:rgba(0,0,0,0.3);border-radius:4px;font-size:10px;color:rgba(100,200,255,0.8);word-break:break-all;">Substrate\\config\\client_secret_*.json</code>
+                        4. Turn on <b style="color:rgba(255,255,255,0.7);">IMAP</b> in Gmail Settings<br>
+                        5. For SMS: enable <b style="color:rgba(255,255,255,0.7);">Google Voice</b> text-to-email forwarding<br>
+                        <span style="font-size:10px;opacity:0.6;display:block;margin-top:5px;padding-top:4px;border-top:1px solid rgba(255,255,255,0.05);">First run opens a browser for OAuth consent. Token saves to <code style="font-size:9.5px;">config/gmail_token.json</code>.</span>
+                    </div>
+                </details>
                 <div id="gmail-status-radial" class="config-help" style="display:none"></div>
                 
                 <div class="config-help">Advanced settings for the AI model and API endpoint.</div>
@@ -3776,7 +3787,7 @@
             _gmailSaveTimer = setTimeout(() => {
                 const addr = (document.getElementById('gmail-address-input-radial') || {}).value || '';
                 const pw = (document.getElementById('gmail-app-password-input-radial') || {}).value || '';
-                if (addr.length > 0 || pw.length > 0) {
+                if ((addr.length > 0 || pw.length > 0) && !(document.getElementById('gmail-app-password-input-radial')?.dataset.hasKey === 'true' && pw.length === 0)) {
                     console.log('[Gmail AUTO-SAVE] Saving credentials, email:', addr);
                     const keys = {};
                     if (addr) keys.gmail_address = addr;
@@ -4090,6 +4101,12 @@
                     maskIfSet('notion-api-key-radial', 'notion_api_key');
                     maskIfSet('minimax-api-key-input-radial', 'minimax_api_key');
                     maskIfSet('openai-api-key-input-radial', 'openai_api_key');
+                    // Gmail: show email address (not masked) and mask the app password
+                    const gmailAddrLoad = document.getElementById('gmail-address-input-radial');
+                    if (gmailAddrLoad && keys.gmail_address && keys.gmail_address.length > 0) {
+                        gmailAddrLoad.value = keys.gmail_address;
+                    }
+                    maskIfSet('gmail-app-password-input-radial', 'gmail_app_password');
                 }
                 
                 // Show the radial panel

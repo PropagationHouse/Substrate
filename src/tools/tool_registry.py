@@ -1388,35 +1388,6 @@ _ON_DEMAND_TOOLS = {
             category="automation",
         ),
     },
-    "gmail": {
-        "keywords": ["email", "gmail", "inbox", "send email", "check email", "text me", "sms", "google voice", "send a text", "read my email", "mail", "unread"],
-        "register": lambda reg: reg.register(
-            name="gmail",
-            execute=lambda action, **kwargs: _gmail_dispatch(action, **kwargs),
-            description=(
-                "Read, search, and send email via Gmail. Also reads SMS forwarded from Google Voice. "
-                "Actions: status (check config), inbox (recent emails), search (find emails by query), "
-                "send (compose and send email), read_sms (Google Voice texts)."
-            ),
-            schema={
-                "type": "object",
-                "properties": {
-                    "action": {"type": "string", "enum": ["status", "inbox", "search", "send", "read_sms"]},
-                    "to": {"type": "string", "description": "Recipient email address (for send)"},
-                    "subject": {"type": "string", "description": "Email subject (for send)"},
-                    "body": {"type": "string", "description": "Email body text (for send)"},
-                    "query": {"type": "string", "description": "Search query — name, email, subject keyword, or IMAP criteria (for search)"},
-                    "max_results": {"type": "integer", "description": "Max emails to return (default 10)"},
-                    "unread_only": {"type": "boolean", "description": "Only return unread emails (for inbox)"},
-                    "folder": {"type": "string", "description": "IMAP folder (default INBOX)"},
-                    "reply_to_message_id": {"type": "string", "description": "Message-ID to reply to (for threading)"},
-                    "html": {"type": "boolean", "description": "Send as HTML email (default false)"},
-                },
-                "required": ["action"],
-            },
-            category="communication",
-        ),
-    },
     "agent": {
         "keywords": ["sub-agent", "subagent", "background task", "parallel", "spawn agent", "run in background"],
         "register": lambda reg: reg.register(
