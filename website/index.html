@@ -15,7 +15,7 @@
     <meta name="twitter:image" content="https://substrate.propagation.house/og-image.svg">
     <meta name="twitter:title" content="Substrate — Autonomous Desktop Agent">
     <meta name="twitter:description" content="A source-available agentic system that turns your machine into something conversational, proactive, and autonomous. 17 built-in tools, model-independent.">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%230a70e8' rx='20' width='100' height='100'/><text x='50' y='72' text-anchor='middle' fill='white' font-size='60' font-weight='bold'>S</text></svg>" type="image/svg+xml">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%23a08c64' rx='20' width='100' height='100'/><text x='50' y='72' text-anchor='middle' fill='white' font-size='60' font-weight='bold'>S</text></svg>" type="image/svg+xml">
     <script type="application/ld+json">
     {
         "@context": "https://schema.org",
@@ -46,10 +46,10 @@
             theme: {
                 extend: {
                     colors: {
-                        brand: { 50:'#eef9ff',100:'#d8f1ff',200:'#b9e8ff',300:'#89dbff',400:'#51c5ff',500:'#29a7ff',600:'#1189fc',700:'#0a70e8',800:'#0f5abb',900:'#134d93',950:'#0f3059' },
+                        brand: { 50:'#faf6f0',100:'#f0e8d8',200:'#e8dcc8',300:'#d4c4a8',400:'#c9b896',500:'#b8a67e',600:'#a08c64',700:'#887650',800:'#6e5f40',900:'#584c34',950:'#3a3222' },
                     },
                     fontFamily: {
-                        sans: ['Inter','system-ui','-apple-system','sans-serif'],
+                        sans: ['Space Grotesk','Inter','system-ui','-apple-system','sans-serif'],
                         mono: ['JetBrains Mono','Fira Code','monospace'],
                     },
                 },
@@ -58,54 +58,54 @@
     </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
-        body { background: #06060b; }
+        body { background: #0a0a0a; }
         .gradient-text {
-            background: linear-gradient(135deg, #51c5ff 0%, #89dbff 40%, #29a7ff 100%);
+            background: linear-gradient(135deg, #e8dcc8 0%, #d4c4a8 40%, #c9b896 100%);
             -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
         }
         .gradient-line {
-            height: 2px;
-            background: linear-gradient(90deg, transparent 0%, rgba(41,167,255,0.5) 50%, transparent 100%);
+            height: 1px;
+            background: linear-gradient(90deg, transparent 0%, rgba(201,184,150,0.35) 50%, transparent 100%);
         }
-        .glow { box-shadow: 0 0 80px rgba(41,167,255,0.18), 0 0 160px rgba(41,167,255,0.06); }
+        .glow { box-shadow: 0 0 80px rgba(201,184,150,0.1), 0 0 160px rgba(201,184,150,0.03); }
         .card-hover { transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease; }
-        .card-hover:hover { transform: translateY(-4px); box-shadow: 0 8px 50px rgba(41,167,255,0.14); border-color: rgba(41,167,255,0.2); }
-        .terminal-bg { background: linear-gradient(180deg, #0e0e16 0%, #0a0a12 100%); }
+        .card-hover:hover { transform: translateY(-4px); box-shadow: 0 8px 50px rgba(201,184,150,0.08); border-color: rgba(201,184,150,0.15); }
+        .terminal-bg { background: linear-gradient(180deg, #111111 0%, #0d0d0d 100%); }
         .grid-bg {
             background-image:
-                radial-gradient(ellipse 80% 60% at 50% 0%, rgba(41,167,255,0.08) 0%, transparent 70%),
-                radial-gradient(rgba(41,167,255,0.04) 1px, transparent 1px);
+                radial-gradient(ellipse 80% 60% at 50% 0%, rgba(201,184,150,0.05) 0%, transparent 70%),
+                radial-gradient(rgba(255,255,255,0.02) 1px, transparent 1px);
             background-size: 100% 100%, 40px 40px;
         }
         @keyframes cursor-blink-anim { 0%,100%{opacity:1} 50%{opacity:0} }
         @keyframes site-float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
         .cursor-blink { animation: cursor-blink-anim 1s step-end infinite; }
         .tool-pill { transition: background 0.15s ease, border-color 0.15s ease; }
-        .tool-pill:hover { background: rgba(41,167,255,0.12); border-color: rgba(41,167,255,0.25); }
-        ::selection { background: rgba(41,167,255,0.3); }
+        .tool-pill:hover { background: rgba(201,184,150,0.1); border-color: rgba(201,184,150,0.2); }
+        ::selection { background: rgba(201,184,150,0.25); }
 
         /* Stat counter pulse */
-        .stat-glow { text-shadow: 0 0 30px rgba(41,167,255,0.4); }
+        .stat-glow { text-shadow: 0 0 30px rgba(201,184,150,0.3); }
 
         /* Diagram tabs */
         .diagram-tab { background: rgba(255,255,255,0.04); color: #9ca3af; border: 1px solid rgba(255,255,255,0.06); }
         .diagram-tab:hover { background: rgba(255,255,255,0.08); color: #d1d5db; }
-        .diagram-tab-active { background: rgba(41,167,255,0.12) !important; color: #51c5ff !important; border-color: rgba(41,167,255,0.25) !important; }
+        .diagram-tab-active { background: rgba(201,184,150,0.1) !important; color: #e8dcc8 !important; border-color: rgba(201,184,150,0.2) !important; }
     </style>
 </head>
-<body class="text-gray-300 font-sans antialiased overflow-x-hidden">
+<body class="text-gray-300 font-sans antialiased overflow-x-hidden text-lg">
 
     <!-- ==================== NAV ==================== -->
-    <nav class="fixed top-0 w-full z-50 bg-[#06060b]/80 backdrop-blur-2xl border-b border-white/5">
+    <nav class="fixed top-0 w-full z-50 bg-[#0a0a0a]/80 backdrop-blur-2xl border-b border-white/5">
         <div class="max-w-7xl mx-auto px-8 h-16 flex items-center justify-between">
-            <a href="#" class="flex items-center gap-3">
-                <div class="w-9 h-9 rounded-xl bg-brand-600 flex items-center justify-center shadow-lg shadow-brand-600/30">
-                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
-                </div>
-                <span class="text-white font-bold text-xl tracking-tight">Substrate</span>
-            </a>
+            <div class="flex items-center gap-4">
+                <a href="#" class="flex items-center gap-2.5">
+                    <img src="ph-mark.png" alt="Propagation House" class="w-6 h-6 opacity-50">
+                    <span class="text-white font-bold text-xl tracking-tight">Substrate</span>
+                </a>
+            </div>
             <div class="hidden md:flex items-center gap-10 text-[15px] text-gray-400 font-medium">
                 <a href="#features" class="hover:text-white transition">Features</a>
                 <a href="#architecture" class="hover:text-white transition">Architecture</a>
@@ -192,22 +192,22 @@
     <section class="relative py-20">
         <div class="gradient-line max-w-4xl mx-auto mb-20"></div>
         <div class="max-w-5xl mx-auto px-8">
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-10 text-center">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-10 text-center items-start">
                 <div>
-                    <div class="text-5xl md:text-6xl font-black text-white stat-glow mb-2">17</div>
-                    <div class="text-lg text-gray-400 font-medium">Built-in Tools</div>
+                    <div class="text-5xl md:text-6xl font-black text-white stat-glow mb-3">&infin;</div>
+                    <div class="text-[15px] text-gray-400 font-medium leading-snug">Built-in Tools,<br>Unique User Outcomes</div>
                 </div>
                 <div>
-                    <div class="text-5xl md:text-6xl font-black text-white stat-glow mb-2">5+</div>
-                    <div class="text-lg text-gray-400 font-medium">LLM Providers</div>
+                    <div class="text-5xl md:text-6xl font-black text-white stat-glow mb-3">5+</div>
+                    <div class="text-[15px] text-gray-400 font-medium leading-snug">LLM Providers<br>&nbsp;</div>
                 </div>
                 <div>
-                    <div class="text-5xl md:text-6xl font-black text-white stat-glow mb-2">3</div>
-                    <div class="text-lg text-gray-400 font-medium">UI Interfaces</div>
+                    <div class="text-5xl md:text-6xl font-black text-white stat-glow mb-3">3</div>
+                    <div class="text-[15px] text-gray-400 font-medium leading-snug">UI Interfaces<br>&nbsp;</div>
                 </div>
                 <div>
-                    <div class="text-5xl md:text-6xl font-black text-white stat-glow mb-2">100%</div>
-                    <div class="text-lg text-gray-400 font-medium">Local-First</div>
+                    <div class="text-5xl md:text-6xl font-black text-white stat-glow mb-3">100%</div>
+                    <div class="text-[15px] text-gray-400 font-medium leading-snug">Model Agnostic<br>&nbsp;</div>
                 </div>
             </div>
         </div>
@@ -220,227 +220,263 @@
             <div class="text-center mb-20">
                 <p class="text-brand-400 text-lg font-bold uppercase tracking-widest mb-4">Capabilities</p>
                 <h2 class="text-4xl sm:text-5xl md:text-6xl font-black text-white leading-tight">Everything your system<br>needs to <em>be</em>.</h2>
-                <p class="text-xl text-gray-400 max-w-2xl mx-auto mt-6 leading-relaxed">Persistent memory, autonomous scheduling, and full OS control &mdash; model-independent architecture that adapts to each user.</p>
+                <p class="text-2xl text-gray-400 max-w-3xl mx-auto mt-6 leading-relaxed">Persistent memory, autonomous scheduling, and full OS control &mdash; model-independent architecture that adapts to each user.</p>
             </div>
-            <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
-
-                <!-- Card: Desktop Control -->
+            <!-- ═══ ROW 1: Three simple cards ═══ -->
+            <div class="grid md:grid-cols-3 gap-6 md:gap-8">
                 <div class="bg-white/[0.025] border border-white/[0.06] rounded-3xl p-8 card-hover">
                     <div class="w-14 h-14 rounded-2xl bg-brand-500/10 flex items-center justify-center mb-6">
                         <svg class="w-7 h-7 text-brand-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
                     </div>
                     <h3 class="text-white font-bold text-xl mb-3">Desktop Control</h3>
-                    <p class="text-gray-400 text-base leading-relaxed">Shell commands, file operations, process management, mouse/keyboard control, and native Windows UI automation.</p>
+                    <p class="text-gray-400 text-lg leading-relaxed">Shell commands, file operations, process management, mouse/keyboard control, and native Windows UI automation.</p>
                 </div>
-
-                <!-- Card: Multi-Model LLM -->
-                <div class="bg-white/[0.025] border border-white/[0.06] rounded-3xl p-8 card-hover">
-                    <div class="w-14 h-14 rounded-2xl bg-purple-500/10 flex items-center justify-center mb-6">
-                        <svg class="w-7 h-7 text-purple-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M9.5 2A2.5 2.5 0 0112 4.5V12h7.5a2.5 2.5 0 010 5H12v2.5a2.5 2.5 0 01-5 0V17H4.5a2.5 2.5 0 010-5H7V4.5A2.5 2.5 0 019.5 2z"/></svg>
-                    </div>
-                    <h3 class="text-white font-bold text-xl mb-3">Multi-Model LLM</h3>
-                    <p class="text-gray-400 text-base leading-relaxed">Dynamically loads all available models from your API keys, runs entirely offline via your preferred model library, or takes a hybrid approach with both. Any OpenAI-compatible endpoint works too. Hot-swap mid-conversation.</p>
-                </div>
-
-                <!-- Card: Browser Automation -->
                 <div class="bg-white/[0.025] border border-white/[0.06] rounded-3xl p-8 card-hover">
                     <div class="w-14 h-14 rounded-2xl bg-green-500/10 flex items-center justify-center mb-6">
                         <svg class="w-7 h-7 text-green-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
                     </div>
                     <h3 class="text-white font-bold text-xl mb-3">Browser Automation</h3>
-                    <p class="text-gray-400 text-base leading-relaxed">Full Chrome DevTools Protocol control. Navigate, click, type, submit forms, execute JavaScript, and capture screenshots of any page.</p>
+                    <p class="text-gray-400 text-lg leading-relaxed">Full Chrome DevTools Protocol control. Navigate, click, type, submit forms, execute JavaScript, and capture screenshots.</p>
                 </div>
-
-                <!-- Card: Voice I/O -->
                 <div class="bg-white/[0.025] border border-white/[0.06] rounded-3xl p-8 card-hover">
                     <div class="w-14 h-14 rounded-2xl bg-orange-500/10 flex items-center justify-center mb-6">
                         <svg class="w-7 h-7 text-orange-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/></svg>
                     </div>
                     <h3 class="text-white font-bold text-xl mb-3">Voice I/O</h3>
-                    <p class="text-gray-400 text-base leading-relaxed">Local TTS via Kokoro-82M or cloud via ElevenLabs. Speech recognition input. The agent can speak every response aloud.</p>
+                    <p class="text-gray-400 text-lg leading-relaxed">Local TTS via Kokoro-82M or cloud via ElevenLabs. Speech recognition input. The agent speaks every response aloud.</p>
                 </div>
+            </div>
 
-                <!-- Card: Memory -->
-                <div class="bg-white/[0.025] border border-white/[0.06] rounded-3xl p-8 card-hover">
-                    <div class="w-14 h-14 rounded-2xl bg-cyan-500/10 flex items-center justify-center mb-6">
-                        <svg class="w-7 h-7 text-cyan-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
+            <!-- ═══ HERO: Multi-Model LLM ═══ -->
+            <div class="mt-8 bg-white/[0.025] border border-white/[0.06] rounded-3xl p-8 md:p-10 card-hover">
+                <div class="flex flex-col md:flex-row gap-8">
+                    <div class="flex-1">
+                        <div class="flex items-center gap-4 mb-5">
+                            <div class="w-14 h-14 rounded-2xl bg-purple-500/10 flex items-center justify-center">
+                                <svg class="w-7 h-7 text-purple-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M9.5 2A2.5 2.5 0 0112 4.5V12h7.5a2.5 2.5 0 010 5H12v2.5a2.5 2.5 0 01-5 0V17H4.5a2.5 2.5 0 010-5H7V4.5A2.5 2.5 0 019.5 2z"/></svg>
+                            </div>
+                            <h3 class="text-white font-bold text-2xl">Multi-Model LLM</h3>
+                        </div>
+                        <p class="text-gray-400 text-lg leading-relaxed">Dynamically loads all available models from your API keys, runs entirely offline via your preferred model library, or takes a hybrid approach with both. Any OpenAI-compatible endpoint works. Hot-swap mid-conversation.</p>
                     </div>
-                    <h3 class="text-white font-bold text-xl mb-3">Persistent Memory</h3>
-                    <p class="text-gray-400 text-base leading-relaxed">Unified SQLite with FTS5 full-text search and vector embeddings. Hybrid keyword + semantic retrieval across sessions.</p>
-                </div>
-
-                <!-- Card: Circuits -->
-                <div class="bg-white/[0.025] border border-white/[0.06] rounded-3xl p-8 card-hover">
-                    <div class="w-14 h-14 rounded-2xl bg-yellow-500/10 flex items-center justify-center mb-6">
-                        <svg class="w-7 h-7 text-yellow-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    <div class="flex-1 grid grid-cols-2 gap-4">
+                        <div class="bg-white/[0.02] border border-white/[0.04] rounded-2xl p-5">
+                            <h4 class="text-white font-semibold text-sm mb-1">Cloud</h4>
+                            <p class="text-gray-500 text-sm">Anthropic, OpenAI, Google, DeepSeek, xAI</p>
+                        </div>
+                        <div class="bg-white/[0.02] border border-white/[0.04] rounded-2xl p-5">
+                            <h4 class="text-white font-semibold text-sm mb-1">Local</h4>
+                            <p class="text-gray-500 text-sm">Your preferred local models via any OpenAI-compatible server</p>
+                        </div>
+                        <div class="bg-white/[0.02] border border-white/[0.04] rounded-2xl p-5">
+                            <h4 class="text-white font-semibold text-sm mb-1">Hot-swap</h4>
+                            <p class="text-gray-500 text-sm">Change models mid-conversation without restarting</p>
+                        </div>
+                        <div class="bg-white/[0.02] border border-white/[0.04] rounded-2xl p-5">
+                            <h4 class="text-white font-semibold text-sm mb-1">Auto-discover</h4>
+                            <p class="text-gray-500 text-sm">Detects all available models from your API keys</p>
+                        </div>
                     </div>
-                    <h3 class="text-white font-bold text-xl mb-3">Circuits & Scheduling</h3>
-                    <p class="text-gray-400 text-base leading-relaxed">File-driven task scheduling via CIRCUITS.md. Recurring tasks, startup routines, and a system tray daemon that runs even when the UI is closed.</p>
                 </div>
+            </div>
 
-                <!-- Card: Image Gen -->
+            <!-- ═══ ROW 2: Three simple cards ═══ -->
+            <div class="mt-8 grid md:grid-cols-3 gap-6 md:gap-8">
                 <div class="bg-white/[0.025] border border-white/[0.06] rounded-3xl p-8 card-hover">
                     <div class="w-14 h-14 rounded-2xl bg-pink-500/10 flex items-center justify-center mb-6">
                         <svg class="w-7 h-7 text-pink-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
                     </div>
                     <h3 class="text-white font-bold text-xl mb-3">Image Generation</h3>
-                    <p class="text-gray-400 text-base leading-relaxed">Generate images via DALL-E 3 or Google Imagen. Results render inline in the chat with click-to-zoom and download.</p>
+                    <p class="text-gray-400 text-lg leading-relaxed">Generate images via Midjourney, NanoBanana, Google Imagen, and more. Results render inline in the chat with click-to-zoom and download.</p>
                 </div>
-
-                <!-- Card: Plugins & MCP -->
                 <div class="bg-white/[0.025] border border-white/[0.06] rounded-3xl p-8 card-hover">
                     <div class="w-14 h-14 rounded-2xl bg-indigo-500/10 flex items-center justify-center mb-6">
                         <svg class="w-7 h-7 text-indigo-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
                     </div>
-                    <h3 class="text-white font-bold text-xl mb-3">Plugins & MCP</h3>
-                    <p class="text-gray-400 text-base leading-relaxed">Hook-based plugin architecture. Connect external MCP tool servers for any custom integration &mdash; the agent discovers and calls their tools automatically.</p>
+                    <h3 class="text-white font-bold text-xl mb-3">Plugins &amp; MCP</h3>
+                    <p class="text-gray-400 text-lg leading-relaxed">Hook-based plugin architecture. Connect external MCP tool servers &mdash; the agent discovers and calls their tools automatically.</p>
                 </div>
+                <div class="bg-white/[0.025] border border-white/[0.06] rounded-3xl p-8 card-hover">
+                    <div class="w-14 h-14 rounded-2xl bg-yellow-500/10 flex items-center justify-center mb-6">
+                        <svg class="w-7 h-7 text-yellow-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    </div>
+                    <h3 class="text-white font-bold text-xl mb-3">Circuits &amp; Scheduling</h3>
+                    <p class="text-gray-400 text-lg leading-relaxed">File-driven task scheduling via CIRCUITS.md. Recurring tasks, startup routines, and a system tray daemon.</p>
+                </div>
+            </div>
 
-                <!-- Card: Dual UI -->
+            <!-- ═══ HERO: Autonomy & Awareness (merged) ═══ -->
+            <div class="mt-8 bg-white/[0.025] border border-white/[0.06] rounded-3xl p-8 md:p-10 card-hover">
+                <div class="flex items-center gap-4 mb-3">
+                    <div class="w-14 h-14 rounded-2xl bg-rose-500/10 flex items-center justify-center">
+                        <svg class="w-7 h-7 text-rose-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    </div>
+                    <div>
+                        <h3 class="text-white font-bold text-2xl">Autonomy &amp; Awareness</h3>
+                        <p class="text-gray-500 text-base">Every channel independently configurable &mdash; toggle, set intervals, customize prompts</p>
+                    </div>
+                </div>
+                <p class="text-gray-400 text-lg leading-relaxed mb-8">The agent watches your screen, sees through your camera, monitors scheduled tasks, and builds context about your workflow over time. Each awareness channel runs independently with its own cadence &mdash; you decide what it sees and how often.</p>
+                <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div class="bg-white/[0.02] border border-white/[0.04] rounded-2xl p-5">
+                        <div class="flex items-center gap-2 mb-2">
+                            <svg class="w-4 h-4 text-brand-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+                            <h4 class="text-white font-semibold text-sm">Screen Watch</h4>
+                        </div>
+                        <p class="text-gray-500 text-xs leading-relaxed">Periodic screenshots to build workflow context</p>
+                        <p class="text-xs text-gray-600 mt-2">2–10 min &middot; Default off</p>
+                    </div>
+                    <div class="bg-white/[0.02] border border-white/[0.04] rounded-2xl p-5">
+                        <div class="flex items-center gap-2 mb-2">
+                            <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+                            <h4 class="text-white font-semibold text-sm">Camera Vision</h4>
+                        </div>
+                        <p class="text-gray-500 text-xs leading-relaxed">See through your phone's camera via mobile UI</p>
+                        <p class="text-xs text-gray-600 mt-2">30s–2 min &middot; 50% silent</p>
+                    </div>
+                    <div class="bg-white/[0.02] border border-white/[0.04] rounded-2xl p-5">
+                        <div class="flex items-center gap-2 mb-2">
+                            <svg class="w-4 h-4 text-green-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+                            <h4 class="text-white font-semibold text-sm">Auto Messages</h4>
+                        </div>
+                        <p class="text-gray-500 text-xs leading-relaxed">Proactive check-ins, suggestions, observations</p>
+                        <p class="text-xs text-gray-600 mt-2">1–5 min &middot; Custom prompt</p>
+                    </div>
+                    <div class="bg-white/[0.02] border border-white/[0.04] rounded-2xl p-5">
+                        <div class="flex items-center gap-2 mb-2">
+                            <svg class="w-4 h-4 text-lime-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+                            <h4 class="text-white font-semibold text-sm">SMS Listener</h4>
+                        </div>
+                        <p class="text-gray-500 text-xs leading-relaxed">Polls for texts, replies conversationally</p>
+                        <p class="text-xs text-gray-600 mt-2">5s poll &middot; Gmail OAuth2</p>
+                    </div>
+                    <div class="bg-white/[0.02] border border-white/[0.04] rounded-2xl p-5">
+                        <div class="flex items-center gap-2 mb-2">
+                            <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                            <h4 class="text-white font-semibold text-sm">Auto Notes</h4>
+                        </div>
+                        <p class="text-gray-500 text-xs leading-relaxed">Creates Obsidian notes from key conversation points</p>
+                        <p class="text-xs text-gray-600 mt-2">10–30 min &middot; Default off</p>
+                    </div>
+                    <div class="bg-white/[0.02] border border-white/[0.04] rounded-2xl p-5">
+                        <div class="flex items-center gap-2 mb-2">
+                            <svg class="w-4 h-4 text-pink-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+                            <h4 class="text-white font-semibold text-sm">Auto Image Gen</h4>
+                        </div>
+                        <p class="text-gray-500 text-xs leading-relaxed">Generates images inspired by conversation context</p>
+                        <p class="text-xs text-gray-600 mt-2">5–15 min &middot; Custom prompt</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ═══ ROW 3: Two standard + one standard ═══ -->
+            <div class="mt-8 grid md:grid-cols-2 gap-6 md:gap-8">
+                <!-- Hero-ish: Memory -->
+                <div class="bg-white/[0.025] border border-white/[0.06] rounded-3xl p-8 card-hover">
+                    <div class="flex items-center gap-4 mb-5">
+                        <div class="w-14 h-14 rounded-2xl bg-cyan-500/10 flex items-center justify-center">
+                            <svg class="w-7 h-7 text-cyan-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
+                        </div>
+                        <h3 class="text-white font-bold text-2xl">Persistent Memory</h3>
+                    </div>
+                    <p class="text-gray-400 text-lg leading-relaxed mb-5">Unified SQLite with FTS5 full-text search and vector embeddings. Hybrid keyword + semantic retrieval across sessions.</p>
+                    <div class="grid grid-cols-3 gap-3">
+                        <div class="bg-white/[0.02] border border-white/[0.04] rounded-xl p-4 text-center">
+                            <p class="text-white font-bold text-lg">FTS5</p>
+                            <p class="text-gray-500 text-xs">Full-text search</p>
+                        </div>
+                        <div class="bg-white/[0.02] border border-white/[0.04] rounded-xl p-4 text-center">
+                            <p class="text-white font-bold text-lg">Vector</p>
+                            <p class="text-gray-500 text-xs">Semantic embeddings</p>
+                        </div>
+                        <div class="bg-white/[0.02] border border-white/[0.04] rounded-xl p-4 text-center">
+                            <p class="text-white font-bold text-lg">Hybrid</p>
+                            <p class="text-gray-500 text-xs">BM25 + cosine</p>
+                        </div>
+                    </div>
+                </div>
+                <!-- Hero-ish: Avatar & Identity -->
+                <div class="bg-white/[0.025] border border-white/[0.06] rounded-3xl p-8 card-hover">
+                    <div class="flex items-center gap-4 mb-5">
+                        <div class="w-14 h-14 rounded-2xl bg-sky-500/10 flex items-center justify-center">
+                            <svg class="w-7 h-7 text-sky-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                        </div>
+                        <h3 class="text-white font-bold text-2xl">Avatar &amp; Identity</h3>
+                    </div>
+                    <p class="text-gray-400 text-lg leading-relaxed mb-5">A living, animated avatar with breathing, talking, bounce, wiggle, and squish reactions. Fully customizable personality.</p>
+                    <div class="grid grid-cols-3 gap-3">
+                        <div class="bg-white/[0.02] border border-white/[0.04] rounded-xl p-4 text-center">
+                            <p class="text-white font-semibold text-sm">SUBSTRATE.md</p>
+                            <p class="text-gray-500 text-xs">Core identity</p>
+                        </div>
+                        <div class="bg-white/[0.02] border border-white/[0.04] rounded-xl p-4 text-center">
+                            <p class="text-white font-semibold text-sm">PRIME.md</p>
+                            <p class="text-gray-500 text-xs">Startup behavior</p>
+                        </div>
+                        <div class="bg-white/[0.02] border border-white/[0.04] rounded-xl p-4 text-center">
+                            <p class="text-white font-semibold text-sm">CIRCUITS.md</p>
+                            <p class="text-gray-500 text-xs">Recurring tasks</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ═══ ROW 4: Three simple cards ═══ -->
+            <div class="mt-8 grid md:grid-cols-3 gap-6 md:gap-8">
                 <div class="bg-white/[0.025] border border-white/[0.06] rounded-3xl p-8 card-hover">
                     <div class="w-14 h-14 rounded-2xl bg-teal-500/10 flex items-center justify-center mb-6">
                         <svg class="w-7 h-7 text-teal-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></svg>
                     </div>
-                    <h3 class="text-white font-bold text-xl mb-3">Desktop & Mobile UI</h3>
-                    <p class="text-gray-400 text-base leading-relaxed">Electron desktop app with animated avatar, plus a PWA-capable WebUI accessible from any phone, tablet, or browser on your network.</p>
+                    <h3 class="text-white font-bold text-xl mb-3">Desktop &amp; Mobile UI</h3>
+                    <p class="text-gray-400 text-lg leading-relaxed">Electron desktop app with animated avatar, plus a PWA-capable WebUI for any phone, tablet, or browser on your network.</p>
                 </div>
-
-                <!-- Card: Autonomy & Awareness -->
-                <div class="bg-white/[0.025] border border-white/[0.06] rounded-3xl p-8 card-hover">
-                    <div class="w-14 h-14 rounded-2xl bg-rose-500/10 flex items-center justify-center mb-6">
-                        <svg class="w-7 h-7 text-rose-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                    </div>
-                    <h3 class="text-white font-bold text-xl mb-3">Autonomy & Awareness</h3>
-                    <p class="text-gray-400 text-base leading-relaxed">Configurable screen observation, camera/computer vision, and autonomous context building. Control how often the agent watches your screen, sees through your camera, and learns your workflows &mdash; all with adjustable intervals and toggles per channel.</p>
-                </div>
-
-                <!-- Card: Avatar & Agent Identity -->
-                <div class="bg-white/[0.025] border border-white/[0.06] rounded-3xl p-8 card-hover">
-                    <div class="w-14 h-14 rounded-2xl bg-sky-500/10 flex items-center justify-center mb-6">
-                        <svg class="w-7 h-7 text-sky-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                    </div>
-                    <h3 class="text-white font-bold text-xl mb-3">Animated Avatar & Identity</h3>
-                    <p class="text-gray-400 text-base leading-relaxed">A living, animated avatar with idle breathing, talking animations, bounce, wiggle, and squish reactions. Customize your agent's personality via editable markdown files &mdash; SUBSTRATE.md defines its core identity, PRIME.md sets startup behavior, and CIRCUITS.md schedules recurring tasks. Upload any image as the avatar face through the radial config panel.</p>
-                </div>
-
-                <!-- Card: Remote Access -->
                 <div class="bg-white/[0.025] border border-white/[0.06] rounded-3xl p-8 card-hover">
                     <div class="w-14 h-14 rounded-2xl bg-emerald-500/10 flex items-center justify-center mb-6">
                         <svg class="w-7 h-7 text-emerald-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9"/></svg>
                     </div>
-                    <h3 class="text-white font-bold text-xl mb-3">Remote Access via ZeroTier</h3>
-                    <p class="text-gray-400 text-base leading-relaxed">Access your agent from any device on your ZeroTier network &mdash; phone, tablet, or another PC. The built-in WebUI and mobile PWA connect securely over your private overlay network without exposing anything to the public internet. Chat, use voice, and control your desktop remotely.</p>
+                    <h3 class="text-white font-bold text-xl mb-3">Remote Access</h3>
+                    <p class="text-gray-400 text-lg leading-relaxed">Access your agent from any device via ZeroTier. Secure private overlay network &mdash; no public internet exposure.</p>
                 </div>
-
-                <!-- Card: MIDI & Hardware -->
                 <div class="bg-white/[0.025] border border-white/[0.06] rounded-3xl p-8 card-hover">
-                    <div class="w-14 h-14 rounded-2xl bg-violet-500/10 flex items-center justify-center mb-6">
-                        <svg class="w-7 h-7 text-violet-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+                    <div class="w-14 h-14 rounded-2xl bg-lime-500/10 flex items-center justify-center mb-6">
+                        <svg class="w-7 h-7 text-lime-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/><path d="M8 10h.01M12 10h.01M16 10h.01"/></svg>
                     </div>
-                    <h3 class="text-white font-bold text-xl mb-3">MIDI &amp; Hardware Control</h3>
-                    <p class="text-gray-400 text-base leading-relaxed">Control connected MIDI instruments &mdash; synthesizers, drum machines, hardware &mdash; through Python scripts the agent writes and runs autonomously. Not a hardcoded feature; an emergent property of shell access, scripting, and the skill system.</p>
+                    <h3 class="text-white font-bold text-xl mb-3">Email &amp; SMS</h3>
+                    <p class="text-gray-400 text-lg leading-relaxed">Gmail API with OAuth2 for email. Google Voice for SMS &mdash; reads, replies conversationally, shows both sides in chat.</p>
                 </div>
-
             </div>
 
-            <!-- Autonomy detail panel -->
-            <div class="mt-12 bg-white/[0.02] border border-white/[0.06] rounded-3xl p-8 md:p-10">
-                <div class="flex items-center gap-4 mb-8">
-                    <div class="w-12 h-12 rounded-2xl bg-rose-500/10 flex items-center justify-center">
-                        <svg class="w-6 h-6 text-rose-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                    </div>
-                    <div>
-                        <h3 class="text-white font-bold text-xl">Autonomy Settings</h3>
-                        <p class="text-gray-500 text-sm">Every awareness channel is independently configurable &mdash; enable/disable, set intervals, customize prompts</p>
-                    </div>
-                </div>
-                <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
-                    <!-- Channel: Screen Observation -->
-                    <div class="bg-white/[0.02] border border-white/[0.04] rounded-2xl p-6">
-                        <div class="flex items-center gap-3 mb-3">
-                            <div class="w-8 h-8 rounded-lg bg-brand-500/10 flex items-center justify-center">
-                                <svg class="w-4 h-4 text-brand-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+            <!-- ═══ HERO: Hardware & Embodiment ═══ -->
+            <div class="mt-8 bg-white/[0.025] border border-white/[0.06] rounded-3xl p-8 md:p-10 card-hover">
+                <div class="flex flex-col md:flex-row gap-8">
+                    <div class="flex-1">
+                        <div class="flex items-center gap-4 mb-5">
+                            <div class="w-14 h-14 rounded-2xl bg-violet-500/10 flex items-center justify-center">
+                                <svg class="w-7 h-7 text-violet-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 2a2 2 0 012 2v2a2 2 0 01-2 2 2 2 0 01-2-2V4a2 2 0 012-2z"/><path d="M12 8v4"/><circle cx="12" cy="16" r="4"/><path d="M8 16H4M20 16h-4M12 20v2"/></svg>
                             </div>
-                            <h4 class="text-white font-semibold text-base">Screen Observation</h4>
+                            <h3 class="text-white font-bold text-2xl">Hardware &amp; Embodiment</h3>
                         </div>
-                        <p class="text-gray-400 text-sm leading-relaxed mb-3">Periodic screenshots let the agent see what you're working on and build context about your workflow.</p>
-                        <div class="text-xs text-gray-500 space-y-1">
-                            <div class="flex justify-between"><span>Interval</span><span class="text-gray-400">2 &ndash; 10 min (configurable)</span></div>
-                            <div class="flex justify-between"><span>Default</span><span class="text-rose-400/70">Off</span></div>
-                        </div>
+                        <p class="text-gray-400 text-lg leading-relaxed">Control MIDI instruments, bridge to Raspberry Pi devices, and drive robotic embodiments. The agent writes and runs scripts autonomously to interact with physical hardware &mdash; an emergent property of shell access, networking, and the skill system.</p>
                     </div>
-                    <!-- Channel: Camera Vision -->
-                    <div class="bg-white/[0.02] border border-white/[0.04] rounded-2xl p-6">
-                        <div class="flex items-center gap-3 mb-3">
-                            <div class="w-8 h-8 rounded-lg bg-purple-500/10 flex items-center justify-center">
-                                <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
-                            </div>
-                            <h4 class="text-white font-semibold text-base">Camera / Vision</h4>
+                    <div class="flex-1 grid grid-cols-2 gap-4">
+                        <div class="bg-white/[0.02] border border-white/[0.04] rounded-2xl p-5">
+                            <h4 class="text-white font-semibold text-sm mb-1">MIDI</h4>
+                            <p class="text-gray-500 text-sm">Synthesizers, drum machines, DAW control</p>
                         </div>
-                        <p class="text-gray-400 text-sm leading-relaxed mb-3">See through your phone's camera via the mobile WebUI. The agent reacts naturally to what it sees &mdash; with a special "first look" prompt when vision connects.</p>
-                        <div class="text-xs text-gray-500 space-y-1">
-                            <div class="flex justify-between"><span>Interval</span><span class="text-gray-400">30s &ndash; 2 min</span></div>
-                            <div class="flex justify-between"><span>Silent chance</span><span class="text-gray-400">50% (won't always comment)</span></div>
+                        <div class="bg-white/[0.02] border border-white/[0.04] rounded-2xl p-5">
+                            <h4 class="text-white font-semibold text-sm mb-1">Raspberry Pi</h4>
+                            <p class="text-gray-500 text-sm">SSH bridge to any networked device</p>
                         </div>
-                    </div>
-                    <!-- Channel: Circuits Polling -->
-                    <div class="bg-white/[0.02] border border-white/[0.04] rounded-2xl p-6">
-                        <div class="flex items-center gap-3 mb-3">
-                            <div class="w-8 h-8 rounded-lg bg-yellow-500/10 flex items-center justify-center">
-                                <svg class="w-4 h-4 text-yellow-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                            </div>
-                            <h4 class="text-white font-semibold text-base">Circuits Polling</h4>
+                        <div class="bg-white/[0.02] border border-white/[0.04] rounded-2xl p-5">
+                            <h4 class="text-white font-semibold text-sm mb-1">Robotics</h4>
+                            <p class="text-gray-500 text-sm">Servos, sensors, companion robots</p>
                         </div>
-                        <p class="text-gray-400 text-sm leading-relaxed mb-3">Background system monitoring on a timer. The agent checks for events, alerts, and scheduled tasks &mdash; responds silently unless something needs attention.</p>
-                        <div class="text-xs text-gray-500 space-y-1">
-                            <div class="flex justify-between"><span>Interval</span><span class="text-gray-400">1 &ndash; 60 min (configurable)</span></div>
-                            <div class="flex justify-between"><span>Active hours</span><span class="text-gray-400">Configurable window</span></div>
-                        </div>
-                    </div>
-                    <!-- Channel: Autonomous Messages -->
-                    <div class="bg-white/[0.02] border border-white/[0.04] rounded-2xl p-6">
-                        <div class="flex items-center gap-3 mb-3">
-                            <div class="w-8 h-8 rounded-lg bg-green-500/10 flex items-center justify-center">
-                                <svg class="w-4 h-4 text-green-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
-                            </div>
-                            <h4 class="text-white font-semibold text-base">Autonomous Messages</h4>
-                        </div>
-                        <p class="text-gray-400 text-sm leading-relaxed mb-3">Periodic conversational check-ins. The agent proactively comments on your work, offers suggestions, or shares observations.</p>
-                        <div class="text-xs text-gray-500 space-y-1">
-                            <div class="flex justify-between"><span>Interval</span><span class="text-gray-400">1 &ndash; 5 min</span></div>
-                            <div class="flex justify-between"><span>Custom prompt</span><span class="text-gray-400">Fully editable</span></div>
-                        </div>
-                    </div>
-                    <!-- Channel: Autonomous Notes -->
-                    <div class="bg-white/[0.02] border border-white/[0.04] rounded-2xl p-6">
-                        <div class="flex items-center gap-3 mb-3">
-                            <div class="w-8 h-8 rounded-lg bg-cyan-500/10 flex items-center justify-center">
-                                <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                            </div>
-                            <h4 class="text-white font-semibold text-base">Autonomous Notes</h4>
-                        </div>
-                        <p class="text-gray-400 text-sm leading-relaxed mb-3">Automatically creates Obsidian notes summarizing key conversation points, decisions, and action items.</p>
-                        <div class="text-xs text-gray-500 space-y-1">
-                            <div class="flex justify-between"><span>Interval</span><span class="text-gray-400">10 &ndash; 30 min</span></div>
-                            <div class="flex justify-between"><span>Default</span><span class="text-rose-400/70">Off</span></div>
-                        </div>
-                    </div>
-                    <!-- Channel: Image Generation -->
-                    <div class="bg-white/[0.02] border border-white/[0.04] rounded-2xl p-6">
-                        <div class="flex items-center gap-3 mb-3">
-                            <div class="w-8 h-8 rounded-lg bg-pink-500/10 flex items-center justify-center">
-                                <svg class="w-4 h-4 text-pink-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
-                            </div>
-                            <h4 class="text-white font-semibold text-base">Auto Image Gen</h4>
-                        </div>
-                        <p class="text-gray-400 text-sm leading-relaxed mb-3">Periodically generates image prompts inspired by the conversation context using DALL-E or Imagen. Creative visual companion.</p>
-                        <div class="text-xs text-gray-500 space-y-1">
-                            <div class="flex justify-between"><span>Interval</span><span class="text-gray-400">5 &ndash; 15 min</span></div>
-                            <div class="flex justify-between"><span>Custom prompt</span><span class="text-gray-400">Fully editable</span></div>
+                        <div class="bg-white/[0.02] border border-white/[0.04] rounded-2xl p-5">
+                            <h4 class="text-white font-semibold text-sm mb-1">Emergent</h4>
+                            <p class="text-gray-500 text-sm">Agent teaches itself new hardware skills</p>
                         </div>
                     </div>
                 </div>
-                <p class="text-center text-gray-500 text-sm mt-6">All channels have independent enable/disable toggles, configurable min/max intervals, and custom prompts. The agent builds a richer understanding of your workflow over time.</p>
             </div>
         </div>
     </section>
@@ -452,16 +488,16 @@
             <div class="text-center mb-20">
                 <p class="text-brand-400 text-lg font-bold uppercase tracking-widest mb-4">The Interface</p>
                 <h2 class="text-4xl sm:text-5xl md:text-6xl font-black text-white leading-tight">Minimalist by design,<br>powerful by nature.</h2>
-                <p class="text-xl text-gray-400 max-w-2xl mx-auto mt-6 leading-relaxed">Just your avatar, a text field, and a transparent canvas. Designed to fit into whatever workflow you have without being intrusive or distracting.</p>
+                <p class="text-2xl text-gray-400 max-w-3xl mx-auto mt-6 leading-relaxed">Just your avatar, a text field, and a transparent canvas. Designed to fit into whatever workflow you have without being intrusive or distracting.</p>
             </div>
 
             <!-- All avatar + UI styles scoped under .app-demo -->
             <style>
                 /* ── Avatar body ── */
-                .app-demo .da { position:relative; width:61px; height:120px; background:#5bbfdd; border-radius:60% 60% 50% 50%; box-shadow:0 2px 10px rgba(0,0,0,.1),0 0 15px 4px rgba(91,191,221,.5),0 0 30px 8px rgba(91,191,221,.2); animation:da-float 6s ease-in-out infinite,da-bloom 25s linear infinite; display:flex; flex-direction:column; align-items:center; justify-content:center; overflow:visible; transition:transform .3s ease,background-color .5s ease,box-shadow 2s ease-in-out; transform-origin:center center; cursor:grab; user-select:none; }
+                .app-demo .da { position:relative; width:61px; height:120px; background:#c9b896; border-radius:60% 60% 50% 50%; box-shadow:0 2px 10px rgba(0,0,0,.1),0 0 15px 4px rgba(201,184,150,.4),0 0 30px 8px rgba(201,184,150,.15); animation:da-float 6s ease-in-out infinite,da-bloom-warm 25s linear infinite; display:flex; flex-direction:column; align-items:center; justify-content:center; overflow:visible; transition:transform .3s ease,background-color .5s ease,box-shadow 2s ease-in-out; transform-origin:center center; cursor:grab; user-select:none; }
                 .app-demo .da:active { cursor:grabbing; }
                 /* ── Face panel (::before) ── */
-                .app-demo .da::before { content:''; position:absolute; width:64%; height:25%; background:#a8e4f3; border-radius:10px; border:2px solid #5bbfdd; z-index:1; top:23%; left:50%; transform:translate(-50%,-50%); transition:background-color .5s ease; }
+                .app-demo .da::before { content:''; position:absolute; width:64%; height:25%; background:#e8dcc8; border-radius:10px; border:2px solid #c9b896; z-index:1; top:23%; left:50%; transform:translate(-50%,-50%); transition:background-color .5s ease; }
                 /* ── Eyes ── */
                 .app-demo .da-eye { position:absolute; width:9px; height:9px; background:radial-gradient(circle at 25% 25%,#fff 0%,#fff 25%,#000 25%,#000 100%); border:2px solid #000; border-radius:50%; z-index:10; transition:transform .2s ease-out,height .15s ease-out; }
                 .app-demo .da-eye-l { top:11%; left:23%; }
@@ -474,7 +510,7 @@
                 .app-demo .da-cheek-l { top:21%; left:20%; }
                 .app-demo .da-cheek-r { top:21%; right:20%; }
                 /* ── Arms ── */
-                .app-demo .da-arm { position:absolute; width:20px; height:10px; background:var(--demo-arm-bg,#7acee6); border-radius:0 0 10px 10px; z-index:5; border:2px solid var(--demo-body-bg,#5bbfdd); transition:all .3s ease,background-color .5s ease; transform-origin:center top; }
+                .app-demo .da-arm { position:absolute; width:20px; height:10px; background:var(--demo-arm-bg,#d4c4a8); border-radius:0 0 10px 10px; z-index:5; border:2px solid var(--demo-body-bg,#c9b896); transition:all .3s ease,background-color .5s ease; transform-origin:center top; }
                 .app-demo .da-arm-l { top:60%; left:5px; transform:rotate(-10deg); }
                 .app-demo .da-arm-r { top:60%; right:5px; transform:rotate(10deg); }
                 /* ── Brows (hidden default) ── */
@@ -490,14 +526,14 @@
                 .app-demo .da.da-sad .da-eye { height:3px!important; width:8px!important; border-radius:0 0 50% 50%!important; background:transparent!important; border:1px solid #000!important; border-top:none!important; }
                 /* ── Keyframes ── */
                 @keyframes da-float { 0%{transform:translateY(0) rotate(0) scale(1)} 25%{transform:translateY(-5px) rotate(1deg) scale(1.05,.95)} 50%{transform:translateY(-10px) rotate(0) scale(1.03,.97)} 75%{transform:translateY(-5px) rotate(-1deg) scale(1.05,.95)} 100%{transform:translateY(0) rotate(0) scale(1)} }
-                @keyframes da-bloom { 0%,100%{box-shadow:0 2px 10px rgba(0,0,0,.1),0 0 14px 4px rgba(91,191,221,.4),0 0 28px 7px rgba(91,191,221,.14)} 35%{box-shadow:0 2px 10px rgba(0,0,0,.1),0 0 17px 5px rgba(91,191,221,.48),0 0 32px 9px rgba(91,191,221,.18)} 70%{box-shadow:0 2px 10px rgba(0,0,0,.1),0 0 15px 4px rgba(91,191,221,.43),0 0 30px 8px rgba(91,191,221,.16)} }
+                @keyframes da-bloom-warm { 0%,100%{box-shadow:0 2px 10px rgba(0,0,0,.1),0 0 14px 4px rgba(201,184,150,.3),0 0 28px 7px rgba(201,184,150,.1)} 35%{box-shadow:0 2px 10px rgba(0,0,0,.1),0 0 17px 5px rgba(201,184,150,.38),0 0 32px 9px rgba(201,184,150,.14)} 70%{box-shadow:0 2px 10px rgba(0,0,0,.1),0 0 15px 4px rgba(201,184,150,.33),0 0 30px 8px rgba(201,184,150,.12)} }
                 @keyframes da-shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-4px) rotate(-1deg)} 75%{transform:translateX(4px) rotate(1deg)} }
                 @keyframes da-bounce { 0%{transform:translateY(0) scale(1)} 40%{transform:translateY(-20px) scale(.95,1.05)} 50%{transform:translateY(-25px) scale(1)} 70%{transform:translateY(0) scale(1.2,.8)} 90%{transform:translateY(0) scale(1.1,.9)} 100%{transform:translateY(0) scale(1)} }
                 @keyframes da-wiggle { 0%,100%{transform:rotate(0)} 25%{transform:rotate(-3deg)} 75%{transform:rotate(3deg)} }
                 @keyframes da-jiggle { 0%,100%{transform:rotate(0) scale(1)} 25%{transform:rotate(-5deg) scale(1.05)} 50%{transform:rotate(0) scale(1.1)} 75%{transform:rotate(5deg) scale(1.05)} }
                 /* ── Messages ── */
                 .app-demo .message { background:rgba(0,0,0,.5); padding:15px; border-radius:10px; margin:5px 0; backdrop-filter:blur(5px); font-family:'Consolas','Monaco','Courier New',monospace; font-size:12px; line-height:1.6; color:white; }
-                .app-demo .message.user { background:rgba(0,255,255,.1); }
+                .app-demo .message.user { background:rgba(201,184,150,.1); }
                 .app-demo .message.assistant { background:rgba(255,255,255,.1); }
                 .app-demo .message .tool-line { font-size:10px; color:rgba(255,255,255,.5); margin-top:6px; }
                 /* ── Titlebar ── */
@@ -538,13 +574,13 @@
                 .app-demo .upload-wrapper:not(:hover) .ri-11 { transition-delay:.03s; }
                 .app-demo .upload-wrapper:not(:hover) .ri-user { transition-delay:.06s; }
                 .app-demo .upload-wrapper:not(:hover) .ri-mute { transition-delay:.09s; }
-                .app-demo .radial-menu .radial-item:hover { transform:scale(1.2)!important; background:rgba(255,255,255,.25); box-shadow:0 0 10px rgba(79,195,247,.3); }
+                .app-demo .radial-menu .radial-item:hover { transform:scale(1.2)!important; background:rgba(255,255,255,.25); box-shadow:0 0 10px rgba(201,184,150,.3); }
                 .app-demo .upload-wrapper:hover .radial-menu::before { content:''; position:absolute; left:-20px; top:-80px; width:70px; height:100px; pointer-events:all; }
             </style>
 
             <!-- UI Mockup -->
             <div class="max-w-4xl mx-auto app-demo">
-                <div class="rounded-3xl border border-white/10 glow overflow-hidden" style="background:linear-gradient(180deg,#0c0c14 0%,#080810 100%);">
+                <div class="rounded-3xl border border-white/10 glow overflow-hidden" style="background:linear-gradient(180deg,#111111 0%,#0d0d0d 100%);">
                     <div class="titlebar">
                         <button class="minimize-btn" title="Minimize to tray">−</button>
                         <button class="close-btn" title="Close">×</button>
@@ -552,7 +588,7 @@
                     <div id="demo-box" class="relative flex flex-col" style="min-height:540px; overflow:hidden;">
                         <div id="demo-messages" class="flex-1 px-5 pt-2 pb-4 flex flex-col gap-2.5 overflow-hidden" style="padding-bottom:220px;">
                             <div class="message user">What can you do in Code mode?</div>
-                            <div class="message assistant">In <span style="color:rgba(0,255,255,.7);">Code</span> mode I act on your instructions immediately &mdash; executing commands, writing files, browsing the web, and controlling your desktop in real time.<br><br>I can:<br>&bull; Run shell commands and scripts on your OS<br>&bull; Read, write, and manage files across your system<br>&bull; Browse the web, scrape data, and take screenshots<br>&bull; Send messages to Obsidian or any integrated app<br>&bull; Chain multiple tools together in a single response<br><br>This is the default mode &mdash; tell me what to do and I'll do it.</div>
+                            <div class="message assistant">In <span style="color:rgba(201,184,150,.8);">Code</span> mode I act on your instructions immediately &mdash; executing commands, writing files, browsing the web, and controlling your desktop in real time.<br><br>I can:<br>&bull; Run shell commands and scripts on your OS<br>&bull; Read, write, and manage files across your system<br>&bull; Browse the web, scrape data, and take screenshots<br>&bull; Send messages to Obsidian or any integrated app<br>&bull; Chain multiple tools together in a single response<br><br>This is the default mode &mdash; tell me what to do and I'll do it.</div>
                         </div>
                         <!-- Avatar -->
                         <div id="demo-avatar-wrap">
@@ -629,7 +665,7 @@
 
         /* ── Color sets (same as app) ── */
         var colors = [
-            {body:'#5bbfdd',face:'#a8e4f3'},
+            {body:'#c9b896',face:'#e8dcc8'},
             {body:'#ff9d7a',face:'#ffd4c2'},
             {body:'#a5d6a7',face:'#c8e6c9'},
             {body:'#ce93d8',face:'#e1bee7'},
@@ -665,7 +701,7 @@
         }
         // Inject dynamic face color var
         var faceRule=document.createElement('style');
-        faceRule.textContent='.app-demo .da::before{background:var(--demo-face-bg,#a8e4f3)!important;border-color:var(--demo-body-bg,#5bbfdd)!important;}';
+        faceRule.textContent='.app-demo .da::before{background:var(--demo-face-bg,#e8dcc8)!important;border-color:var(--demo-body-bg,#c9b896)!important;}';
         document.head.appendChild(faceRule);
 
         /* ── Blinking ── */
@@ -760,7 +796,7 @@
 
         var content = {
             code: '<div class="message user">What can you do in Code mode?</div>'
-                + '<div class="message assistant">In <span style="color:rgba(0,255,255,.7);">Code</span> mode I act on your instructions immediately &mdash; executing commands, writing files, browsing the web, and controlling your desktop in real time.'
+                + '<div class="message assistant">In <span style="color:rgba(201,184,150,.8);">Code</span> mode I act on your instructions immediately &mdash; executing commands, writing files, browsing the web, and controlling your desktop in real time.'
                 + '<br><br>I can:'
                 + '<br>&bull; Run shell commands and scripts on your OS'
                 + '<br>&bull; Read, write, and manage files across your system'
@@ -770,7 +806,7 @@
                 + '<br><br>This is the default mode &mdash; tell me what to do and I\'ll do it.</div>',
 
             ask: '<div class="message user">What can you do in Ask mode?</div>'
-                + '<div class="message assistant">In <span style="color:rgba(0,255,255,.7);">Ask</span> mode I answer questions using my knowledge, your files, and web search &mdash; without executing any commands or modifying anything.'
+                + '<div class="message assistant">In <span style="color:rgba(201,184,150,.8);">Ask</span> mode I answer questions using my knowledge, your files, and web search &mdash; without executing any commands or modifying anything.'
                 + '<br><br>I can:'
                 + '<br>&bull; Explain code, concepts, or errors'
                 + '<br>&bull; Search the web and summarize findings'
@@ -779,7 +815,7 @@
                 + '<br><br>Think of it as a research assistant that looks but doesn\'t touch.</div>',
 
             plan: '<div class="message user">What does Plan mode do?</div>'
-                + '<div class="message assistant">In <span style="color:rgba(0,255,255,.7);">Plan</span> mode I break down complex tasks into structured steps before executing anything.'
+                + '<div class="message assistant">In <span style="color:rgba(201,184,150,.8);">Plan</span> mode I break down complex tasks into structured steps before executing anything.'
                 + '<br><br>I will:'
                 + '<br>&bull; Analyze what you\'re asking for'
                 + '<br>&bull; Outline each step with the tools I\'ll use'
@@ -889,7 +925,7 @@
             <div class="text-center mb-20">
                 <p class="text-brand-400 text-lg font-bold uppercase tracking-widest mb-4">Architecture</p>
                 <h2 class="text-4xl sm:text-5xl md:text-6xl font-black text-white leading-tight">How it works</h2>
-                <p class="text-xl text-gray-400 max-w-2xl mx-auto mt-6 leading-relaxed">A hybrid Electron + Python architecture with bidirectional IPC, a Flask API layer, and pluggable LLM backends.</p>
+                <p class="text-2xl text-gray-400 max-w-3xl mx-auto mt-6 leading-relaxed">A hybrid Electron + Python architecture with bidirectional IPC, a Flask API layer, and pluggable LLM backends.</p>
             </div>
 
             <!-- Diagram tab switcher -->
@@ -907,48 +943,48 @@
                 <div class="terminal-bg rounded-3xl border border-white/10 p-6 md:p-10 glow overflow-x-auto">
                     <svg viewBox="0 0 900 620" class="w-full max-w-4xl mx-auto" xmlns="http://www.w3.org/2000/svg">
                         <defs>
-                            <linearGradient id="glow-blue" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#29a7ff" stop-opacity="0.25"/><stop offset="100%" stop-color="#29a7ff" stop-opacity="0"/></linearGradient>
+                            <linearGradient id="glow-blue" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#c9b896" stop-opacity="0.25"/><stop offset="100%" stop-color="#c9b896" stop-opacity="0"/></linearGradient>
                             <linearGradient id="glow-green" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#4ade80" stop-opacity="0.2"/><stop offset="100%" stop-color="#4ade80" stop-opacity="0"/></linearGradient>
-                            <filter id="shadow"><feDropShadow dx="0" dy="2" stdDeviation="6" flood-color="#29a7ff" flood-opacity="0.15"/></filter>
+                            <filter id="shadow"><feDropShadow dx="0" dy="2" stdDeviation="6" flood-color="#c9b896" flood-opacity="0.15"/></filter>
                             <filter id="shadow-green"><feDropShadow dx="0" dy="2" stdDeviation="6" flood-color="#4ade80" flood-opacity="0.12"/></filter>
                         </defs>
 
                         <!-- Layer label: User Interfaces -->
-                        <text x="450" y="30" text-anchor="middle" fill="#51c5ff" font-size="15" font-weight="700" letter-spacing="3" font-family="Inter,sans-serif">USER INTERFACES</text>
+                        <text x="450" y="30" text-anchor="middle" fill="#e8dcc8" font-size="15" font-weight="700" letter-spacing="3" font-family="Inter,sans-serif">USER INTERFACES</text>
 
                         <!-- UI Boxes -->
                         <g filter="url(#shadow)">
-                            <rect x="60" y="48" width="220" height="80" rx="16" fill="#0e0e16" stroke="#29a7ff" stroke-opacity="0.3" stroke-width="1.5"/>
+                            <rect x="60" y="48" width="220" height="80" rx="16" fill="#0e0e16" stroke="#c9b896" stroke-opacity="0.3" stroke-width="1.5"/>
                             <text x="170" y="80" text-anchor="middle" fill="white" font-size="16" font-weight="700" font-family="Inter,sans-serif">Electron App</text>
                             <text x="170" y="104" text-anchor="middle" fill="#9ca3af" font-size="13" font-family="Inter,sans-serif">Desktop UI + Avatar</text>
                         </g>
                         <g filter="url(#shadow)">
-                            <rect x="340" y="48" width="220" height="80" rx="16" fill="#0e0e16" stroke="#29a7ff" stroke-opacity="0.3" stroke-width="1.5"/>
+                            <rect x="340" y="48" width="220" height="80" rx="16" fill="#0e0e16" stroke="#c9b896" stroke-opacity="0.3" stroke-width="1.5"/>
                             <text x="450" y="80" text-anchor="middle" fill="white" font-size="16" font-weight="700" font-family="Inter,sans-serif">WebUI / PWA</text>
                             <text x="450" y="104" text-anchor="middle" fill="#9ca3af" font-size="13" font-family="Inter,sans-serif">Mobile &amp; Browser</text>
                         </g>
                         <g filter="url(#shadow)">
-                            <rect x="620" y="48" width="220" height="80" rx="16" fill="#0e0e16" stroke="#29a7ff" stroke-opacity="0.3" stroke-width="1.5"/>
+                            <rect x="620" y="48" width="220" height="80" rx="16" fill="#0e0e16" stroke="#c9b896" stroke-opacity="0.3" stroke-width="1.5"/>
                             <text x="730" y="80" text-anchor="middle" fill="white" font-size="16" font-weight="700" font-family="Inter,sans-serif">System Tray</text>
                             <text x="730" y="104" text-anchor="middle" fill="#9ca3af" font-size="13" font-family="Inter,sans-serif">Background Daemon</text>
                         </g>
 
                         <!-- Connection arrows -->
-                        <line x1="170" y1="128" x2="170" y2="180" stroke="#29a7ff" stroke-opacity="0.35" stroke-width="1.5" stroke-dasharray="6,4"/>
+                        <line x1="170" y1="128" x2="170" y2="180" stroke="#c9b896" stroke-opacity="0.35" stroke-width="1.5" stroke-dasharray="6,4"/>
                         <text x="190" y="160" fill="#6b7280" font-size="11" font-family="JetBrains Mono,monospace">IPC</text>
-                        <line x1="450" y1="128" x2="450" y2="180" stroke="#29a7ff" stroke-opacity="0.35" stroke-width="1.5" stroke-dasharray="6,4"/>
+                        <line x1="450" y1="128" x2="450" y2="180" stroke="#c9b896" stroke-opacity="0.35" stroke-width="1.5" stroke-dasharray="6,4"/>
                         <text x="470" y="160" fill="#6b7280" font-size="11" font-family="JetBrains Mono,monospace">HTTP/WS</text>
-                        <line x1="730" y1="128" x2="730" y2="180" stroke="#29a7ff" stroke-opacity="0.35" stroke-width="1.5" stroke-dasharray="6,4"/>
+                        <line x1="730" y1="128" x2="730" y2="180" stroke="#c9b896" stroke-opacity="0.35" stroke-width="1.5" stroke-dasharray="6,4"/>
                         <text x="750" y="160" fill="#6b7280" font-size="11" font-family="JetBrains Mono,monospace">HTTP</text>
 
                         <!-- Arrow tips -->
-                        <polygon points="170,180 165,170 175,170" fill="#29a7ff" fill-opacity="0.5"/>
-                        <polygon points="450,180 445,170 455,170" fill="#29a7ff" fill-opacity="0.5"/>
-                        <polygon points="730,180 725,170 735,170" fill="#29a7ff" fill-opacity="0.5"/>
+                        <polygon points="170,180 165,170 175,170" fill="#c9b896" fill-opacity="0.5"/>
+                        <polygon points="450,180 445,170 455,170" fill="#c9b896" fill-opacity="0.5"/>
+                        <polygon points="730,180 725,170 735,170" fill="#c9b896" fill-opacity="0.5"/>
 
                         <!-- Backend layer -->
-                        <rect x="40" y="188" width="820" height="210" rx="20" fill="url(#glow-blue)" stroke="#29a7ff" stroke-opacity="0.15" stroke-width="1"/>
-                        <text x="450" y="218" text-anchor="middle" fill="#51c5ff" font-size="15" font-weight="700" letter-spacing="3" font-family="Inter,sans-serif">PYTHON BACKEND</text>
+                        <rect x="40" y="188" width="820" height="210" rx="20" fill="url(#glow-blue)" stroke="#c9b896" stroke-opacity="0.15" stroke-width="1"/>
+                        <text x="450" y="218" text-anchor="middle" fill="#e8dcc8" font-size="15" font-weight="700" letter-spacing="3" font-family="Inter,sans-serif">PYTHON BACKEND</text>
                         <text x="450" y="238" text-anchor="middle" fill="#6b7280" font-size="12" font-family="JetBrains Mono,monospace">Flask &middot; port 8765</text>
 
                         <!-- Backend modules -->
@@ -1011,8 +1047,8 @@
                 <div class="terminal-bg rounded-3xl border border-white/10 p-6 md:p-10 glow overflow-x-auto">
                     <svg viewBox="0 0 900 820" class="w-full max-w-4xl mx-auto" xmlns="http://www.w3.org/2000/svg">
                         <defs>
-                            <linearGradient id="ocs-ring" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#29a7ff"/><stop offset="50%" stop-color="#a78bfa"/><stop offset="100%" stop-color="#4ade80"/></linearGradient>
-                            <marker id="arrow-blue" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#29a7ff" fill-opacity="0.7"/></marker>
+                            <linearGradient id="ocs-ring" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#c9b896"/><stop offset="50%" stop-color="#a78bfa"/><stop offset="100%" stop-color="#4ade80"/></linearGradient>
+                            <marker id="arrow-blue" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#c9b896" fill-opacity="0.7"/></marker>
                             <marker id="arrow-purple" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#a78bfa" fill-opacity="0.7"/></marker>
                             <marker id="arrow-green" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#4ade80" fill-opacity="0.7"/></marker>
                             <marker id="arrow-red" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"><polygon points="0 0, 10 3.5, 0 7" fill="#f87171" fill-opacity="0.7"/></marker>
@@ -1023,14 +1059,14 @@
                         <!-- User message entry -->
                         <rect x="320" y="50" width="260" height="50" rx="14" fill="#0e0e16" stroke="#6b7280" stroke-opacity="0.3" stroke-width="1.5"/>
                         <text x="450" y="80" text-anchor="middle" fill="white" font-size="14" font-weight="600" font-family="Inter,sans-serif">User Message</text>
-                        <line x1="450" y1="100" x2="450" y2="140" stroke="#29a7ff" stroke-opacity="0.5" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+                        <line x1="450" y1="100" x2="450" y2="140" stroke="#c9b896" stroke-opacity="0.5" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
 
                         <!-- Step 1: OBSERVE -->
-                        <rect x="60" y="148" width="280" height="140" rx="18" fill="#0e0e16" stroke="#29a7ff" stroke-opacity="0.35" stroke-width="1.5" filter="url(#shadow)"/>
-                        <rect x="60" y="148" width="280" height="36" rx="18" fill="#29a7ff" fill-opacity="0.08"/>
-                        <circle cx="88" cy="166" r="10" fill="#29a7ff" fill-opacity="0.2"/>
-                        <text x="88" y="171" text-anchor="middle" fill="#29a7ff" font-size="12" font-weight="800" font-family="Inter,sans-serif">1</text>
-                        <text x="210" y="172" text-anchor="middle" fill="#51c5ff" font-size="16" font-weight="800" font-family="Inter,sans-serif">OBSERVE</text>
+                        <rect x="60" y="148" width="280" height="140" rx="18" fill="#0e0e16" stroke="#c9b896" stroke-opacity="0.35" stroke-width="1.5" filter="url(#shadow)"/>
+                        <rect x="60" y="148" width="280" height="36" rx="18" fill="#c9b896" fill-opacity="0.08"/>
+                        <circle cx="88" cy="166" r="10" fill="#c9b896" fill-opacity="0.2"/>
+                        <text x="88" y="171" text-anchor="middle" fill="#c9b896" font-size="12" font-weight="800" font-family="Inter,sans-serif">1</text>
+                        <text x="210" y="172" text-anchor="middle" fill="#e8dcc8" font-size="16" font-weight="800" font-family="Inter,sans-serif">OBSERVE</text>
                         <text x="200" y="208" text-anchor="middle" fill="#d1d5db" font-size="13" font-family="Inter,sans-serif">Build system prompt</text>
                         <text x="200" y="228" text-anchor="middle" fill="#9ca3af" font-size="12" font-family="Inter,sans-serif">Load on-demand tool schemas</text>
                         <text x="200" y="248" text-anchor="middle" fill="#9ca3af" font-size="12" font-family="Inter,sans-serif">Inject memory + context</text>
@@ -1115,30 +1151,30 @@
                         <text x="450" y="30" text-anchor="middle" fill="#9ca3af" font-size="14" font-weight="600" font-family="Inter,sans-serif">Tools load on-demand based on conversation context &mdash; no wasted tokens</text>
 
                         <!-- Core tools (always loaded) -->
-                        <text x="450" y="70" text-anchor="middle" fill="#51c5ff" font-size="15" font-weight="700" letter-spacing="3" font-family="Inter,sans-serif">CORE TOOLS (always loaded)</text>
+                        <text x="450" y="70" text-anchor="middle" fill="#e8dcc8" font-size="15" font-weight="700" letter-spacing="3" font-family="Inter,sans-serif">CORE TOOLS (always loaded)</text>
                         <g>
-                            <rect x="30" y="88" width="120" height="44" rx="12" fill="#29a7ff" fill-opacity="0.08" stroke="#29a7ff" stroke-opacity="0.25" stroke-width="1"/>
-                            <text x="90" y="115" text-anchor="middle" fill="#89dbff" font-size="14" font-weight="600" font-family="JetBrains Mono,monospace">bash</text>
+                            <rect x="30" y="88" width="120" height="44" rx="12" fill="#c9b896" fill-opacity="0.08" stroke="#c9b896" stroke-opacity="0.25" stroke-width="1"/>
+                            <text x="90" y="115" text-anchor="middle" fill="#e8dcc8" font-size="14" font-weight="600" font-family="JetBrains Mono,monospace">bash</text>
                         </g>
                         <g>
-                            <rect x="170" y="88" width="130" height="44" rx="12" fill="#29a7ff" fill-opacity="0.08" stroke="#29a7ff" stroke-opacity="0.25" stroke-width="1"/>
-                            <text x="235" y="115" text-anchor="middle" fill="#89dbff" font-size="13" font-weight="600" font-family="JetBrains Mono,monospace">text_editor</text>
+                            <rect x="170" y="88" width="130" height="44" rx="12" fill="#c9b896" fill-opacity="0.08" stroke="#c9b896" stroke-opacity="0.25" stroke-width="1"/>
+                            <text x="235" y="115" text-anchor="middle" fill="#e8dcc8" font-size="13" font-weight="600" font-family="JetBrains Mono,monospace">text_editor</text>
                         </g>
                         <g>
-                            <rect x="320" y="88" width="120" height="44" rx="12" fill="#29a7ff" fill-opacity="0.08" stroke="#29a7ff" stroke-opacity="0.25" stroke-width="1"/>
-                            <text x="380" y="115" text-anchor="middle" fill="#89dbff" font-size="14" font-weight="600" font-family="JetBrains Mono,monospace">computer</text>
+                            <rect x="320" y="88" width="120" height="44" rx="12" fill="#c9b896" fill-opacity="0.08" stroke="#c9b896" stroke-opacity="0.25" stroke-width="1"/>
+                            <text x="380" y="115" text-anchor="middle" fill="#e8dcc8" font-size="14" font-weight="600" font-family="JetBrains Mono,monospace">computer</text>
                         </g>
                         <g>
-                            <rect x="460" y="88" width="110" height="44" rx="12" fill="#29a7ff" fill-opacity="0.08" stroke="#29a7ff" stroke-opacity="0.25" stroke-width="1"/>
-                            <text x="515" y="115" text-anchor="middle" fill="#89dbff" font-size="14" font-weight="600" font-family="JetBrains Mono,monospace">browser</text>
+                            <rect x="460" y="88" width="110" height="44" rx="12" fill="#c9b896" fill-opacity="0.08" stroke="#c9b896" stroke-opacity="0.25" stroke-width="1"/>
+                            <text x="515" y="115" text-anchor="middle" fill="#e8dcc8" font-size="14" font-weight="600" font-family="JetBrains Mono,monospace">browser</text>
                         </g>
                         <g>
-                            <rect x="590" y="88" width="100" height="44" rx="12" fill="#29a7ff" fill-opacity="0.08" stroke="#29a7ff" stroke-opacity="0.25" stroke-width="1"/>
-                            <text x="640" y="115" text-anchor="middle" fill="#89dbff" font-size="14" font-weight="600" font-family="JetBrains Mono,monospace">memory</text>
+                            <rect x="590" y="88" width="100" height="44" rx="12" fill="#c9b896" fill-opacity="0.08" stroke="#c9b896" stroke-opacity="0.25" stroke-width="1"/>
+                            <text x="640" y="115" text-anchor="middle" fill="#e8dcc8" font-size="14" font-weight="600" font-family="JetBrains Mono,monospace">memory</text>
                         </g>
                         <g>
-                            <rect x="710" y="88" width="150" height="44" rx="12" fill="#29a7ff" fill-opacity="0.08" stroke="#29a7ff" stroke-opacity="0.25" stroke-width="1"/>
-                            <text x="785" y="115" text-anchor="middle" fill="#89dbff" font-size="12" font-weight="600" font-family="JetBrains Mono,monospace">web_search/fetch</text>
+                            <rect x="710" y="88" width="150" height="44" rx="12" fill="#c9b896" fill-opacity="0.08" stroke="#c9b896" stroke-opacity="0.25" stroke-width="1"/>
+                            <text x="785" y="115" text-anchor="middle" fill="#e8dcc8" font-size="12" font-weight="600" font-family="JetBrains Mono,monospace">web_search/fetch</text>
                         </g>
 
                         <!-- Keyword detection -->
@@ -1268,24 +1304,24 @@
                         <text x="110" y="563" text-anchor="middle" fill="#86efac" font-size="13" font-weight="600" font-family="Inter,sans-serif">Instant Response</text>
 
                         <!-- NO branch (right) — Full LLM -->
-                        <line x1="530" y1="330" x2="680" y2="330" stroke="#29a7ff" stroke-opacity="0.5" stroke-width="1.5" marker-end="url(#arr-gray)"/>
+                        <line x1="530" y1="330" x2="680" y2="330" stroke="#c9b896" stroke-opacity="0.5" stroke-width="1.5" marker-end="url(#arr-gray)"/>
                         <text x="600" y="320" text-anchor="middle" fill="#f87171" font-size="12" font-weight="700" font-family="Inter,sans-serif">NO</text>
 
-                        <rect x="680" y="300" width="180" height="60" rx="14" fill="#29a7ff" fill-opacity="0.06" stroke="#29a7ff" stroke-opacity="0.25" stroke-width="1"/>
-                        <text x="770" y="326" text-anchor="middle" fill="#51c5ff" font-size="14" font-weight="700" font-family="Inter,sans-serif">Full Agent Loop</text>
+                        <rect x="680" y="300" width="180" height="60" rx="14" fill="#c9b896" fill-opacity="0.06" stroke="#c9b896" stroke-opacity="0.25" stroke-width="1"/>
+                        <text x="770" y="326" text-anchor="middle" fill="#e8dcc8" font-size="14" font-weight="700" font-family="Inter,sans-serif">Full Agent Loop</text>
                         <text x="770" y="346" text-anchor="middle" fill="#9ca3af" font-size="11" font-family="Inter,sans-serif">OCS + tool calling</text>
 
                         <!-- Full LLM path -->
-                        <line x1="770" y1="360" x2="770" y2="400" stroke="#29a7ff" stroke-opacity="0.4" stroke-width="1.5" marker-end="url(#arr-gray)"/>
+                        <line x1="770" y1="360" x2="770" y2="400" stroke="#c9b896" stroke-opacity="0.4" stroke-width="1.5" marker-end="url(#arr-gray)"/>
 
-                        <rect x="680" y="408" width="180" height="80" rx="14" fill="#0e0e16" stroke="#29a7ff" stroke-opacity="0.2" stroke-width="1"/>
+                        <rect x="680" y="408" width="180" height="80" rx="14" fill="#0e0e16" stroke="#c9b896" stroke-opacity="0.2" stroke-width="1"/>
                         <text x="770" y="436" text-anchor="middle" fill="white" font-size="14" font-weight="700" font-family="Inter,sans-serif">chat_with_tools</text>
                         <text x="770" y="456" text-anchor="middle" fill="#9ca3af" font-size="11" font-family="Inter,sans-serif">LLM reasoning</text>
                         <text x="770" y="472" text-anchor="middle" fill="#9ca3af" font-size="11" font-family="Inter,sans-serif">Multi-step tool use</text>
 
-                        <line x1="770" y1="488" x2="770" y2="530" stroke="#29a7ff" stroke-opacity="0.4" stroke-width="1.5" marker-end="url(#arr-gray)"/>
-                        <rect x="680" y="538" width="180" height="40" rx="12" fill="#29a7ff" fill-opacity="0.08" stroke="#29a7ff" stroke-opacity="0.2" stroke-width="1"/>
-                        <text x="770" y="563" text-anchor="middle" fill="#51c5ff" font-size="13" font-weight="600" font-family="Inter,sans-serif">Intelligent Response</text>
+                        <line x1="770" y1="488" x2="770" y2="530" stroke="#c9b896" stroke-opacity="0.4" stroke-width="1.5" marker-end="url(#arr-gray)"/>
+                        <rect x="680" y="538" width="180" height="40" rx="12" fill="#c9b896" fill-opacity="0.08" stroke="#c9b896" stroke-opacity="0.2" stroke-width="1"/>
+                        <text x="770" y="563" text-anchor="middle" fill="#e8dcc8" font-size="13" font-weight="600" font-family="Inter,sans-serif">Intelligent Response</text>
 
                         <!-- Example commands -->
                         <text x="450" y="605" text-anchor="middle" fill="#4b5563" font-size="12" font-family="JetBrains Mono,monospace">"open notepad" &rarr; fast-path &nbsp;|&nbsp; "summarize this PDF and email it" &rarr; full agent loop</text>
@@ -1328,11 +1364,11 @@
                         <text x="140" y="334" fill="#9ca3af" font-size="12" font-family="Inter,sans-serif">desktop: 40 elements max &middot; pdf: 6k chars &middot; memory: 10 results &middot; generic: 2k/field, 8k total</text>
 
                         <!-- Layer 4: Context Pruning -->
-                        <rect x="60" y="370" width="780" height="110" rx="18" fill="#29a7ff" fill-opacity="0.04" stroke="#29a7ff" stroke-opacity="0.2" stroke-width="1"/>
-                        <circle cx="100" cy="395" r="16" fill="#29a7ff" fill-opacity="0.15"/>
-                        <text x="100" y="400" text-anchor="middle" fill="#29a7ff" font-size="14" font-weight="800" font-family="Inter,sans-serif">4</text>
-                        <text x="140" y="397" fill="#51c5ff" font-size="16" font-weight="800" font-family="Inter,sans-serif">Two-Phase Context Pruning</text>
-                        <text x="740" y="397" text-anchor="end" fill="#29a7ff" font-size="14" font-weight="700" font-family="JetBrains Mono,monospace">dynamic savings</text>
+                        <rect x="60" y="370" width="780" height="110" rx="18" fill="#c9b896" fill-opacity="0.04" stroke="#c9b896" stroke-opacity="0.2" stroke-width="1"/>
+                        <circle cx="100" cy="395" r="16" fill="#c9b896" fill-opacity="0.15"/>
+                        <text x="100" y="400" text-anchor="middle" fill="#c9b896" font-size="14" font-weight="800" font-family="Inter,sans-serif">4</text>
+                        <text x="140" y="397" fill="#e8dcc8" font-size="16" font-weight="800" font-family="Inter,sans-serif">Two-Phase Context Pruning</text>
+                        <text x="740" y="397" text-anchor="end" fill="#c9b896" font-size="14" font-weight="700" font-family="JetBrains Mono,monospace">dynamic savings</text>
                         <text x="140" y="419" fill="#d1d5db" font-size="13" font-family="Inter,sans-serif">Runs before every LLM call &mdash; selectively trims old tool results based on context fill ratio</text>
                         <text x="140" y="439" fill="#9ca3af" font-size="12" font-family="Inter,sans-serif">Phase 1 (soft): Keep head + tail of large results (1.5k + 1.5k chars) when context &gt; 30% full</text>
                         <text x="140" y="459" fill="#9ca3af" font-size="12" font-family="Inter,sans-serif">Phase 2 (hard): Replace ancient results with placeholder when context &gt; 50% full</text>
@@ -1514,8 +1550,8 @@
         <div class="max-w-6xl mx-auto px-8">
             <div class="text-center mb-20">
                 <p class="text-brand-400 text-lg font-bold uppercase tracking-widest mb-4">Tool Ecosystem</p>
-                <h2 class="text-4xl sm:text-5xl md:text-6xl font-black text-white leading-tight">17 built-in tools</h2>
-                <p class="text-xl text-gray-400 max-w-2xl mx-auto mt-6 leading-relaxed">Every tool the agent needs to control your desktop, automate workflows, and interact with the world.</p>
+                <h2 class="text-4xl sm:text-5xl md:text-6xl font-black text-white leading-tight">Built-in tools.<br><span class="gradient-text">Extensible by design.</span></h2>
+                <p class="text-2xl text-gray-400 max-w-3xl mx-auto mt-6 leading-relaxed">Every tool the agent needs to control your desktop, automate workflows, and interact with the world &mdash; plus MCP support for adding your own.</p>
             </div>
             <div class="flex flex-wrap justify-center gap-4 max-w-5xl mx-auto">
                 <span class="tool-pill px-5 py-3 rounded-2xl bg-brand-500/10 border border-brand-500/20 text-base font-mono text-brand-300 font-semibold">bash</span>
@@ -1535,6 +1571,7 @@
                 <span class="tool-pill px-5 py-3 rounded-2xl bg-white/[0.04] border border-white/[0.08] text-base font-mono text-gray-200">notify</span>
                 <span class="tool-pill px-5 py-3 rounded-2xl bg-white/[0.04] border border-white/[0.08] text-base font-mono text-gray-200">agent</span>
                 <span class="tool-pill px-5 py-3 rounded-2xl bg-white/[0.04] border border-white/[0.08] text-base font-mono text-gray-200">macro</span>
+                <span class="tool-pill px-5 py-3 rounded-2xl bg-lime-500/10 border border-lime-500/25 text-base font-mono text-lime-300 font-semibold">gmail</span>
                 <span class="tool-pill px-5 py-3 rounded-2xl bg-purple-500/10 border border-purple-500/25 text-base font-mono text-purple-300 font-semibold">+ MCP servers</span>
             </div>
             <p class="text-center text-gray-500 text-sm mt-4">Core tools (highlighted) are always loaded. On-demand tools load automatically when relevant keywords are detected.</p>
@@ -1552,7 +1589,7 @@
                     </div>
                 </div>
 
-                <p class="text-gray-400 text-base leading-relaxed mb-8">When the agent encounters a complex multi-step workflow, it can autonomously write scripts, save them as reusable skills, and invoke them in future tasks. Your toolset grows organically from real usage &mdash; no manual configuration needed. A real-world example: the agent taught itself to perform generative music on a connected MIDI synthesizer, composing and playing jazz, ambient, and chill progressions in real time &mdash; a capability that was never explicitly programmed.</p>
+                <p class="text-gray-400 text-lg leading-relaxed mb-8">When the agent encounters a complex multi-step workflow, it can autonomously write scripts, save them as reusable skills, and invoke them in future tasks. Your toolset grows organically from real usage &mdash; no manual configuration needed. A real-world example: the agent taught itself to perform generative music on a connected MIDI synthesizer, composing and playing jazz, ambient, and chill progressions in real time &mdash; a capability that was never explicitly programmed.</p>
 
                 <!-- Flow: 3 steps -->
                 <div class="grid md:grid-cols-3 gap-5 mb-8">
@@ -1618,8 +1655,8 @@
         <div class="gradient-line max-w-4xl mx-auto mb-28"></div>
         <div class="max-w-4xl mx-auto px-8 text-center">
             <p class="text-brand-400 text-lg font-bold uppercase tracking-widest mb-4">Download</p>
-            <h2 class="text-4xl sm:text-5xl md:text-6xl font-black text-white leading-tight mb-6">Get Substrate</h2>
-            <p class="text-xl text-gray-400 max-w-2xl mx-auto mb-14 leading-relaxed">One-click installer for Windows. Python dependencies are installed automatically on first launch.</p>
+            <h2 class="text-4xl sm:text-5xl md:text-6xl font-black text-white leading-tight mb-6">Adopt a Substrate</h2>
+            <p class="text-2xl text-gray-400 max-w-3xl mx-auto mb-14 leading-relaxed">One-click installer for Windows. Python dependencies are installed automatically on first launch.</p>
 
             <div class="flex flex-col sm:flex-row items-center justify-center gap-5 mb-12">
                 <a href="https://github.com/propagationhouse/substrate/releases/latest" target="_blank" class="px-10 py-5 bg-brand-600 hover:bg-brand-500 text-white text-xl font-bold rounded-2xl transition shadow-xl shadow-brand-600/30 flex items-center gap-3">
@@ -1657,7 +1694,7 @@
             <div class="text-center mb-20">
                 <p class="text-brand-400 text-lg font-bold uppercase tracking-widest mb-4">Developer Setup</p>
                 <h2 class="text-4xl sm:text-5xl md:text-6xl font-black text-white leading-tight">Build from source<br>in 4 steps</h2>
-                <p class="text-xl text-gray-400 max-w-2xl mx-auto mt-6 leading-relaxed">For contributors and developers who want to modify, extend, or build Substrate from the repository.</p>
+                <p class="text-2xl text-gray-400 max-w-3xl mx-auto mt-6 leading-relaxed">For contributors and developers who want to modify, extend, or build Substrate from the repository.</p>
             </div>
             <div class="space-y-10">
                 <!-- Step 1 -->
@@ -1730,10 +1767,10 @@
         <div class="max-w-7xl mx-auto px-8">
             <div class="flex flex-col md:flex-row items-center justify-between gap-8">
                 <div class="flex items-center gap-3">
-                    <div class="w-8 h-8 rounded-xl bg-brand-600 flex items-center justify-center">
-                        <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
-                    </div>
-                    <span class="text-gray-500 text-base">Substrate &copy; 2025&ndash;2026 Michael Blackstone &middot; BSL 1.1</span>
+                    <a href="https://www.propagation.house" target="_blank" class="opacity-40 hover:opacity-70 transition">
+                        <img src="ph-mark.png" alt="Propagation House" class="w-7 h-7">
+                    </a>
+                    <span class="text-gray-500 text-base">Substrate &copy; 2025&ndash;2026 Michael Blackstone &middot; <a href="https://www.propagation.house" target="_blank" class="hover:text-gray-300 transition">Propagation House</a> &middot; BSL 1.1</span>
                 </div>
                 <div class="flex items-center gap-8 text-base text-gray-500 font-medium">
                     <a href="https://github.com/propagationhouse/substrate" class="hover:text-white transition">GitHub</a>
