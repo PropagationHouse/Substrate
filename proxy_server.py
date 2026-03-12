@@ -146,6 +146,7 @@ _AUTH_EXEMPT_PREFIXES = (
     '/api/substrate', '/api/circuits', '/api/prime',
     '/api/commands',
     '/api/models', '/api/discover-models',
+    '/api/gmail/status',
 )
 
 def _get_agent_config():
@@ -1325,6 +1326,11 @@ class MessageBuffer:
         """Determine if a message should be spoken"""
         logger.debug(f"[SHOULD_SPEAK] Checking message: status={message.get('status')}, type={message.get('type')}, has_messages={'messages' in message}")
         
+        # Explicit speak=False flag (e.g. incoming SMS)
+        if message.get('speak') is False:
+            logger.debug("[SHOULD_SPEAK] speak=False flag set")
+            return False
+        
         # Don't speak if voice is disabled
         if not self.voice_enabled:
             logger.debug("[SHOULD_SPEAK] voice_enabled is False")
@@ -1565,7 +1571,7 @@ def send_message_to_frontend(message, silent=False):
             _result = str(message.get('result') or '').strip()
             _msg_type = message.get('type', '')
             # Allow config, thinking, avatar, voice messages through
-            if _msg_type not in ('config', 'thinking_start', 'thinking_end', 'thinking_delta', 'avatar', 'voice'):
+            if _msg_type not in ('config', 'thinking_start', 'thinking_end', 'thinking_delta', 'avatar', 'voice', 'user_message'):
                 # Suppress errors and empty results during startup
                 if _status == 'error' or (_status in ('done', 'streaming') and not _result):
                     logger.info(f"[STARTUP] Suppressed early message (age={_age:.1f}s, status={_status}, result={_result[:60]})")
@@ -3216,6 +3222,45 @@ class ChatAgent:
                 logger.info("XGO auto-detect thread started")
             except Exception as xgo_err:
                 logger.error(f"Failed to start XGO auto-detect: {xgo_err}")
+            
+            # Start Gmail SMS listener (polls for Google Voice texts)
+            try:
+                from src.tools.gmail_tool import start_sms_listener
+                
+                # Wrap call_llm_sync with conversation context so SMS replies
+                # have awareness of recent chat history and the agent's persona.
+                _agent_ref = self
+                def _sms_llm_fn(messages):
+                    """Context-aware LLM call for SMS replies."""
+                    try:
+                        # Build context: system prompt + recent conversation
+                        from src.infra.prompt_builder import build_system_prompt
+                        sys_prompt = build_system_prompt(
+                            config=_agent_ref.config,
+                            chat_mode='chat',
+                            include_tools=False,
+                            include_skills=False,
+                        )
+                        context = _agent_ref.get_recent_context()
+                        
+                        # Merge context into the system message
+                        sms_system = messages[0]['content'] if messages and messages[0].get('role') == 'system' else ''
+                        full_system = f"{sys_prompt}\n\n{sms_system}"
+                        if context:
+                            full_system += f"\n\n## Recent Conversation\n{context}"
+                        
+                        enriched = [{'role': 'system', 'content': full_system}] + [
+                            m for m in messages if m.get('role') != 'system'
+                        ]
+                        return _agent_ref.call_llm_sync(enriched)
+                    except Exception as e:
+                        logger.error(f"[SMS_LLM] Context enrichment failed, falling back: {e}")
+                        return _agent_ref.call_llm_sync(messages)
+                
+                start_sms_listener(_sms_llm_fn, send_message_to_frontend)
+                logger.info("Gmail SMS listener started")
+            except Exception as sms_err:
+                logger.error(f"Failed to start SMS listener: {sms_err}")
             
             logger.info("Infrastructure initialized successfully")
             
@@ -10069,8 +10114,11 @@ def api_gmail_status():
     """Check Gmail configuration and connectivity."""
     try:
         from src.tools.gmail_tool import check_status
-        return jsonify(check_status())
+        result = check_status()
+        logger.info(f"[GMAIL STATUS] {result}")
+        return jsonify(result)
     except Exception as e:
+        logger.error(f"[GMAIL STATUS] Exception: {e}")
         return jsonify({"status": "error", "error": str(e)}), 500
 
 @app.route('/api/gmail/inbox', methods=['GET'])

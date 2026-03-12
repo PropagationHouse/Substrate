@@ -474,12 +474,41 @@ def _build_runtime_section(config: Optional[Dict[str, Any]] = None) -> List[str]
     if config:
         model = config.get('model', 'unknown')
         parts.append(f"model={model}")
-    return [
+    lines = [
         "## Runtime",
         f"CURRENT_TIME: {now_str}",
         f"Runtime: {' | '.join(parts)}",
         "",
     ]
+    # Gmail/SMS capability — inform agent about built-in email tool
+    gmail_addr = os.environ.get('GMAIL_ADDRESS', '').strip()
+    # Also check if OAuth2 is configured (token or client_secret in config/)
+    _oauth2_available = False
+    try:
+        from src.tools.gmail_tool import _has_oauth2
+        _oauth2_available = _has_oauth2()
+    except Exception:
+        pass
+    if gmail_addr or _oauth2_available:
+        auth_note = "OAuth2 (Gmail API)" if _oauth2_available else f"App Password ({gmail_addr})"
+        lines.extend([
+            "## Communication: Gmail & SMS",
+            f"You have a connected Gmail account authenticated via {auth_note}.",
+            "A background listener automatically polls for incoming Google Voice SMS and routes them to you.",
+            "To send email or reply to SMS, use the built-in gmail_tool (already installed):",
+            "```python",
+            "from src.tools.gmail_tool import send_email, read_inbox, search_emails, read_sms",
+            "# Send email/SMS reply:",
+            "send_email(to='recipient@example.com', subject='Re: ...', body='Your reply text')",
+            "# Read inbox:",
+            "read_inbox(max_results=5, unread_only=True)",
+            "# Search (uses Gmail search syntax):",
+            "search_emails(query='from:someone@example.com')",
+            "```",
+            "Do NOT use google.auth, Gmail API directly, or write custom email scripts. The gmail_tool handles all authentication automatically.",
+            "",
+        ])
+    return lines
 
 
 # ─── Main builder ─────────────────────────────────────────────────────
