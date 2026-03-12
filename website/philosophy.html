@@ -15,17 +15,17 @@
     <meta name="twitter:title" content="Substrate — Philosophy">
     <meta name="twitter:description" content="Why Substrate exists. The story, philosophy, and vision behind the project.">
     <meta name="twitter:image" content="https://substrate.propagation.house/og-image.svg">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%230a70e8' rx='20' width='100' height='100'/><text x='50' y='72' text-anchor='middle' fill='white' font-size='60' font-weight='bold'>S</text></svg>" type="image/svg+xml">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect fill='%23a08c64' rx='20' width='100' height='100'/><text x='50' y='72' text-anchor='middle' fill='white' font-size='60' font-weight='bold'>S</text></svg>" type="image/svg+xml">
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
             theme: {
                 extend: {
                     colors: {
-                        brand: { 50:'#eef9ff',100:'#d8f1ff',200:'#b9e8ff',300:'#89dbff',400:'#51c5ff',500:'#29a7ff',600:'#1189fc',700:'#0a70e8',800:'#0f5abb',900:'#134d93',950:'#0f3059' },
+                        brand: { 50:'#faf6f0',100:'#f0e8d8',200:'#e8dcc8',300:'#d4c4a8',400:'#c9b896',500:'#b8a67e',600:'#a08c64',700:'#887650',800:'#6e5f40',900:'#584c34',950:'#3a3222' },
                     },
                     fontFamily: {
-                        sans: ['Inter','system-ui','-apple-system','sans-serif'],
+                        sans: ['Space Grotesk','Inter','system-ui','-apple-system','sans-serif'],
                         mono: ['JetBrains Mono','Fira Code','monospace'],
                     },
                 },
@@ -34,31 +34,75 @@
     </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
-        body { background: #06060b; }
+        body { background: #0a0a0a; }
         .gradient-text {
-            background: linear-gradient(135deg, #51c5ff 0%, #89dbff 40%, #29a7ff 100%);
+            background: linear-gradient(135deg, #e8dcc8 0%, #d4c4a8 40%, #c9b896 100%);
             -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
         }
         .gradient-line {
-            height: 2px;
-            background: linear-gradient(90deg, transparent 0%, rgba(41,167,255,0.5) 50%, transparent 100%);
+            height: 1px;
+            background: linear-gradient(90deg, transparent 0%, rgba(201,184,150,0.35) 50%, transparent 100%);
         }
-        ::selection { background: rgba(41,167,255,0.3); }
+        ::selection { background: rgba(201,184,150,0.25); }
+        .hero-glow {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 600px;
+            height: 400px;
+            background: radial-gradient(ellipse 80% 60% at 50% 50%, rgba(201,184,150,0.05) 0%, transparent 70%);
+            pointer-events: none;
+        }
+        .section-icon {
+            width: 60px; height: 60px; border-radius: 18px;
+            display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+        }
+        .section-card {
+            background: rgba(255,255,255,0.025);
+            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 24px;
+            padding: 3rem 3.5rem;
+            transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+        }
+        .section-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 50px rgba(201,184,150,0.08);
+            border-color: rgba(201,184,150,0.15);
+        }
+        .quote-card {
+            background: rgba(201,184,150,0.04);
+            border: 1px solid rgba(201,184,150,0.12);
+            border-radius: 20px;
+            padding: 2.5rem 3rem;
+            position: relative;
+        }
+        .quote-card::before {
+            content: '\201C';
+            position: absolute;
+            top: -4px;
+            left: 28px;
+            font-size: 5rem;
+            line-height: 1;
+            color: rgba(201,184,150,0.25);
+            font-family: Georgia, serif;
+        }
+        .stat-glow { text-shadow: 0 0 30px rgba(201,184,150,0.3); }
     </style>
 </head>
-<body class="text-gray-300 font-sans antialiased overflow-x-hidden">
+<body class="text-gray-300 font-sans antialiased overflow-x-hidden text-lg">
 
     <!-- ==================== NAV ==================== -->
-    <nav class="fixed top-0 w-full z-50 bg-[#06060b]/80 backdrop-blur-2xl border-b border-white/5">
+    <nav class="fixed top-0 w-full z-50 bg-[#0a0a0a]/80 backdrop-blur-2xl border-b border-white/5">
         <div class="max-w-7xl mx-auto px-8 h-16 flex items-center justify-between">
-            <a href="index.html" class="flex items-center gap-3">
-                <div class="w-9 h-9 rounded-xl bg-brand-600 flex items-center justify-center shadow-lg shadow-brand-600/30">
-                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
-                </div>
-                <span class="text-white font-bold text-xl tracking-tight">Substrate</span>
-            </a>
+            <div class="flex items-center gap-4">
+                <a href="index.html" class="flex items-center gap-2.5">
+                    <img src="ph-mark.png" alt="Propagation House" class="w-6 h-6 opacity-50">
+                    <span class="text-white font-bold text-xl tracking-tight">Substrate</span>
+                </a>
+            </div>
             <div class="hidden md:flex items-center gap-10 text-[15px] text-gray-400 font-medium">
                 <a href="index.html#features" class="hover:text-white transition">Features</a>
                 <a href="index.html#architecture" class="hover:text-white transition">Architecture</a>
@@ -74,119 +118,181 @@
     </nav>
 
     <!-- ==================== HERO ==================== -->
-    <section class="relative min-h-[50vh] flex items-center justify-center pt-16">
-        <div class="relative max-w-4xl mx-auto px-8 text-center py-24">
-            <p class="text-brand-400 text-lg font-bold uppercase tracking-widest mb-6">Philosophy</p>
-            <h1 class="text-5xl sm:text-6xl md:text-7xl font-black text-white leading-tight mb-6">Why Substrate exists</h1>
-            <p class="text-xl text-gray-500 font-medium">The story, the decisions, and the vision behind the project.</p>
+    <section class="relative min-h-[55vh] flex items-center justify-center pt-16">
+        <div class="hero-glow"></div>
+        <div class="relative max-w-5xl mx-auto px-8 text-center py-32">
+            <p class="text-brand-400 text-xl font-bold uppercase tracking-widest mb-6">Philosophy</p>
+            <h1 class="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-black text-white leading-[1.1] mb-10 stat-glow">Why Substrate exists</h1>
+            <p class="text-2xl md:text-3xl text-gray-500 font-medium max-w-3xl mx-auto leading-relaxed">The story, the decisions, and the vision behind the project.</p>
         </div>
     </section>
 
-    <!-- ==================== ORIGIN ==================== -->
-    <section class="relative pb-28">
-        <div class="gradient-line max-w-4xl mx-auto mb-20"></div>
-        <div class="max-w-2xl mx-auto px-8">
-            <div class="space-y-8 text-left">
+    <!-- ==================== CONTENT ==================== -->
+    <section class="relative pb-32">
+        <div class="gradient-line max-w-5xl mx-auto mb-24"></div>
+        <div class="max-w-5xl mx-auto px-8 space-y-10">
 
-                <h2 class="text-2xl font-bold text-white">Origin</h2>
-
-                <p class="text-lg text-gray-400 leading-relaxed">
-                    Substrate was created by Michael Blackstone of <strong class="text-gray-300">Propagation House</strong>. It started in January 2025 as a command parser &mdash; a sharp little automation layer that could intercept patterns in natural language and route them to direct system actions without touching an LLM at all. App launches, web URLs, YouTube searches, quick shell commands &mdash; things that don't need a neural network, just a regex and an executor.
-                </p>
-
-                <p class="text-lg text-gray-400 leading-relaxed">
-                    But once the parser existed, the next question was obvious: what if the system could also reason? What if it had a browser, and memory, and a voice? What if it could learn from what it did yesterday and apply that tomorrow? Each layer made the next one possible, and each one made the whole thing more capable than the sum of its parts.
-                </p>
-
-                <p class="text-lg text-gray-400 leading-relaxed">
-                    Over thirteen months of development, that command parser grew into a full agentic system &mdash; tools, memory, scheduling, voice, browser automation, skills, profiles, a desktop app, a WebUI, and a background daemon. The first public version ships in February 2026.
-                </p>
-
-                <div class="gradient-line max-w-md mx-auto my-12"></div>
-
-                <h2 class="text-2xl font-bold text-white">The question</h2>
-
-                <p class="text-lg text-gray-400 leading-relaxed">
-                    Substrate started as a single question: what would it take to give a computer genuine agency &mdash; not a chatbot window, not a copilot sidebar, but a system that actually inhabits the machine and operates it the way you would?
-                </p>
-
-                <p class="text-lg text-gray-400 leading-relaxed">
-                    The answer turned out to be everything at once. Shell access alone isn't enough. Neither is browser control, or memory, or scheduling, or voice. An agent that can only do one of those things hits a wall the moment a real task crosses boundaries. So Substrate was built as a complete substrate &mdash; the foundational layer that connects all of those capabilities into a single, coherent system that an LLM can reason over and act through.
-                </p>
-
-                <div class="gradient-line max-w-md mx-auto my-12"></div>
-
-                <h2 class="text-2xl font-bold text-white">Architecture as philosophy</h2>
-
-                <p class="text-lg text-gray-400 leading-relaxed">
-                    This isn't a wrapper around an API. It's an architecture designed from the ground up so that every piece &mdash; tools, memory, scheduling, learning, voice &mdash; feeds back into every other piece. The agent remembers what it learned last week when it encounters a similar problem today. It builds skills from experience and reuses them without being told. It runs tasks in the background while you sleep. It doesn't need a specific model to do any of this &mdash; swap the brain, keep the body.
-                </p>
-
-                <div class="border-l-2 border-brand-500/30 pl-6 py-2">
-                    <p class="text-lg text-gray-300 leading-relaxed">
-                        The name is intentional. A substrate is the base material that everything else grows on. The project provides the structure &mdash; but it's the user's data, patterns, preferences, and workflows that turn it into something no two installations will ever share.
+            <!-- ── Origin ── -->
+            <div class="section-card">
+                <div class="flex items-center gap-5 mb-8">
+                    <div class="section-icon bg-brand-500/10">
+                        <svg class="w-6 h-6 text-brand-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                    </div>
+                    <h2 class="text-[2.5rem] font-black text-white tracking-tight">Origin</h2>
+                </div>
+                <div class="space-y-7">
+                    <p class="text-[1.35rem] text-gray-400 leading-[1.8]">
+                        Substrate was created by Michael Blackstone of <strong class="text-brand-300">Propagation House</strong>. It started in January 2025 as a command parser &mdash; a sharp little automation layer that could intercept patterns in natural language and route them to direct system actions without touching an LLM at all. App launches, web URLs, YouTube searches, quick shell commands &mdash; things that don't need a neural network, just a regex and an executor.
+                    </p>
+                    <p class="text-[1.35rem] text-gray-400 leading-[1.8]">
+                        But once the parser existed, the next question was obvious: what if the system could also reason? What if it had a browser, and memory, and a voice? What if it could learn from what it did yesterday and apply that tomorrow? Each layer made the next one possible, and each one made the whole thing more capable than the sum of its parts.
+                    </p>
+                    <p class="text-[1.35rem] text-gray-400 leading-[1.8]">
+                        Over thirteen months of development, that command parser grew into a full agentic system &mdash; tools, memory, scheduling, voice, browser automation, skills, profiles, a desktop app, a WebUI, and a background daemon. The first public version ships in February 2026.
                     </p>
                 </div>
-
-                <div class="gradient-line max-w-md mx-auto my-12"></div>
-
-                <h2 class="text-2xl font-bold text-white">The principle</h2>
-
-                <p class="text-lg text-gray-400 leading-relaxed">
-                    Every design decision follows from one principle: the agent should be able to do anything you can do at your desk &mdash; and more. Not because the technology is impressive, but because a machine that sits idle 90% of the day is a wasted resource. Your files, your context, your history &mdash; they shouldn't just be stored. They should be <em class="text-gray-300">understood</em>.
-                </p>
-
-                <div class="gradient-line max-w-md mx-auto my-12"></div>
-
-                <h2 class="text-2xl font-bold text-white">Beyond the desk</h2>
-
-                <p class="text-lg text-gray-400 leading-relaxed">
-                    And it doesn't stop at the desktop. Substrate supports expanding peripherals, remote bridge access over HTTPS, and a full PWA-capable WebUI &mdash; meaning you can reach your agent from a phone, tablet, or any browser on your network. Your desktop agent, in your pocket. The machine keeps working whether you're sitting in front of it or not, and you stay connected to it from wherever you are.
-                </p>
-
-                <div class="gradient-line max-w-md mx-auto my-12"></div>
-
-                <h2 class="text-2xl font-bold text-white">Embodiment</h2>
-
-                <p class="text-lg text-gray-400 leading-relaxed">
-                    Substrate doesn't have to stay behind a screen. The system can connect to external hardware &mdash; Raspberry Pi devices, robotic chassis, custom peripherals &mdash; over your local network or remotely via ZeroTier. Voice audio streams bidirectionally between your desktop and the device. Speech recognition flows back. The agent speaks through it, listens through it, and acts through it.
-                </p>
-
-                <p class="text-lg text-gray-400 leading-relaxed">
-                    This turns a robot from a pre-programmed toy into a vessel for an intelligent system that already knows how to search the web, manage files, hold conversations, and learn from experience. The same agent that controls your desktop can inhabit a physical body &mdash; carrying its full memory, personality, and capabilities with it.
-                </p>
-
-                <div class="border-l-2 border-brand-500/30 pl-6 py-2">
-                    <p class="text-lg text-gray-300 leading-relaxed">
-                        The architecture is already in place. Bidirectional audio bridges, remote chassis connections, and ZeroTier networking are built into the codebase today. Expanding to new hardware is a matter of specification, not reinvention &mdash; the foundation is designed to be universal.
-                    </p>
-                </div>
-
-                <div class="gradient-line max-w-md mx-auto my-12"></div>
-
-                <h2 class="text-2xl font-bold text-white">Open by default</h2>
-
-                <p class="text-lg text-gray-400 leading-relaxed">
-                    Substrate is source-available under the Business Source License 1.1. Free for personal, educational, and non-commercial use &mdash; no restrictions, no strings. If you're using it to make money, you need a commercial license. The entire codebase is auditable, forkable, and transparent. No telemetry, no cloud dependency unless you choose it, no corporate middleman between you and your own machine. On February 1, 2029, the license automatically converts to Apache 2.0 &mdash; fully open source, permanently.
-                </p>
-
-                <div class="gradient-line max-w-md mx-auto my-12"></div>
-
-                <h2 class="text-2xl font-bold text-white">Work in progress</h2>
-
-                <p class="text-lg text-gray-400 leading-relaxed">
-                    This is a solo project &mdash; built by one person, one commit at a time. It's not finished. It may never be. But the foundation is stable, the architecture is extensible, and the vision is clear: make every machine capable of being more than a tool you operate. Make it a partner that operates alongside you.
-                </p>
-
             </div>
+
+            <!-- ── The Question ── -->
+            <div class="section-card">
+                <div class="flex items-center gap-5 mb-8">
+                    <div class="section-icon bg-purple-500/10">
+                        <svg class="w-6 h-6 text-purple-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><circle cx="12" cy="17" r=".5"/></svg>
+                    </div>
+                    <h2 class="text-[2.5rem] font-black text-white tracking-tight">The question</h2>
+                </div>
+                <div class="space-y-7">
+                    <p class="text-[1.35rem] text-gray-400 leading-[1.8]">
+                        Substrate started as a single question: what would it take to give a computer genuine agency &mdash; not a chatbot window, not a copilot sidebar, but a system that actually inhabits the machine and operates it the way you would?
+                    </p>
+                    <p class="text-[1.35rem] text-gray-400 leading-[1.8]">
+                        The answer turned out to be everything at once. Shell access alone isn't enough. Neither is browser control, or memory, or scheduling, or voice. An agent that can only do one of those things hits a wall the moment a real task crosses boundaries. So Substrate was built as a complete substrate &mdash; the foundational layer that connects all of those capabilities into a single, coherent system that an LLM can reason over and act through.
+                    </p>
+                </div>
+            </div>
+
+            <!-- ── Architecture as Philosophy ── -->
+            <div class="section-card">
+                <div class="flex items-center gap-5 mb-8">
+                    <div class="section-icon bg-cyan-500/10">
+                        <svg class="w-6 h-6 text-cyan-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M2 20h20M5 20V8l7-5 7 5v12"/><path d="M9 20v-6h6v6"/></svg>
+                    </div>
+                    <h2 class="text-[2.5rem] font-black text-white tracking-tight">Architecture as philosophy</h2>
+                </div>
+                <div class="space-y-7">
+                    <p class="text-[1.35rem] text-gray-400 leading-[1.8]">
+                        This isn't a wrapper around an API. It's an architecture designed from the ground up so that every piece &mdash; tools, memory, scheduling, learning, voice &mdash; feeds back into every other piece. The agent remembers what it learned last week when it encounters a similar problem today. It builds skills from experience and reuses them without being told. It runs tasks in the background while you sleep. It doesn't need a specific model to do any of this &mdash; swap the brain, keep the body.
+                    </p>
+                    <div class="quote-card">
+                        <p class="text-[1.35rem] text-gray-200 leading-[1.8] italic">
+                            The name is intentional. A substrate is the base material that everything else grows on. The project provides the structure &mdash; but it's the user's data, patterns, preferences, and workflows that turn it into something no two installations will ever share.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── The Principle ── -->
+            <div class="section-card">
+                <div class="flex items-center gap-5 mb-8">
+                    <div class="section-icon bg-rose-500/10">
+                        <svg class="w-6 h-6 text-rose-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    </div>
+                    <h2 class="text-[2.5rem] font-black text-white tracking-tight">The principle</h2>
+                </div>
+                <div class="space-y-7">
+                    <p class="text-[1.35rem] text-gray-400 leading-[1.8]">
+                        Every design decision follows from one principle: the agent should be able to do anything you can do at your desk &mdash; and more. Not because the technology is impressive, but because a machine that sits idle 90% of the day is a wasted resource. Your files, your context, your history &mdash; they shouldn't just be stored. They should be <em class="text-brand-300 not-italic font-medium">understood</em>.
+                    </p>
+                </div>
+            </div>
+
+            <!-- ── Beyond the Desk ── -->
+            <div class="section-card">
+                <div class="flex items-center gap-5 mb-8">
+                    <div class="section-icon bg-emerald-500/10">
+                        <svg class="w-6 h-6 text-emerald-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9"/></svg>
+                    </div>
+                    <h2 class="text-[2.5rem] font-black text-white tracking-tight">Beyond the desk</h2>
+                </div>
+                <div class="space-y-7">
+                    <p class="text-[1.35rem] text-gray-400 leading-[1.8]">
+                        And it doesn't stop at the desktop. Substrate supports expanding peripherals, remote bridge access over HTTPS, and a full PWA-capable WebUI &mdash; meaning you can reach your agent from a phone, tablet, or any browser on your network. Your desktop agent, in your pocket. The machine keeps working whether you're sitting in front of it or not, and you stay connected to it from wherever you are.
+                    </p>
+                </div>
+            </div>
+
+            <!-- ── Embodiment ── -->
+            <div class="section-card">
+                <div class="flex items-center gap-5 mb-8">
+                    <div class="section-icon bg-violet-500/10">
+                        <svg class="w-6 h-6 text-violet-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 2a2 2 0 012 2v2a2 2 0 01-2 2 2 2 0 01-2-2V4a2 2 0 012-2z"/><path d="M12 8v4"/><circle cx="12" cy="16" r="4"/><path d="M8 16H4M20 16h-4M12 20v2"/></svg>
+                    </div>
+                    <h2 class="text-[2.5rem] font-black text-white tracking-tight">Embodiment</h2>
+                </div>
+                <div class="space-y-7">
+                    <p class="text-[1.35rem] text-gray-400 leading-[1.8]">
+                        Substrate doesn't have to stay behind a screen. The system can connect to external hardware &mdash; Raspberry Pi devices, robotic chassis, custom peripherals &mdash; over your local network or remotely via ZeroTier. Voice audio streams bidirectionally between your desktop and the device. Speech recognition flows back. The agent speaks through it, listens through it, and acts through it.
+                    </p>
+                    <p class="text-[1.35rem] text-gray-400 leading-[1.8]">
+                        This turns a robot from a pre-programmed toy into a vessel for an intelligent system that already knows how to search the web, manage files, hold conversations, and learn from experience. The same agent that controls your desktop can inhabit a physical body &mdash; carrying its full memory, personality, and capabilities with it.
+                    </p>
+                    <div class="quote-card">
+                        <p class="text-[1.35rem] text-gray-200 leading-[1.8] italic">
+                            The architecture is already in place. Bidirectional audio bridges, remote chassis connections, and ZeroTier networking are built into the codebase today. Expanding to new hardware is a matter of specification, not reinvention &mdash; the foundation is designed to be universal.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── Open by Default ── -->
+            <div class="section-card">
+                <div class="flex items-center gap-5 mb-8">
+                    <div class="section-icon bg-sky-500/10">
+                        <svg class="w-6 h-6 text-sky-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                    </div>
+                    <h2 class="text-[2.5rem] font-black text-white tracking-tight">Open by default</h2>
+                </div>
+                <div class="space-y-7">
+                    <p class="text-[1.35rem] text-gray-400 leading-[1.8]">
+                        Substrate is source-available under the Business Source License 1.1. Free for personal, educational, and non-commercial use &mdash; no restrictions, no strings. If you're using it to make money, you need a commercial license. The entire codebase is auditable, forkable, and transparent. No telemetry, no cloud dependency unless you choose it, no corporate middleman between you and your own machine.
+                    </p>
+                    <div class="flex items-center gap-5 bg-brand-500/[0.06] border border-brand-500/[0.12] rounded-2xl p-6">
+                        <div class="w-12 h-12 rounded-xl bg-brand-500/10 flex items-center justify-center flex-shrink-0">
+                            <svg class="w-6 h-6 text-brand-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                        </div>
+                        <p class="text-[1.2rem] text-gray-300 leading-relaxed">On <strong class="text-white">February 1, 2029</strong>, the license automatically converts to Apache 2.0 &mdash; fully open source, permanently.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── Work in Progress ── -->
+            <div class="section-card">
+                <div class="flex items-center gap-5 mb-8">
+                    <div class="section-icon bg-orange-500/10">
+                        <svg class="w-6 h-6 text-orange-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>
+                    </div>
+                    <h2 class="text-[2.5rem] font-black text-white tracking-tight">Work in progress</h2>
+                </div>
+                <div class="space-y-7">
+                    <p class="text-[1.35rem] text-gray-400 leading-[1.8]">
+                        This is a solo project &mdash; built by one person, one commit at a time. It's not finished. It may never be. But the foundation is stable, the architecture is extensible, and the vision is clear: make every machine capable of being more than a tool you operate. Make it a partner that operates alongside you.
+                    </p>
+                </div>
+            </div>
+
         </div>
     </section>
 
     <!-- ==================== FOOTER ==================== -->
     <footer class="py-16 border-t border-white/5">
         <div class="max-w-7xl mx-auto px-8 text-center">
-            <p class="text-gray-500 text-sm">&copy; 2025&ndash;2026 Michael Blackstone &middot; Propagation House &middot; BSL 1.1</p>
-            <div class="flex items-center justify-center gap-6 mt-4 text-sm text-gray-500">
+            <div class="flex items-center justify-center gap-3 mb-4">
+                <a href="https://www.propagation.house" target="_blank" class="opacity-40 hover:opacity-70 transition">
+                    <img src="ph-mark.png" alt="Propagation House" class="w-7 h-7">
+                </a>
+                <span class="text-gray-500 text-base">Substrate &copy; 2025&ndash;2026 Michael Blackstone &middot; <a href="https://www.propagation.house" target="_blank" class="hover:text-gray-300 transition">Propagation House</a> &middot; BSL 1.1</span>
+            </div>
+            <div class="flex items-center justify-center gap-6 text-sm text-gray-500">
                 <a href="index.html" class="hover:text-white transition">&larr; Back to home</a>
                 <a href="https://github.com/propagationhouse/substrate" target="_blank" class="hover:text-white transition">GitHub</a>
             </div>
