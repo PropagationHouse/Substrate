@@ -2638,8 +2638,8 @@
                 
                 <h4>Gmail / Google Voice SMS</h4>
                 <div class="config-row">
-                    <label for="gmail-address-input-radial">Gmail Address:</label>
-                    <input type="text" id="gmail-address-input-radial" placeholder="agent@gmail.com" autocomplete="off" spellcheck="false">
+                    <label for="gmail-address-input-radial">Agent's Gmail:</label>
+                    <input type="text" id="gmail-address-input-radial" placeholder="your-agents-email@gmail.com" autocomplete="off" spellcheck="false">
                 </div>
                 <div class="config-row">
                     <label for="gmail-app-password-input-radial">App Password:</label>
