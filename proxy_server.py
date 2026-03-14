@@ -118,6 +118,8 @@ _cors_origins = [
     "http://localhost:8765",
     "https://localhost:8766",
     "http://127.0.0.1:8765",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
     "https://127.0.0.1:8766",
     "file://",  # Electron
 ]
@@ -3227,37 +3229,23 @@ class ChatAgent:
             try:
                 from src.tools.gmail_tool import start_sms_listener
                 
-                # Wrap call_llm_sync with conversation context so SMS replies
-                # have awareness of recent chat history and the agent's persona.
+                # Route SMS through the full agent pipeline (process_message)
+                # so tool calling, command parsing, etc. all work over SMS.
                 _agent_ref = self
-                def _sms_llm_fn(messages):
-                    """Context-aware LLM call for SMS replies."""
+                def _sms_agent_fn(text):
+                    """Full agent pipeline for SMS — same as voice/desktop/web."""
                     try:
-                        # Build context: system prompt + recent conversation
-                        from src.infra.prompt_builder import build_system_prompt
-                        sys_prompt = build_system_prompt(
-                            config=_agent_ref.config,
-                            chat_mode='chat',
-                            include_tools=False,
-                            include_skills=False,
-                        )
-                        context = _agent_ref.get_recent_context()
-                        
-                        # Merge context into the system message
-                        sms_system = messages[0]['content'] if messages and messages[0].get('role') == 'system' else ''
-                        full_system = f"{sys_prompt}\n\n{sms_system}"
-                        if context:
-                            full_system += f"\n\n## Recent Conversation\n{context}"
-                        
-                        enriched = [{'role': 'system', 'content': full_system}] + [
-                            m for m in messages if m.get('role') != 'system'
-                        ]
-                        return _agent_ref.call_llm_sync(enriched)
+                        result = _agent_ref.process_message({
+                            'text': text,
+                            'mode': 'code',  # full tool mode
+                            'source': 'sms',
+                        })
+                        return result
                     except Exception as e:
-                        logger.error(f"[SMS_LLM] Context enrichment failed, falling back: {e}")
-                        return _agent_ref.call_llm_sync(messages)
+                        logger.error(f"[SMS_AGENT] process_message failed: {e}")
+                        return {'status': 'error', 'result': str(e)}
                 
-                start_sms_listener(_sms_llm_fn, send_message_to_frontend)
+                start_sms_listener(_sms_agent_fn, send_message_to_frontend)
                 logger.info("Gmail SMS listener started")
             except Exception as sms_err:
                 logger.error(f"Failed to start SMS listener: {sms_err}")

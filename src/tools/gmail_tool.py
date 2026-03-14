@@ -612,7 +612,7 @@ def _extract_gv_sms(parsed_email: Dict[str, Any]) -> Optional[Dict[str, str]]:
     }
 
 
-def _sms_listener_loop(llm_fn: Callable, send_frontend_fn: Callable):
+def _sms_listener_loop(agent_fn: Callable, send_frontend_fn: Callable):
     """Background loop that polls Gmail for new Google Voice texts."""
     logger.info("[SMS_LISTENER] Starting Gmail SMS listener...")
     
@@ -640,9 +640,9 @@ def _sms_listener_loop(llm_fn: Callable, send_frontend_fn: Callable):
         _poll_count += 1
         try:
             if use_api:
-                _poll_api(llm_fn, send_frontend_fn, _poll_count)
+                _poll_api(agent_fn, send_frontend_fn, _poll_count)
             else:
-                _poll_imap(llm_fn, send_frontend_fn, _poll_count)
+                _poll_imap(agent_fn, send_frontend_fn, _poll_count)
         except Exception as e:
             logger.error(f"[SMS_LISTENER] Poll error: {e}")
         
@@ -666,14 +666,15 @@ def _clean_reply_for_sms(text: str) -> str:
     return cleaned
 
 
-def _handle_sms_reply(llm_fn, send_frontend_fn, sms, parsed):
-    """Handle SMS reply using a direct LLM call (no agent tool pipeline).
+def _handle_sms_reply(agent_fn, send_frontend_fn, sms, parsed):
+    """Handle SMS reply using the full agent pipeline (process_message).
     
     Flow:
     1. Show the incoming SMS in the desktop UI as a user message
-    2. Call LLM directly for a clean conversational reply (no tools)
-    3. Show the reply in the desktop UI as assistant message
-    4. Send exactly ONE email back as SMS
+    2. Route through agent.process_message (tools, commands, everything)
+    3. Extract the reply text and clean it for SMS format
+    4. Show the reply in the desktop UI as assistant message
+    5. Send exactly ONE email back as SMS
     """
     import traceback
     try:
@@ -690,33 +691,38 @@ def _handle_sms_reply(llm_fn, send_frontend_fn, sms, parsed):
         except Exception as e:
             logger.error(f"[SMS_LISTENER] Failed to push inbound SMS to UI: {e}")
         
-        # 2) Call LLM directly — no tool calling, just a conversational reply
-        llm_messages = [
-            {'role': 'system', 'content': (
-                'You received a text message (SMS). Reply naturally and conversationally. '
-                'Keep it concise — this will be sent as a text message. '
-                'Do NOT use tools, do NOT write code, do NOT use markdown formatting.'
-            )},
-            {'role': 'user', 'content': text}
-        ]
-        logger.info(f"[SMS_LISTENER] Calling LLM for reply to: {text[:80]}")
-        llm_result = llm_fn(llm_messages)
+        # 2) Route through full agent pipeline — tools, commands, everything
+        logger.info(f"[SMS_LISTENER] Routing to agent pipeline: {text[:80]}")
+        agent_result = agent_fn(text)
         
+        # 3) Extract reply text from agent result
         reply_text = ''
-        if isinstance(llm_result, dict):
-            reply_text = llm_result.get('content', '')
-        elif isinstance(llm_result, str):
-            reply_text = llm_result
+        if isinstance(agent_result, dict):
+            # process_message returns various shapes; try common keys
+            reply_text = (
+                agent_result.get('result', '') or
+                agent_result.get('content', '') or
+                ''
+            )
+            # Also check messages array for assistant reply
+            if not reply_text and agent_result.get('messages'):
+                for msg in reversed(agent_result['messages']):
+                    if msg.get('role') == 'assistant' and msg.get('content'):
+                        reply_text = msg['content']
+                        break
+        elif isinstance(agent_result, str):
+            reply_text = agent_result
         
-        # Clean the reply
+        # Clean the reply for SMS (strip tool calls, markdown, thinking tags)
         clean_reply = _clean_reply_for_sms(reply_text)
         if not clean_reply:
-            logger.warning("[SMS_LISTENER] LLM returned empty reply")
+            logger.warning("[SMS_LISTENER] Agent returned empty reply")
             return
         
-        logger.info(f"[SMS_LISTENER] LLM reply: {clean_reply[:80]}")
+        logger.info(f"[SMS_LISTENER] Agent reply: {clean_reply[:80]}")
         
-        # 3) Show agent reply as a normal assistant bubble in the desktop UI
+        # 4) Show agent reply as a normal assistant bubble in the desktop UI
+        #    (process_message may already push to frontend, but we ensure SMS source tag)
         try:
             send_frontend_fn({
                 'status': 'done',
@@ -731,7 +737,7 @@ def _handle_sms_reply(llm_fn, send_frontend_fn, sms, parsed):
         except Exception as e:
             logger.error(f"[SMS_LISTENER] Failed to push reply to UI: {e}")
         
-        # 4) Send exactly ONE email back as SMS
+        # 5) Send exactly ONE email back as SMS
         reply_to = parsed.get('from', '')
         if not reply_to:
             logger.error("[SMS_LISTENER] No reply-to address found")
@@ -750,7 +756,7 @@ def _handle_sms_reply(llm_fn, send_frontend_fn, sms, parsed):
         else:
             logger.error(f"[SMS_LISTENER] SMS reply failed: {reply_result.get('error')}")
         
-        # 5) Save to conversation memory so future context includes this exchange
+        # 6) Save to conversation memory so future context includes this exchange
         try:
             from src.memory.unified_memory import UnifiedMemory
             mem = UnifiedMemory()
@@ -762,7 +768,7 @@ def _handle_sms_reply(llm_fn, send_frontend_fn, sms, parsed):
         logger.error(f"[SMS_LISTENER] Error in reply handler: {e}\n{traceback.format_exc()}")
 
 
-def _poll_api(llm_fn, send_frontend_fn, poll_count):
+def _poll_api(agent_fn, send_frontend_fn, poll_count):
     """Poll for new GV texts using Gmail API.
     
     Batches multiple unread texts from the same sender into a single agent
@@ -840,14 +846,14 @@ def _poll_api(llm_fn, send_frontend_fn, poll_count):
         # Route to agent in a separate thread so polling continues
         reply_thread = threading.Thread(
             target=_handle_sms_reply,
-            args=(llm_fn, send_frontend_fn, latest_sms, latest_parsed),
+            args=(agent_fn, send_frontend_fn, latest_sms, latest_parsed),
             daemon=True,
             name=f"sms-reply-{sender}"
         )
         reply_thread.start()
 
 
-def _poll_imap(llm_fn, send_frontend_fn, poll_count):
+def _poll_imap(agent_fn, send_frontend_fn, poll_count):
     """Poll for new GV texts using IMAP fallback."""
     imap, err = _connect_imap()
     if err:
@@ -885,7 +891,7 @@ def _poll_imap(llm_fn, send_frontend_fn, poll_count):
                 # Route to agent in a separate thread
                 reply_thread = threading.Thread(
                     target=_handle_sms_reply,
-                    args=(llm_fn, send_frontend_fn, sms, parsed),
+                    args=(agent_fn, send_frontend_fn, sms, parsed),
                     daemon=True,
                     name=f"sms-reply-imap-{mid[:8] if isinstance(mid, str) else mid}"
                 )
@@ -914,12 +920,12 @@ def _imap_mark_as_read(uid: str):
         except Exception: pass
 
 
-def start_sms_listener(llm_fn: Callable, send_frontend_fn: Callable):
+def start_sms_listener(agent_fn: Callable, send_frontend_fn: Callable):
     """Start the background SMS listener thread.
     
     Args:
-        llm_fn: Direct LLM call function (e.g. call_llm_sync) that takes
-                a list of message dicts and returns {'content': str}.
+        agent_fn: Full agent pipeline function that takes a text string
+                  and returns a result dict (same as process_message).
         send_frontend_fn: Function to push messages to the desktop UI.
     """
     global _sms_listener_thread
@@ -931,7 +937,7 @@ def start_sms_listener(llm_fn: Callable, send_frontend_fn: Callable):
     _sms_listener_stop.clear()
     _sms_listener_thread = threading.Thread(
         target=_sms_listener_loop,
-        args=(llm_fn, send_frontend_fn),
+        args=(agent_fn, send_frontend_fn),
         daemon=True,
         name="sms-listener"
     )
