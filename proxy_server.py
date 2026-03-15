@@ -14,6 +14,8 @@ import threading
 
 # Thread-local storage for circuits silent suppression
 _circuits_tls = threading.local()
+# Thread-local storage for SMS response capture
+_sms_tls = threading.local()
 import logging
 import urllib.parse
 import random
@@ -1592,6 +1594,16 @@ def send_message_to_frontend(message, silent=False):
         if isinstance(message, dict) and message.get('status') in ('done', 'streaming'):
             logger.debug("Circuits [SILENT]: suppressing frontend message")
             return
+    
+    # SMS capture: if an SMS thread is capturing, stash done/success/streaming payloads
+    _sms_cap = getattr(_sms_tls, 'capture', None)
+    if _sms_cap is not None and isinstance(message, dict):
+        _st = message.get('status', '')
+        if _st in ('done', 'success') and message.get('result'):
+            _sms_cap['full_response'] = message['result']
+            _sms_cap['streaming_buf'] = ''
+        elif _st == 'streaming' and message.get('result'):
+            _sms_cap['streaming_buf'] += message['result']
     
     # Skip logging for high-frequency messages like avatar energy
     if silent or (isinstance(message, dict) and message.get('type') == 'avatar'):
@@ -3231,19 +3243,52 @@ class ChatAgent:
                 
                 # Route SMS through the full agent pipeline (process_message)
                 # so tool calling, command parsing, etc. all work over SMS.
+                #
+                # Problem: process_message often returns None after streaming
+                # the full response to the frontend via WebSocket.  To capture
+                # the full reply for SMS, we use thread-local storage
+                # (_sms_tls.capture) that send_message_to_frontend checks.
+                # When set, every 'done' and 'streaming' payload gets stashed
+                # so we can extract the complete text afterward.
                 _agent_ref = self
+                
                 def _sms_agent_fn(text):
                     """Full agent pipeline for SMS — same as voice/desktop/web."""
+                    # Enable capture on this thread
+                    _sms_tls.capture = {'full_response': '', 'streaming_buf': ''}
                     try:
                         result = _agent_ref.process_message({
                             'text': text,
                             'mode': 'code',  # full tool mode
                             'source': 'sms',
                         })
-                        return result
                     except Exception as e:
                         logger.error(f"[SMS_AGENT] process_message failed: {e}")
-                        return {'status': 'error', 'result': str(e)}
+                        result = {'status': 'error', 'result': str(e)}
+                    finally:
+                        # Grab captured text, then disable capture
+                        cap = getattr(_sms_tls, 'capture', None) or {}
+                        _sms_tls.capture = None
+                    
+                    # Prefer the captured 'done' payload (complete response);
+                    # fall back to accumulated streaming chunks;
+                    # last resort is the return dict's result key.
+                    captured_text = (
+                        cap.get('full_response', '') or
+                        cap.get('streaming_buf', '') or
+                        ''
+                    )
+                    
+                    if captured_text:
+                        # Always override with captured text — it comes from
+                        # the authoritative 'done' payload in send_message_to_frontend
+                        # and is guaranteed to be the full, final response.
+                        if result is None:
+                            result = {'status': 'done', 'result': captured_text}
+                        elif isinstance(result, dict):
+                            result['result'] = captured_text
+                    
+                    return result
                 
                 start_sms_listener(_sms_agent_fn, send_message_to_frontend)
                 logger.info("Gmail SMS listener started")
