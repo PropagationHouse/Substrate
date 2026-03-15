@@ -455,7 +455,9 @@ def send_email(
                     msg['In-Reply-To'] = reply_to_message_id
                     msg['References'] = reply_to_message_id
                 
-                raw = base64.urlsafe_b64encode(msg.as_bytes()).decode('utf-8')
+                raw_bytes = msg.as_bytes()
+                logger.info(f"[GMAIL] Email body len={len(body)}, MIME bytes={len(raw_bytes)}, first 300 body chars: {body[:300]}")
+                raw = base64.urlsafe_b64encode(raw_bytes).decode('utf-8')
                 send_body = {'raw': raw}
                 if thread_id:
                     send_body['threadId'] = thread_id
@@ -666,6 +668,51 @@ def _clean_reply_for_sms(text: str) -> str:
     return cleaned
 
 
+def _split_sms_chunks(text: str, limit: int = 750) -> list:
+    """Split text into chunks that fit within the SMS/GV character limit.
+    
+    Splits at paragraph boundaries (double newline) first, then at sentence
+    boundaries ('. '), then hard-splits as a last resort.
+    """
+    if len(text) <= limit:
+        return [text]
+    
+    chunks = []
+    remaining = text
+    
+    while remaining:
+        if len(remaining) <= limit:
+            chunks.append(remaining)
+            break
+        
+        # Try to split at a paragraph boundary
+        cut = remaining.rfind('\n\n', 0, limit)
+        if cut > limit // 3:  # Only use if we keep at least 1/3 of the limit
+            chunks.append(remaining[:cut].rstrip())
+            remaining = remaining[cut:].lstrip()
+            continue
+        
+        # Try to split at a sentence boundary
+        cut = remaining.rfind('. ', 0, limit)
+        if cut > limit // 3:
+            chunks.append(remaining[:cut + 1].rstrip())  # Include the period
+            remaining = remaining[cut + 2:].lstrip()
+            continue
+        
+        # Hard split at the limit (last resort)
+        # Find the last space to avoid splitting mid-word
+        cut = remaining.rfind(' ', 0, limit)
+        if cut > limit // 3:
+            chunks.append(remaining[:cut].rstrip())
+            remaining = remaining[cut + 1:].lstrip()
+        else:
+            # No good split point — hard cut
+            chunks.append(remaining[:limit])
+            remaining = remaining[limit:]
+    
+    return chunks
+
+
 def _handle_sms_reply(agent_fn, send_frontend_fn, sms, parsed):
     """Handle SMS reply using the full agent pipeline (process_message).
     
@@ -698,6 +745,9 @@ def _handle_sms_reply(agent_fn, send_frontend_fn, sms, parsed):
         # 3) Extract reply text from agent result
         reply_text = ''
         if isinstance(agent_result, dict):
+            # Log keys for debugging
+            logger.info(f"[SMS_LISTENER] agent_result keys: {list(agent_result.keys())}")
+            logger.info(f"[SMS_LISTENER] agent_result['result'] len: {len(str(agent_result.get('result', '') or ''))}")
             # process_message returns various shapes; try common keys
             reply_text = (
                 agent_result.get('result', '') or
@@ -709,45 +759,44 @@ def _handle_sms_reply(agent_fn, send_frontend_fn, sms, parsed):
                 for msg in reversed(agent_result['messages']):
                     if msg.get('role') == 'assistant' and msg.get('content'):
                         reply_text = msg['content']
+                        logger.info(f"[SMS_LISTENER] Fell back to messages array, len={len(reply_text)}")
                         break
         elif isinstance(agent_result, str):
             reply_text = agent_result
         
+        logger.info(f"[SMS_LISTENER] Raw reply_text len={len(reply_text)}, first 200 chars: {reply_text[:200]}")
+        
         # Clean the reply for SMS (strip tool calls, markdown, thinking tags)
         clean_reply = _clean_reply_for_sms(reply_text)
         if not clean_reply:
-            logger.warning("[SMS_LISTENER] Agent returned empty reply")
+            logger.warning("[SMS_LISTENER] Agent returned empty reply after cleaning")
             return
         
-        logger.info(f"[SMS_LISTENER] Agent reply: {clean_reply[:80]}")
+        logger.info(f"[SMS_LISTENER] Clean reply len={len(clean_reply)}, first 200 chars: {clean_reply[:200]}")
         
-        # 4) Show agent reply as a normal assistant bubble in the desktop UI
-        #    (process_message may already push to frontend, but we ensure SMS source tag)
-        try:
-            send_frontend_fn({
-                'status': 'done',
-                'result': clean_reply,
-                'messages': [
-                    {'role': 'assistant', 'content': clean_reply}
-                ],
-                'new_message': True,
-                'clear_thinking': True,
-                'source': 'sms',
-            })
-        except Exception as e:
-            logger.error(f"[SMS_LISTENER] Failed to push reply to UI: {e}")
+        # 4) NOTE: We do NOT push the reply to the desktop UI here.
+        #    process_message → chat_with_tools already sends the full response
+        #    via send_message_to_frontend.  Pushing again here caused duplicates.
         
-        # 5) Send exactly ONE email back as SMS
+        # 5) Send SMS reply.
+        #    Google Voice's email-to-SMS gateway drops everything after the
+        #    first newline character in the email body.  We flatten newlines
+        #    to spaces ONLY in the SMS body — clean_reply stays intact for
+        #    memory and desktop display.
         reply_to = parsed.get('from', '')
         if not reply_to:
             logger.error("[SMS_LISTENER] No reply-to address found")
             return
         
-        logger.info(f"[SMS_LISTENER] Sending SMS reply to {reply_to}")
+        # Flatten newlines for SMS transport only
+        sms_body = clean_reply.replace('\n\n', ' — ').replace('\n', ' ')
+        sms_body = re.sub(r'  +', ' ', sms_body).strip()
+        
+        logger.info(f"[SMS_LISTENER] Sending SMS reply to {reply_to} ({len(sms_body)} chars, flattened)")
         reply_result = send_email(
             to=reply_to,
             subject=f"Re: {sms.get('subject', 'SMS')}",
-            body=clean_reply,
+            body=sms_body,
             reply_to_message_id=sms.get('message_id'),
             thread_id=sms.get('thread_id'),
         )
