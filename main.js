@@ -1881,6 +1881,20 @@ function startSpeechRecognition() {
                     if (mainWindow) {
                         mainWindow.webContents.send('mic-device-changed', jsonData);
                     }
+                    // Persist device name for resilient startup (indices shift when hardware changes)
+                    if (jsonData.name) {
+                        try {
+                            const settingsPath = path.join(__dirname, 'custom_settings.json');
+                            let settings = {};
+                            if (fs.existsSync(settingsPath)) {
+                                settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
+                            }
+                            settings.mic_device_name = jsonData.name;
+                            fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf-8');
+                        } catch (e) {
+                            console.error('Failed to save mic device name:', e);
+                        }
+                    }
                 } else if (jsonData.status === 'info') {
                     console.log('Speech info:', jsonData.message);
                 } else if (jsonData.status === 'error') {
@@ -2215,6 +2229,7 @@ ipcMain.on('set-mic-device', (event, value) => {
             settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
         }
         settings.mic_device_index = value;
+        // Device name will be saved when mic_device_changed event arrives from speech process
         fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf-8');
         console.log('Mic device preference saved:', value);
     } catch (e) {

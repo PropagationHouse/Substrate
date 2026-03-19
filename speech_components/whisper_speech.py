@@ -101,6 +101,28 @@ max_buffer_size = int(16000 * 30)  # Maximum buffer size (~30 seconds)
 no_buffer_limit = False  # When True, disables chunk trigger and raises max buffer to ~10 min
 _nbl_sent_samples = 0  # Track how many samples we've already sent during no_buffer_limit mode
 
+def _resolve_device_by_name(name):
+    """Find the current device index matching a saved device name.
+    
+    Device indices shift when hardware is added/removed (USB, Bluetooth).
+    This resolves a saved name to the current index by substring match.
+    Returns the index or None if not found.
+    """
+    try:
+        devices = sd.query_devices()
+        # Exact match first
+        for i, d in enumerate(devices):
+            if d['max_input_channels'] > 0 and d['name'] == name:
+                return i
+        # Substring match (device names can get truncated by the OS)
+        for i, d in enumerate(devices):
+            if d['max_input_channels'] > 0 and (name in d['name'] or d['name'] in name):
+                return i
+    except Exception:
+        pass
+    return None
+
+
 # Load Google API key and mic device from custom_settings.json at startup
 try:
     settings_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'custom_settings.json')
@@ -112,11 +134,23 @@ try:
             print(f"Loaded Google API key from custom_settings.json (length: {len(google_api_key)})")
         else:
             print("No Google API key found in custom_settings.json")
-        # Load saved mic device index
-        saved_mic = settings.get('mic_device_index', None)
-        if saved_mic is not None:
-            selected_device_index = int(saved_mic)
-            print(f"Loaded saved mic device index: {selected_device_index}")
+        # Load saved mic device — prefer name-based lookup (indices shift when hardware changes)
+        saved_mic_name = settings.get('mic_device_name', '')
+        saved_mic_idx = settings.get('mic_device_index', None)
+        if saved_mic_name:
+            # Resolve name to current index
+            resolved = _resolve_device_by_name(saved_mic_name)
+            if resolved is not None:
+                selected_device_index = resolved
+                print(f"Resolved saved mic '{saved_mic_name}' to device index {resolved}")
+            elif saved_mic_idx is not None:
+                selected_device_index = int(saved_mic_idx)
+                print(f"WARNING: Saved mic '{saved_mic_name}' not found, falling back to saved index {saved_mic_idx}")
+            else:
+                print(f"WARNING: Saved mic '{saved_mic_name}' not found and no index fallback — using system default")
+        elif saved_mic_idx is not None:
+            selected_device_index = int(saved_mic_idx)
+            print(f"Loaded saved mic device index: {selected_device_index} (no name saved, index may be stale)")
     else:
         print(f"custom_settings.json not found at {settings_path}")
 except Exception as e:
@@ -788,9 +822,17 @@ def _switch_device(new_index):
         )
         _active_stream.start()
 
-        dev_name = "system default" if selected_device_index is None else f"device {selected_device_index}"
+        # Resolve actual device name for persistence
+        if selected_device_index is not None:
+            try:
+                dev_info = sd.query_devices(selected_device_index)
+                dev_name = dev_info['name']
+            except Exception:
+                dev_name = f"device {selected_device_index}"
+        else:
+            dev_name = "system default"
         print_json({"status": "info", "message": f"Switched microphone to {dev_name}"})
-        print_json({"type": "mic_device_changed", "selected": selected_device_index})
+        print_json({"type": "mic_device_changed", "selected": selected_device_index, "name": dev_name})
     except Exception as e:
         print_json({"status": "error", "message": f"Failed to switch mic device: {e}"})
 
