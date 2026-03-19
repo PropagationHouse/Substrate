@@ -1,0 +1,49 @@
+.intelligence-feed-container {
+    background-color: #1a1a1a;
+    border: 1px solid #333;
+    padding: 15px;
+    margin: 20px;
+    border-radius: 8px;
+    color: #eee;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.intelligence-feed-container h2 {
+    color: #00ffcc; /* Neon green */
+    margin-top: 0;
+    margin-bottom: 15px;
+    text-shadow: 0 0 5px #00ffcc;
+}
+
+#feed-list {
+    list-style: none;
+    padding: 0;
+}
+
+#feed-list li {
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px dashed #444;
+}
+
+#feed-list li:last-child {
+    border-bottom: none;
+}
+
+#feed-list li a {
+    color: #99ccff; /* Light blue */
+    text-decoration: none;
+    font-weight: bold;
+}
+
+#feed-list li a:hover {
+    color: #00ffcc;
+    text-decoration: underline;
+}
+
+#feed-list li span.date {
+    font-size: 0.8em;
+    color: #888;
+    display: block;
+    margin-top: 5px;
+}
