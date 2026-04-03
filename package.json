@@ -1,6 +1,6 @@
 {
   "name": "substrate",
-  "version": "1.2.1",
+  "version": "1.2.3",
   "description": "Substrate - Autonomous Agent Interface",
   "productName": "Substrate",
   "main": "main.js",
@@ -87,6 +87,7 @@
       "config/**/*",
       "knowledge/**/*",
       "skills/**/*",
+      "macros/**/*",
       "dashboard/dist/**/*",
       "docs/**/*",
       "certs/**/*",

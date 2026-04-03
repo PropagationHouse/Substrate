@@ -385,6 +385,15 @@ function createProfileManagerWindow() {
     });
 
     remote.enable(profileManagerWindow.webContents);
+
+    const profileHtmlPath = path.join(__dirname, 'profile_manager.html');
+    if (!fs.existsSync(profileHtmlPath)) {
+        console.warn('profile_manager.html not found — opening profile management via dashboard');
+        profileManagerWindow.close();
+        profileManagerWindow = null;
+        shell.openExternal('http://localhost:8765/dashboard');
+        return null;
+    }
     
     profileManagerWindow.loadFile('profile_manager.html')
         .then(() => {
