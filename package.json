@@ -87,6 +87,7 @@
       "config/**/*",
       "knowledge/**/*",
       "skills/**/*",
+      "dashboard/dist/**/*",
       "docs/**/*",
       "certs/**/*",
       "third_party/**/*",
