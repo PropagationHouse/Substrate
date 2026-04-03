@@ -144,13 +144,19 @@ sock = Sock(app)
 # ---------------------------------------------------------------------------
 # Paths that never require auth (static assets, login, setup, health)
 _AUTH_EXEMPT_PREFIXES = (
-    '/ui', '/static/', '/sw.js', '/manifest.json', '/certs/',
+    '/ui', '/dashboard', '/static/', '/sw.js', '/manifest.json', '/certs/',
     '/audio/', '/uploads/', '/api/auth/login', '/api/auth/setup',
     '/api/auth/login-otp', '/api/auth/electron-login', '/api/auth/status', '/api/test',
     '/api/substrate', '/api/circuits', '/api/prime',
     '/api/commands',
     '/api/models', '/api/discover-models',
     '/api/gmail/status',
+    '/api/server-info', '/api/tokens', '/api/agentlog',
+    '/api/connect-defaults', '/api/kanban/', '/api/transcribe/config',
+    '/api/sessions/', '/api/memories', '/api/workspace',
+    '/api/codex-limits', '/api/claude-code-limits',
+    '/api/version/check', '/api/crons', '/api/files/',
+    '/api/gateway/', '/api/events',
 )
 
 def _get_agent_config():
@@ -2088,14 +2094,32 @@ try:
         resp.headers['X-Accel-Buffering'] = 'no'
         return resp
 
-    # Wrap existing send_message_to_frontend to also broadcast to SSE
+    # Wrap existing send_message_to_frontend to also broadcast to SSE + Gateway WS
     _orig_send_message_to_frontend = send_message_to_frontend
-    def send_message_to_frontend(message):
-        _orig_send_message_to_frontend(message)
+    def _wrapped_send_message_to_frontend(message, **kwargs):
+        _orig_send_message_to_frontend(message, **kwargs)
         try:
             _broadcast_to_sse(message)
         except Exception as _e:
             print(f"SSE wrap error: {_e}", file=sys.stderr)
+        # Gateway WebSocket broadcast — translate flat messages to structured events
+        # AND broadcast raw payload for direct consumption by dashboard
+        try:
+            from src.infra.gateway_ws import broadcast_raw, get_connected_count
+            _cc = get_connected_count()
+            _gw_msg = message if isinstance(message, dict) else json.loads(message) if isinstance(message, str) else None
+            _status = _gw_msg.get('status', '?') if _gw_msg else '?'
+            print(f"[SMTF-WRAP] status={_status} clients={_cc} type={type(message).__name__}", file=sys.stderr, flush=True)
+            if _cc > 0 and _gw_msg:
+                broadcast_raw(_gw_msg)
+        except Exception as _gw_e:
+            print(f"Gateway WS broadcast error: {_gw_e}", file=sys.stderr, flush=True)
+    # Rebind the module global so all callers in this file use the wrapped version.
+    # We use sys.modules patching to avoid the 'assigned before global declaration' SyntaxError.
+    import sys as _sys_smtf
+    _this_mod = _sys_smtf.modules[__name__]
+    setattr(_this_mod, 'send_message_to_frontend', _wrapped_send_message_to_frontend)
+    print(f"[SMTF-WRAP] ✓ send_message_to_frontend wrapper installed (id={id(_wrapped_send_message_to_frontend)})", file=_sys_smtf.stderr, flush=True)
 except Exception as e:
     print(f"Error initializing SSE support: {e}", file=sys.stderr)
 
@@ -7337,6 +7361,7 @@ class ChatAgent:
                         model_override = fallback
             
             logger.info(f"[CHAT] chat_response called with model={self.config.get('model')}, message={str(message)[:50]}...")
+            print(f"[CHAT-DBG] send_message_to_frontend is wrapped={send_message_to_frontend.__name__}", file=sys.stderr, flush=True)
             # Treat renderer control pings (e.g., '/config') as non-chat
             control_message = False
             if isinstance(message, str):
@@ -7453,7 +7478,11 @@ class ChatAgent:
                 full_response = ""
                 last_sent = 0
                 _thinking_started = False
+                _chunk_count = 0
                 for chunk in self.stream_response(msgs, model_override=model_override):
+                    _chunk_count += 1
+                    if _chunk_count <= 3 or _chunk_count % 20 == 0:
+                        print(f"[STREAM-DBG] chunk#{_chunk_count} type={type(chunk).__name__} len={len(chunk) if isinstance(chunk, str) else '?'}", file=sys.stderr, flush=True)
                     # Handle thinking tuples from providers
                     if isinstance(chunk, tuple) and chunk[0] == 'thinking':
                         thinking_text = chunk[1]
@@ -9158,6 +9187,514 @@ def api_network_info():
         'best_url': best_url,
     })
 
+# ==== Substrate Gateway REST API ====
+# Session, model, circuits, memory, skills, files, lessons endpoints
+# These expose existing backend systems for dashboard consumption.
+
+@app.route('/api/sessions', methods=['GET'])
+def api_sessions_list():
+    """List all sessions."""
+    try:
+        from src.infra.sessions import get_session_manager
+        mgr = get_session_manager()
+        session_type = request.args.get('type')
+        include_empty = request.args.get('includeEmpty', 'false').lower() == 'true'
+        sessions = mgr.list_sessions(session_type=session_type, include_empty=include_empty)
+        return jsonify({'ok': True, 'sessions': sessions})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/sessions/<path:key>', methods=['GET'])
+def api_sessions_get(key):
+    """Get a single session with messages."""
+    try:
+        from src.infra.sessions import get_session_manager
+        mgr = get_session_manager()
+        session = mgr.get(key)
+        if not session:
+            return jsonify({'ok': False, 'error': 'Session not found'}), 404
+        return jsonify({'ok': True, 'session': session.to_dict()})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/sessions/<path:key>', methods=['DELETE'])
+def api_sessions_delete(key):
+    """Delete a session."""
+    try:
+        from src.infra.sessions import get_session_manager
+        mgr = get_session_manager()
+        deleted = mgr.delete(key)
+        return jsonify({'ok': True, 'deleted': deleted})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/sessions/<path:key>/clear', methods=['POST'])
+def api_sessions_clear(key):
+    """Clear messages from a session."""
+    try:
+        from src.infra.sessions import get_session_manager
+        mgr = get_session_manager()
+        mgr.clear_session(key)
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/sessions/<path:key>/messages', methods=['GET'])
+def api_sessions_messages(key):
+    """Get messages for a session."""
+    try:
+        from src.infra.sessions import get_session_manager
+        mgr = get_session_manager()
+        session = mgr.get(key)
+        if not session:
+            return jsonify({'ok': False, 'error': 'Session not found'}), 404
+        messages = [{'role': m.role, 'content': m.content, 'timestamp': m.timestamp}
+                    for m in session.messages]
+        return jsonify({'ok': True, 'messages': messages, 'sessionKey': key})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/gw/models', methods=['GET'])
+def api_gw_models_list():
+    """List available models with metadata (gateway API)."""
+    try:
+        models = []
+        for model_id, meta in SUPPORTED_MODELS.items():
+            models.append({
+                'id': model_id,
+                'displayName': meta.get('display_name', model_id),
+                'provider': meta.get('provider', 'unknown'),
+                'size': meta.get('size', ''),
+                'configured': True,
+            })
+        # Mark the active model
+        active_model = ''
+        if 'agent' in globals() and agent:
+            active_model = agent.config.get('model', '')
+        return jsonify({'ok': True, 'models': models, 'activeModel': active_model})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/circuits/config', methods=['GET'])
+def api_gw_circuits_config_get():
+    """Get circuits configuration (gateway API)."""
+    try:
+        from src.infra.circuits import CircuitsConfig
+        # Try to get the running config from the agent
+        config_dict = {
+            'enabled': True,
+            'intervalSeconds': 300,
+            'activeHoursStart': None,
+            'activeHoursEnd': None,
+        }
+        if 'agent' in globals() and agent and hasattr(agent, '_circuits_config'):
+            cc = agent._circuits_config
+            if cc:
+                config_dict = {
+                    'enabled': cc.enabled,
+                    'intervalSeconds': cc.interval_seconds,
+                    'activeHoursStart': cc.active_hours_start,
+                    'activeHoursEnd': cc.active_hours_end,
+                    'activeHoursTimezone': cc.active_hours_timezone,
+                    'modelOverride': cc.model_override,
+                    'skipIfEmpty': cc.skip_if_empty,
+                }
+        return jsonify({'ok': True, 'config': config_dict})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/circuits/config', methods=['PUT'])
+def api_gw_circuits_config_set():
+    """Update circuits configuration (gateway API)."""
+    try:
+        data = request.get_json(force=True, silent=True) or {}
+        if 'agent' in globals() and agent and hasattr(agent, '_circuits_config'):
+            cc = agent._circuits_config
+            if cc:
+                if 'enabled' in data:
+                    cc.enabled = bool(data['enabled'])
+                if 'intervalSeconds' in data:
+                    cc.interval_seconds = int(data['intervalSeconds'])
+                if 'activeHoursStart' in data:
+                    cc.active_hours_start = data['activeHoursStart']
+                if 'activeHoursEnd' in data:
+                    cc.active_hours_end = data['activeHoursEnd']
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/circuits/tasks', methods=['GET'])
+def api_gw_circuits_tasks():
+    """Get parsed CIRCUITS.md task list (gateway API)."""
+    try:
+        from src.infra.circuits_tasks import _read_circuits
+        content = _read_circuits()
+        # Parse active tasks and completed tasks from markdown
+        active = []
+        completed = []
+        section = 'active'
+        for line in content.split('\n'):
+            stripped = line.strip()
+            if stripped.lower().startswith('## completed'):
+                section = 'completed'
+                continue
+            if stripped.lower().startswith('## active'):
+                section = 'active'
+                continue
+            if stripped.startswith('- '):
+                task_text = stripped[2:].strip()
+                if section == 'completed':
+                    completed.append(task_text)
+                else:
+                    active.append(task_text)
+        return jsonify({'ok': True, 'active': active, 'completed': completed, 'raw': content})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/skills', methods=['GET'])
+def api_skills_list():
+    """List available skills."""
+    try:
+        from src.tools.skills_tool import list_skills
+        skills = list_skills()
+        return jsonify({'ok': True, 'skills': skills})
+    except ImportError:
+        return jsonify({'ok': True, 'skills': []})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/subagents', methods=['GET'])
+def api_subagents_list():
+    """List active subagent tasks."""
+    try:
+        from src.infra.subagents import SubagentRegistry
+        # Try to get the global registry
+        if 'agent' in globals() and agent and hasattr(agent, '_subagent_registry'):
+            registry = agent._subagent_registry
+            tasks = []
+            with registry._lock:
+                for task in registry._tasks.values():
+                    tasks.append({
+                        'id': task.id,
+                        'name': task.name,
+                        'status': task.status.value if hasattr(task.status, 'value') else str(task.status),
+                        'parentSession': task.parent_session,
+                        'message': task.message[:200],
+                    })
+            return jsonify({'ok': True, 'tasks': tasks})
+        return jsonify({'ok': True, 'tasks': []})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/files/tree', methods=['GET'])
+def api_files_tree():
+    """List workspace files as TreeEntry objects for the dashboard file browser."""
+    try:
+        workspace_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'workspace')
+        sub_path = request.args.get('path', '')
+        if not os.path.isdir(workspace_dir):
+            os.makedirs(workspace_dir, exist_ok=True)
+
+        target_dir = workspace_dir
+        if sub_path:
+            target_dir = os.path.normpath(os.path.join(workspace_dir, sub_path))
+            if not target_dir.startswith(os.path.normpath(workspace_dir)):
+                return jsonify({'ok': False, 'error': 'Path outside workspace'}), 403
+            if not os.path.isdir(target_dir):
+                return jsonify({'ok': False, 'error': 'Directory not found'}), 404
+
+        BINARY_EXTS = {'.png','.jpg','.jpeg','.gif','.bmp','.ico','.webp','.svg',
+                       '.mp3','.wav','.ogg','.mp4','.avi','.mov','.zip','.tar',
+                       '.gz','.rar','.7z','.exe','.dll','.so','.bin','.pdf','.woff','.woff2','.ttf','.eot'}
+        entries = []
+        try:
+            items = sorted(os.listdir(target_dir))
+        except PermissionError:
+            items = []
+        for item_name in items:
+            if item_name.startswith('.') or item_name == '__pycache__' or item_name == 'node_modules':
+                continue
+            full = os.path.join(target_dir, item_name)
+            rel = os.path.relpath(full, workspace_dir).replace('\\', '/')
+            if os.path.isdir(full):
+                entries.append({
+                    'name': item_name,
+                    'path': rel,
+                    'type': 'directory',
+                    'children': None,  # not loaded yet (lazy)
+                })
+            elif os.path.isfile(full):
+                ext = os.path.splitext(item_name)[1].lower()
+                try:
+                    size = os.path.getsize(full)
+                    mtime = int(os.path.getmtime(full) * 1000)
+                except Exception:
+                    size = 0
+                    mtime = 0
+                entries.append({
+                    'name': item_name,
+                    'path': rel,
+                    'type': 'file',
+                    'size': size,
+                    'mtime': mtime,
+                    'binary': ext in BINARY_EXTS,
+                })
+        return jsonify({
+            'ok': True,
+            'entries': entries,
+            'workspaceInfo': {
+                'isCustomWorkspace': False,
+                'rootPath': workspace_dir.replace('\\', '/'),
+            },
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/files/special-folders', methods=['GET'])
+def api_files_special_folders():
+    """List files from special project-level folders (skills, macros, src/tools) for the graph."""
+    try:
+        project_root = os.path.dirname(os.path.abspath(__file__))
+        SPECIAL_FOLDERS = {
+            'skills':    os.path.join(project_root, 'skills'),
+            'macros':    os.path.join(project_root, 'macros'),
+            'tools':     os.path.join(project_root, 'src', 'tools'),
+        }
+        result = {}
+        for folder_key, folder_path in SPECIAL_FOLDERS.items():
+            if not os.path.isdir(folder_path):
+                result[folder_key] = []
+                continue
+            entries = []
+            for root_dir, dirs, filenames in os.walk(folder_path):
+                dirs[:] = [d for d in dirs if not d.startswith('.') and d != '__pycache__' and d != 'node_modules']
+                for fn in sorted(filenames):
+                    if fn.startswith('.'):
+                        continue
+                    full = os.path.join(root_dir, fn)
+                    rel = os.path.relpath(full, folder_path).replace('\\', '/')
+                    try:
+                        size = os.path.getsize(full)
+                    except Exception:
+                        size = 0
+                    entries.append({'name': fn, 'path': f'{folder_key}/{rel}', 'size': size})
+            result[folder_key] = entries
+        return jsonify({'ok': True, 'folders': result})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+# ── Micro Code-Audit Agent ────────────────────────────────────────────
+AUDIT_SYSTEM_PROMPT = """You are a specialized code auditor. Your ONLY job is to review code for:
+1. Bugs and logic errors
+2. Security vulnerabilities
+3. Missing error handling
+4. Performance issues
+5. Style/convention problems
+
+Respond ONLY in this JSON format (no markdown, no backticks):
+{
+  "summary": "Brief overall assessment (1-2 sentences)",
+  "score": <1-10 integer, 10=perfect>,
+  "findings": [
+    {
+      "severity": "error|warning|info",
+      "line": <approximate line number or null>,
+      "title": "Short title",
+      "description": "What's wrong and why",
+      "suggestion": "How to fix it (code snippet if applicable)"
+    }
+  ]
+}
+
+If the code is clean, return an empty findings array with a positive summary.
+Be precise, concise, and actionable. Do NOT explain the code back — only report issues."""
+
+EDIT_SYSTEM_PROMPT = """You are a specialized code editor. You receive a file and an edit instruction.
+Apply the requested change and return the COMPLETE updated file content.
+Do NOT explain the changes — return ONLY the full file content, nothing else.
+Preserve all existing formatting, comments, and structure unless the edit specifically asks to change them."""
+
+def _resolve_audit_file(file_path):
+    """Resolve a file path to an absolute path, checking workspace and project-level folders."""
+    project_root = os.path.dirname(os.path.abspath(__file__))
+    workspace_dir = os.path.join(project_root, 'workspace')
+    # Try workspace first
+    full = os.path.normpath(os.path.join(workspace_dir, file_path))
+    if full.startswith(os.path.normpath(workspace_dir)) and os.path.isfile(full):
+        return full
+    # Try project-level special folders (skills/, macros/, src/tools/)
+    for prefix, folder in [('skills/', 'skills'), ('macros/', 'macros'), ('tools/', os.path.join('src', 'tools'))]:
+        if file_path.startswith(prefix):
+            rel = file_path[len(prefix):]
+            full = os.path.normpath(os.path.join(project_root, folder, rel))
+            if os.path.isfile(full):
+                return full
+    # Try as-is from project root
+    full = os.path.normpath(os.path.join(project_root, file_path))
+    if full.startswith(os.path.normpath(project_root)) and os.path.isfile(full):
+        return full
+    return None
+
+@app.route('/api/audit/run', methods=['POST'])
+def api_audit_run():
+    """Run the micro code-audit agent on a file."""
+    global agent
+    try:
+        data = request.get_json(force=True, silent=True) or {}
+        file_path = data.get('path', '').strip()
+        if not file_path:
+            return jsonify({'ok': False, 'error': 'path is required'}), 400
+
+        full_path = _resolve_audit_file(file_path)
+        if not full_path:
+            return jsonify({'ok': False, 'error': f'File not found: {file_path}'}), 404
+
+        size = os.path.getsize(full_path)
+        if size > 500_000:
+            return jsonify({'ok': False, 'error': f'File too large for audit ({size} bytes, max 500KB)'}), 413
+
+        with open(full_path, 'r', encoding='utf-8', errors='replace') as f:
+            content = f.read()
+
+        ext = os.path.splitext(file_path)[1].lower()
+        lang = {'.py': 'Python', '.js': 'JavaScript', '.ts': 'TypeScript', '.tsx': 'TypeScript/React',
+                '.jsx': 'JavaScript/React', '.json': 'JSON', '.md': 'Markdown', '.html': 'HTML',
+                '.css': 'CSS', '.sh': 'Shell', '.bat': 'Batch', '.rs': 'Rust', '.go': 'Go',
+                '.c': 'C', '.cpp': 'C++', '.h': 'C/C++ Header'}.get(ext, 'Unknown')
+
+        messages = [
+            {"role": "system", "content": AUDIT_SYSTEM_PROMPT},
+            {"role": "user", "content": f"Audit this {lang} file: `{file_path}`\n\n```{ext.lstrip('.')}\n{content}\n```"}
+        ]
+
+        result = agent.call_llm_sync(messages)
+        response_text = result.get('content', '').strip()
+
+        # Try to parse as JSON
+        try:
+            # Strip markdown code fences if present
+            cleaned = response_text
+            if cleaned.startswith('```'):
+                cleaned = cleaned.split('\n', 1)[1] if '\n' in cleaned else cleaned[3:]
+            if cleaned.endswith('```'):
+                cleaned = cleaned[:-3]
+            cleaned = cleaned.strip()
+            audit_data = json.loads(cleaned)
+            return jsonify({'ok': True, 'audit': audit_data, 'raw': None})
+        except Exception:
+            return jsonify({'ok': True, 'audit': None, 'raw': response_text})
+
+    except Exception as e:
+        logger.error(f"[AUDIT] Error: {e}", exc_info=True)
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/audit/edit', methods=['POST'])
+def api_audit_edit():
+    """Use the micro code-audit agent to apply an edit to a file."""
+    global agent
+    try:
+        data = request.get_json(force=True, silent=True) or {}
+        file_path = data.get('path', '').strip()
+        instruction = data.get('instruction', '').strip()
+        current_content = data.get('content', '')  # optional: use editor content if dirty
+
+        if not file_path:
+            return jsonify({'ok': False, 'error': 'path is required'}), 400
+        if not instruction:
+            return jsonify({'ok': False, 'error': 'instruction is required'}), 400
+
+        # If no editor content provided, read from disk
+        if not current_content:
+            full_path = _resolve_audit_file(file_path)
+            if not full_path:
+                return jsonify({'ok': False, 'error': f'File not found: {file_path}'}), 404
+            with open(full_path, 'r', encoding='utf-8', errors='replace') as f:
+                current_content = f.read()
+
+        ext = os.path.splitext(file_path)[1].lower()
+        messages = [
+            {"role": "system", "content": EDIT_SYSTEM_PROMPT},
+            {"role": "user", "content": f"File: `{file_path}`\n\nCurrent content:\n```{ext.lstrip('.')}\n{current_content}\n```\n\nEdit instruction: {instruction}"}
+        ]
+
+        result = agent.call_llm_sync(messages)
+        response_text = result.get('content', '').strip()
+
+        # Strip markdown code fences if the model wrapped it
+        new_content = response_text
+        if new_content.startswith('```'):
+            lines = new_content.split('\n')
+            new_content = '\n'.join(lines[1:])  # remove first ``` line
+        if new_content.endswith('```'):
+            new_content = new_content[:-3]
+        new_content = new_content.strip()
+
+        return jsonify({'ok': True, 'content': new_content, 'instruction': instruction})
+
+    except Exception as e:
+        logger.error(f"[AUDIT_EDIT] Error: {e}", exc_info=True)
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/files/read', methods=['GET'])
+def api_files_read():
+    """Read a workspace file."""
+    try:
+        file_path = request.args.get('path', '')
+        if not file_path:
+            return jsonify({'ok': False, 'error': 'path is required'}), 400
+        workspace_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'workspace')
+        full_path = os.path.normpath(os.path.join(workspace_dir, file_path))
+        # Security: ensure path is within workspace
+        if not full_path.startswith(os.path.normpath(workspace_dir)):
+            return jsonify({'ok': False, 'error': 'Path outside workspace'}), 403
+        if not os.path.isfile(full_path):
+            return jsonify({'ok': False, 'error': 'File not found'}), 404
+        # Read with size limit (1MB)
+        size = os.path.getsize(full_path)
+        if size > 1_000_000:
+            return jsonify({'ok': False, 'error': f'File too large ({size} bytes)'}), 413
+        with open(full_path, 'r', encoding='utf-8', errors='replace') as f:
+            content = f.read()
+        return jsonify({'ok': True, 'path': file_path, 'content': content, 'size': size})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/gateway/status', methods=['GET'])
+def api_gateway_status():
+    """Gateway status — connected clients, protocol version."""
+    try:
+        from src.infra.gateway_ws import get_connected_count, PROTOCOL_VERSION
+        return jsonify({
+            'ok': True,
+            'protocol': PROTOCOL_VERSION,
+            'connectedClients': get_connected_count(),
+            'agent': 'substrate',
+        })
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# === Serve Substrate Dashboard ===
+DASHBOARD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'dashboard', 'dist')
+
+@app.route('/dashboard')
+@app.route('/dashboard/')
+def dashboard_index():
+    """Serve the Substrate Dashboard SPA."""
+    try:
+        return send_from_directory(DASHBOARD_DIR, 'index.html')
+    except Exception as e:
+        return f"Dashboard not found at {DASHBOARD_DIR}: {e}", 404
+
+@app.route('/dashboard/<path:filename>')
+def dashboard_files(filename):
+    """Serve dashboard static assets, with SPA fallback for client-side routes."""
+    filepath = os.path.join(DASHBOARD_DIR, filename)
+    if os.path.isfile(filepath):
+        return send_from_directory(DASHBOARD_DIR, filename)
+    # SPA fallback — return index.html for any non-file route
+    return send_from_directory(DASHBOARD_DIR, 'index.html')
+
 # === Serve Thin WebUI ===
 WEBUI_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'webui')
 
@@ -9573,6 +10110,252 @@ def tts_stream_end():
             except Exception:
                 dead.add(ws_client)
         _tts_clients -= dead
+
+
+# ==== Substrate Gateway WebSocket ====
+@sock.route('/ws')
+def gateway_ws_endpoint(ws):
+    """Substrate Gateway — bidirectional JSON-RPC WebSocket.
+    Provides real-time push events, session-scoped RPC, and structured streaming."""
+    from src.infra.gateway_ws import handle_gateway_ws
+    handle_gateway_ws(ws)
+
+
+# ==== Dashboard-compatible REST stubs (for Substrate Dashboard) ====
+# These lightweight endpoints return sensible defaults so the
+# dashboard renders without 404s.  Heavy lifting happens over the WS gateway.
+
+@app.route('/api/server-info', methods=['GET'])
+def api_server_info():
+    """Return basic server metadata consumed by the dashboard's StatusBar and SessionContext."""
+    cfg = _get_agent_config() or {}
+    agent_name = cfg.get('name', cfg.get('agent_name', 'Substrate'))
+    return jsonify({
+        'agentName': agent_name,
+        'serverTime': int(time.time() * 1000),
+        'gatewayStartedAt': int(time.time() * 1000),
+        'sandbox': False,
+        'version': '1.0.0',
+    })
+
+@app.route('/api/tokens', methods=['GET'])
+def api_tokens():
+    """Token usage stub — dashboard shows token sparklines."""
+    return jsonify({'input': 0, 'output': 0, 'total': 0, 'limit': None, 'sessions': {}})
+
+@app.route('/api/agentlog', methods=['GET', 'POST'])
+def api_agentlog():
+    """Agent activity log stub."""
+    if request.method == 'POST':
+        return jsonify({'ok': True})
+    return jsonify([])
+
+@app.route('/api/connect-defaults', methods=['GET'])
+def api_connect_defaults():
+    """Return default gateway connection info for the dashboard."""
+    return jsonify({
+        'wsUrl': 'ws://127.0.0.1:8765/ws',
+        'token': None,
+        'authEnabled': True,
+        'serverSideAuth': True,
+    })
+
+@app.route('/api/kanban/config', methods=['GET'])
+def api_kanban_config():
+    """Kanban board config stub."""
+    return jsonify({
+        'columns': [
+            {'key': 'backlog',     'label': 'Backlog',     'visible': True, 'color': '#6b7280'},
+            {'key': 'todo',        'label': 'To Do',       'visible': True, 'color': '#3b82f6'},
+            {'key': 'in_progress', 'label': 'In Progress', 'visible': True, 'color': '#f59e0b'},
+            {'key': 'done',        'label': 'Done',        'visible': True, 'color': '#10b981'},
+        ],
+        'defaults': {'status': 'backlog', 'priority': 'medium'},
+        'reviewRequired': False,
+    })
+
+@app.route('/api/kanban/tasks', methods=['GET', 'POST'])
+def api_kanban_tasks():
+    """Kanban tasks stub."""
+    if request.method == 'POST':
+        return jsonify({'ok': True, 'task': request.get_json(force=True, silent=True) or {}})
+    return jsonify({'items': [], 'total': 0, 'limit': 100})
+
+@app.route('/api/kanban/tasks/<path:task_id>', methods=['PATCH', 'DELETE'])
+def api_kanban_task_crud(task_id):
+    """Kanban single-task CRUD stub."""
+    return jsonify({'ok': True, 'id': task_id})
+
+@app.route('/api/kanban/tasks/<path:task_id>/reorder', methods=['POST'])
+@app.route('/api/kanban/tasks/<path:task_id>/execute', methods=['POST'])
+@app.route('/api/kanban/tasks/<path:task_id>/approve', methods=['POST'])
+@app.route('/api/kanban/tasks/<path:task_id>/reject', methods=['POST'])
+@app.route('/api/kanban/tasks/<path:task_id>/abort', methods=['POST'])
+def api_kanban_task_action(task_id):
+    """Kanban task workflow action stub."""
+    return jsonify({'ok': True, 'id': task_id})
+
+@app.route('/api/kanban/proposals', methods=['GET'])
+def api_kanban_proposals():
+    """Kanban proposals stub."""
+    return jsonify({'proposals': []})
+
+@app.route('/api/kanban/proposals/<path:proposal_id>/approve', methods=['POST'])
+@app.route('/api/kanban/proposals/<path:proposal_id>/reject', methods=['POST'])
+def api_kanban_proposal_action(proposal_id):
+    """Kanban proposal action stub."""
+    return jsonify({'ok': True, 'id': proposal_id})
+
+@app.route('/api/transcribe/config', methods=['GET', 'PUT'])
+def api_transcribe_config():
+    """STT config stub."""
+    if request.method == 'PUT':
+        return jsonify({'ok': True})
+    return jsonify({'provider': 'browser', 'model': 'default'})
+
+@app.route('/api/sessions/hidden', methods=['GET'])
+def api_sessions_hidden():
+    """Hidden/archived sessions stub."""
+    return jsonify({'ok': True, 'sessions': []})
+
+@app.route('/api/sessions/<path:session_id>/model', methods=['GET'])
+def api_session_model(session_id):
+    """Session model info stub."""
+    return jsonify({'ok': True, 'model': None, 'missing': True})
+
+@app.route('/api/memories', methods=['GET', 'POST', 'DELETE'])
+def api_memories():
+    """Memories CRUD — reads from agent.unified_memory."""
+    if request.method == 'POST':
+        data = request.get_json(silent=True) or {}
+        text = data.get('text', '').strip()
+        if text and 'agent' in globals() and agent and hasattr(agent, 'unified_memory'):
+            try:
+                from src.memory.unified_memory import MemoryType
+                agent.unified_memory.add_memory(
+                    user_message=text,
+                    assistant_response='',
+                    memory_type=MemoryType.NOTE,
+                )
+            except Exception as e:
+                logger.error(f"Error adding memory: {e}")
+        return jsonify({'ok': True})
+    if request.method == 'DELETE':
+        return jsonify({'ok': True})
+    # GET — return memories from unified_memory
+    try:
+        if 'agent' not in globals() or agent is None or not hasattr(agent, 'unified_memory'):
+            return jsonify([])
+        from datetime import datetime as _dt
+        conn = agent.unified_memory._get_connection()
+        try:
+            limit = int(request.args.get('limit', 100))
+            cursor = conn.execute(
+                """SELECT id, timestamp, type, user_message, assistant_response, metadata
+                   FROM memories ORDER BY timestamp DESC LIMIT ?""",
+                (limit,)
+            )
+            memories = []
+            for row in cursor.fetchall():
+                ts = row['timestamp']
+                try:
+                    date_str = _dt.fromtimestamp(ts).strftime('%Y-%m-%d')
+                except Exception:
+                    date_str = ''
+                user_msg = row['user_message'] or ''
+                assistant_msg = row['assistant_response'] or ''
+                mem_type = row['type'] or 'chat'
+                # Map to dashboard Memory type: section, item, or daily
+                if mem_type in ('foundational', 'system'):
+                    dashboard_type = 'section'
+                elif mem_type == 'note':
+                    dashboard_type = 'section'
+                else:
+                    dashboard_type = 'item'
+                # Build display text
+                if user_msg and assistant_msg:
+                    text = f"Q: {user_msg[:200]}\nA: {assistant_msg[:300]}"
+                elif user_msg:
+                    text = user_msg[:500]
+                elif assistant_msg:
+                    text = assistant_msg[:500]
+                else:
+                    continue
+                memories.append({
+                    'type': dashboard_type,
+                    'text': text,
+                    'date': date_str,
+                })
+            return jsonify(memories)
+        finally:
+            conn.close()
+    except Exception as e:
+        logger.error(f"Error fetching memories: {e}")
+        return jsonify([])
+
+@app.route('/api/workspace', methods=['GET'])
+def api_workspace():
+    """Workspace info stub."""
+    return jsonify({
+        'ok': True,
+        'path': os.path.join(os.path.dirname(os.path.abspath(__file__)), 'workspace'),
+        'isCustomWorkspace': False,
+        'isRemote': False,
+    })
+
+@app.route('/api/codex-limits', methods=['GET'])
+def api_codex_limits():
+    """Codex limits stub."""
+    return jsonify({'available': False})
+
+@app.route('/api/claude-code-limits', methods=['GET'])
+def api_claude_code_limits():
+    """Claude code limits stub."""
+    return jsonify({'available': False})
+
+@app.route('/api/version/check', methods=['GET'])
+def api_version_check():
+    """Version check stub."""
+    return jsonify({'current': '1.0.0', 'latest': '1.0.0', 'updateAvailable': False})
+
+@app.route('/api/crons', methods=['GET'])
+def api_crons():
+    """Cron jobs stub."""
+    return jsonify({'ok': True, 'result': {'jobs': [], 'details': {'jobs': []}}})
+
+
+@app.route('/api/gateway/models', methods=['GET'])
+def api_gateway_models():
+    """Return configured models for the dashboard model selector."""
+    cfg = _get_agent_config() or {}
+    model_id = cfg.get('model', 'unknown')
+    # Derive provider from model ID prefix patterns
+    provider = 'unknown'
+    mid = model_id.lower()
+    if 'gemini' in mid: provider = 'google'
+    elif 'gpt' in mid or 'o1' in mid or 'o3' in mid or 'o4' in mid: provider = 'openai'
+    elif 'claude' in mid: provider = 'anthropic'
+    elif 'llama' in mid or 'mistral' in mid: provider = 'meta'
+    elif '/' in model_id: provider = model_id.split('/')[0]
+    return jsonify({
+        'models': [{
+            'id': model_id,
+            'name': model_id,
+            'provider': provider,
+            'isDefault': True,
+        }],
+        'error': None,
+    })
+
+
+@app.route('/api/gateway/session-info', methods=['GET'])
+def api_gateway_session_info():
+    """Return model/thinking info for a session (or the default)."""
+    cfg = _get_agent_config() or {}
+    return jsonify({
+        'model': cfg.get('model', 'unknown'),
+        'thinking': cfg.get('thinking_level', 'none'),
+    })
 
 
 @sock.route('/api/tts/stream')
@@ -11996,14 +12779,20 @@ def process_stdin():
                                     combined_data = pending[0]
                                     combined_text = combined_data.get('text', '')
                                 
-                                # Echo to feed
+                                # Echo to feed + broadcast to gateway WS for dashboard sync
                                 try:
-                                    _feed_append({
+                                    _user_msg_payload = {
                                         'status': 'user_message',
                                         'result': combined_text,
                                         'messages': [{'role': 'user', 'content': combined_text}],
                                         'suppress_chat': False
-                                    })
+                                    }
+                                    _feed_append(_user_msg_payload)
+                                    try:
+                                        from src.infra.gateway_ws import broadcast_raw
+                                        broadcast_raw(_user_msg_payload)
+                                    except Exception:
+                                        pass
                                 except Exception:
                                     pass
                                 
@@ -12039,14 +12828,20 @@ def process_stdin():
                             logger.debug(f"[DEBOUNCE] Fallback to immediate: {debounce_err}")
                         
                         # Fallback: immediate processing (if debounce fails)
-                        # Echo user message to webui feed so both UIs show the full conversation
+                        # Echo user message to webui feed + gateway WS for dashboard sync
                         try:
-                            _feed_append({
+                            _user_msg_payload2 = {
                                 'status': 'user_message',
                                 'result': text,
                                 'messages': [{'role': 'user', 'content': text}],
                                 'suppress_chat': False
-                            })
+                            }
+                            _feed_append(_user_msg_payload2)
+                            try:
+                                from src.infra.gateway_ws import broadcast_raw
+                                broadcast_raw(_user_msg_payload2)
+                            except Exception:
+                                pass
                         except Exception:
                             pass
                         

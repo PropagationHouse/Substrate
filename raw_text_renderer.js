@@ -46,99 +46,249 @@ class RawTextRenderer {
         return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
-    // Lightweight markdown → HTML renderer
+    // Lightweight markdown → HTML renderer (semantic HTML, matches WebUI)
     _renderMarkdown(text) {
         if (!text) return '';
-        let html = text;
-        // Escape HTML entities first
-        html = html.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const esc = (t) => t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
-        // Fenced code blocks with language label + copy button
-        html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
-            const langLabel = lang || 'code';
-            const trimmed = code.trim();
-            const copyId = 'cb_' + Math.random().toString(36).slice(2, 8);
-            return `<div style="margin:6px 0;border-radius:6px;overflow:hidden;background:rgba(0,0,0,0.35);border:1px solid rgba(255,255,255,0.08);">
-                <div style="display:flex;align-items:center;justify-content:space-between;padding:3px 10px;background:rgba(255,255,255,0.06);border-bottom:1px solid rgba(255,255,255,0.06);font-size:11px;">
-                    <span style="color:rgba(255,255,255,0.45);font-family:sans-serif;">${langLabel}</span>
-                    <button onclick="(function(b){var c=b.closest('div').nextElementSibling||b.closest('[style]').querySelector('pre');var t=c?c.innerText:'';navigator.clipboard.writeText(t).then(function(){b.textContent='✓';setTimeout(function(){b.textContent='📋'},1200)}).catch(function(){})})(this)" style="background:none;border:none;cursor:pointer;color:rgba(255,255,255,0.35);font-size:12px;padding:1px 4px;border-radius:3px;transition:color 0.2s;" onmouseenter="this.style.color='rgba(255,255,255,0.7)'" onmouseleave="this.style.color='rgba(255,255,255,0.35)'" title="Copy code">📋</button>
-                </div>
-                <pre style="margin:0;padding:10px;overflow-x:auto;font-size:12.5px;line-height:1.5;"><code>${trimmed}</code></pre>
-            </div>`;
+        let s = text;
+
+        // Extract fenced code blocks first, replace with placeholders
+        const codeBlocks = [];
+        s = s.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
+            const idx = codeBlocks.length;
+            const langLabel = lang ? `<span class="code-lang">${esc(lang)}</span>` : '';
+            const copyBtn = `<button class="copy-btn" onclick="navigator.clipboard.writeText(this.parentElement.querySelector('code').textContent).then(function(){event.target.textContent='Copied!';setTimeout(function(){event.target.textContent='Copy'},1200)})">Copy</button>`;
+            codeBlocks.push(`<pre>${langLabel}${copyBtn}<code>${esc(code.replace(/^\n|\n$/g, ''))}</code></pre>`);
+            return '\x00CB' + idx + '\x00';
         });
 
-        // Inline code (`...`)
-        html = html.replace(/`([^`]+)`/g, '<code style="background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:3px;font-size:0.9em;">$1</code>');
-
-        // Tables: detect markdown table blocks and render as HTML tables
-        html = html.replace(/((?:^\|.+\|$\n?)+)/gm, (tableBlock) => {
-            const rows = tableBlock.trim().split('\n').filter(r => r.trim());
-            if (rows.length < 2) return tableBlock;
-            // Check if row 2 is a separator (|---|---|)
-            const isSep = /^\|[\s\-:]+(\|[\s\-:]+)+\|?$/.test(rows[1]);
-            let headerRow = null;
-            let dataRows = rows;
-            if (isSep) {
-                headerRow = rows[0];
-                dataRows = rows.slice(2);
-            }
-            const parseRow = (row) => row.replace(/^\||\|$/g, '').split('|').map(c => c.trim());
-            let tableHtml = '<div style="overflow-x:auto;margin:6px 0;"><table style="border-collapse:collapse;width:100%;background:rgba(0,0,0,0.2);border-radius:6px;overflow:hidden;border:1px solid rgba(255,255,255,0.08);font-size:13px;">';
-            if (headerRow) {
-                const cells = parseRow(headerRow);
-                tableHtml += '<thead><tr>';
-                cells.forEach(c => {
-                    tableHtml += `<th style="background:rgba(255,255,255,0.08);padding:6px 10px;border:1px solid rgba(255,255,255,0.08);text-align:left;font-weight:600;color:rgba(255,255,255,0.9);white-space:nowrap;">${c}</th>`;
-                });
-                tableHtml += '</tr></thead>';
-            }
-            tableHtml += '<tbody>';
-            dataRows.forEach((row, i) => {
-                const cells = parseRow(row);
-                const bg = i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.03)';
-                tableHtml += `<tr style="background:${bg};">`;
-                cells.forEach(c => {
-                    tableHtml += `<td style="padding:5px 10px;border:1px solid rgba(255,255,255,0.06);color:rgba(255,255,255,0.75);">${c}</td>`;
-                });
-                tableHtml += '</tr>';
-            });
-            tableHtml += '</tbody></table></div>';
-            return tableHtml;
-        });
-
-        // Headers (### h3, ## h2, # h1)
-        html = html.replace(/^### (.+)$/gm, '<strong style="font-size:1em;display:block;margin:8px 0 4px;">$1</strong>');
-        html = html.replace(/^## (.+)$/gm, '<strong style="font-size:1.1em;display:block;margin:10px 0 4px;">$1</strong>');
-        html = html.replace(/^# (.+)$/gm, '<strong style="font-size:1.2em;display:block;margin:12px 0 6px;">$1</strong>');
-        // Bold (**text** or __text__)
-        html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-        html = html.replace(/__(.+?)__/g, '<strong>$1</strong>');
-        // Italic (*text* or _text_)
-        html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
-        html = html.replace(/(?<![\w])_(.+?)_(?![\w])/g, '<em>$1</em>');
-        // Unordered lists (- item or * item)
-        html = html.replace(/^[\-\*] (.+)$/gm, '<div style="padding-left:12px;">• $1</div>');
-        // Ordered lists (1. item)
-        html = html.replace(/^\d+\. (.+)$/gm, '<div style="padding-left:12px;">$&</div>');
-        // Horizontal rules (--- or ***)
-        html = html.replace(/^(---|\*\*\*)$/gm, '<hr style="border:none;border-top:1px solid rgba(255,255,255,0.15);margin:8px 0;">');
-        // Markdown images ![alt](url) — must come before link replacement
-        html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, url) => {
-            return this._renderInlineImage(url, alt);
+        // Extract inline images before escaping (![alt](url))
+        const imagePlaceholders = [];
+        s = s.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, url) => {
+            const idx = imagePlaceholders.length;
+            imagePlaceholders.push(this._renderInlineImage(url, alt));
+            return '\x00IM' + idx + '\x00';
         });
         // Bare base64 data URI images on their own line
-        html = html.replace(/^(data:image\/[a-zA-Z+]+;base64,[A-Za-z0-9+/=\r\n]+)$/gm, (_, dataUri) => {
-            return this._renderInlineImage(dataUri.replace(/\s/g, ''), 'Generated image');
+        s = s.replace(/^(data:image\/[a-zA-Z+]+;base64,[A-Za-z0-9+/=\r\n]+)$/gm, (_, dataUri) => {
+            const idx = imagePlaceholders.length;
+            imagePlaceholders.push(this._renderInlineImage(dataUri.replace(/\s/g, ''), 'Generated image'));
+            return '\x00IM' + idx + '\x00';
         });
-        // Bare image URLs on their own line (png, jpg, jpeg, gif, webp, svg)
-        html = html.replace(/^(https?:\/\/[^\s]+\.(?:png|jpe?g|gif|webp|svg|bmp)(?:\?[^\s]*)?)$/gim, (_, url) => {
-            return this._renderInlineImage(url, 'Image');
+        // Bare image URLs on their own line
+        s = s.replace(/^(https?:\/\/[^\s]+\.(?:png|jpe?g|gif|webp|svg|bmp)(?:\?[^\s]*)?)$/gim, (_, url) => {
+            const idx = imagePlaceholders.length;
+            imagePlaceholders.push(this._renderInlineImage(url, 'Image'));
+            return '\x00IM' + idx + '\x00';
         });
+
+        // Escape remaining HTML
+        s = esc(s);
+
+        // Restore code blocks
+        s = s.replace(/\x00CB(\d+)\x00/g, (_, idx) => codeBlocks[parseInt(idx)]);
+
+        // Restore image placeholders
+        s = s.replace(/\x00IM(\d+)\x00/g, (_, idx) => imagePlaceholders[parseInt(idx)]);
+
+        // Headings (must be at start of line)
+        s = s.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
+        s = s.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+        s = s.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+        s = s.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+
+        // Horizontal rules
+        s = s.replace(/^---+$/gm, '<hr>');
+        s = s.replace(/^\*\*\*+$/gm, '<hr>');
+
+        // Bold and italic
+        s = s.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+        s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+        s = s.replace(/__(.+?)__/g, '<strong>$1</strong>');
+        s = s.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em>$1</em>');
+        s = s.replace(/(?<![\w])_(.+?)_(?![\w])/g, '<em>$1</em>');
+
+        // Inline code
+        s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+
         // Links [text](url)
-        html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" style="color:#4a90e2;text-decoration:underline;">$1</a>');
-        // Line breaks (double newline → paragraph break, single → <br>)
-        html = html.replace(/\n\n/g, '<br><br>');
-        html = html.replace(/\n/g, '<br>');
+        s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+
+        // Blockquotes
+        s = s.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
+        // Merge adjacent blockquotes
+        s = s.replace(/<\/blockquote>\n<blockquote>/g, '\n');
+
+        // Tables (GFM-style)
+        s = s.replace(/^(\|.+\|)\n(\|[-| :]+\|)\n((?:\|.+\|\n?)+)/gm, (_, header, sep, body) => {
+            const ths = header.split('|').filter(c => c.trim()).map(c => '<th>' + c.trim() + '</th>').join('');
+            const rows = body.trim().split('\n').map(row => {
+                const tds = row.split('|').filter(c => c.trim()).map(c => '<td>' + c.trim() + '</td>').join('');
+                return '<tr>' + tds + '</tr>';
+            }).join('');
+            return '<table><thead><tr>' + ths + '</tr></thead><tbody>' + rows + '</tbody></table>';
+        });
+
+        // Unordered lists
+        s = s.replace(/^(?:[-*+] .+\n?)+/gm, (block) => {
+            const items = block.trim().split('\n').map(line => {
+                return '<li>' + line.replace(/^[-*+] /, '') + '</li>';
+            }).join('');
+            return '<ul>' + items + '</ul>';
+        });
+
+        // Ordered lists
+        s = s.replace(/^(?:\d+\. .+\n?)+/gm, (block) => {
+            const items = block.trim().split('\n').map(line => {
+                return '<li>' + line.replace(/^\d+\. /, '') + '</li>';
+            }).join('');
+            return '<ol>' + items + '</ol>';
+        });
+
+        // Paragraphs — wrap remaining text blocks separated by blank lines
+        const parts = s.split(/\n{2,}/);
+        s = parts.map(part => {
+            const trimmed = part.trim();
+            if (!trimmed) return '';
+            // Don't wrap block-level elements
+            if (/^<(?:h[1-6]|pre|ul|ol|table|blockquote|hr|div)/.test(trimmed)) return trimmed;
+            // Convert single newlines to <br> within paragraphs
+            return '<p>' + trimmed.replace(/\n/g, '<br>') + '</p>';
+        }).join('\n');
+
+        return s;
+    }
+
+    // Rich structured message renderer — mirrors dashboard RichMessageCard
+    _renderRichMessage(rawText) {
+        if (!rawText || rawText.length < 300) return this._renderMarkdown(rawText);
+
+        // Strip fenced code blocks before section parsing
+        const codeBlockPlaceholders = [];
+        const textForParsing = rawText.replace(/```[\s\S]*?```/g, (match) => {
+            const idx = codeBlockPlaceholders.length;
+            codeBlockPlaceholders.push(match);
+            return '\x00CB' + idx + '\x00';
+        });
+
+        // Parse sections from headings
+        const lines = textForParsing.split('\n');
+        const sections = [];
+        const preambleLines = [];
+        let currentHeading = '';
+        let currentBody = [];
+        let foundFirst = false;
+
+        for (let i = 0; i < lines.length; i++) {
+            const hm = lines[i].match(/^#{1,3}\s+(.+)/);
+            if (hm) {
+                if (foundFirst && (currentHeading || currentBody.length)) {
+                    sections.push({ heading: currentHeading || 'Overview', body: currentBody.join('\n').trim() });
+                }
+                foundFirst = true;
+                currentHeading = hm[1].trim();
+                currentBody = [];
+            } else if (!foundFirst) {
+                preambleLines.push(lines[i]);
+            } else {
+                currentBody.push(lines[i]);
+            }
+        }
+        if (foundFirst && (currentHeading || currentBody.length)) {
+            sections.push({ heading: currentHeading || 'Overview', body: currentBody.join('\n').trim() });
+        }
+
+        // Extract source URLs
+        const sourceUrls = [];
+        const seenUrls = {};
+        const mdLinkRe = /\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g;
+        let m;
+        while ((m = mdLinkRe.exec(rawText)) !== null) {
+            if (!seenUrls[m[2]]) { seenUrls[m[2]] = true; sourceUrls.push({ url: m[2], label: m[1].slice(0, 40) }); }
+        }
+        const bareRe = /(?<!\()https?:\/\/[^\s)<>\]]+/g;
+        while ((m = bareRe.exec(rawText)) !== null) {
+            const burl = m[0].replace(/[.,;:!?]+$/, '');
+            if (!seenUrls[burl]) {
+                seenUrls[burl] = true;
+                try { const host = new URL(burl).hostname.replace(/^www\./, ''); sourceUrls.push({ url: burl, label: host }); } catch(e) { sourceUrls.push({ url: burl, label: burl.slice(0, 35) }); }
+            }
+        }
+
+        // Counts
+        const codeBlockCount = Math.floor((rawText.match(/```/g) || []).length / 2);
+        const listItemCount = (rawText.match(/^[-*+] |^\d+\. /gm) || []).length;
+
+        // Decide if rich
+        const isRich = sections.length >= 2 ||
+            (sections.length >= 1 && sourceUrls.length > 0) ||
+            (sections.length >= 1 && codeBlockCount >= 2) ||
+            (sections.length >= 1 && listItemCount >= 5);
+
+        if (!isRich) return this._renderMarkdown(rawText);
+
+        // Restore code block placeholders
+        const restore = (t) => t.replace(/\x00CB(\d+)\x00/g, (_, idx) => codeBlockPlaceholders[parseInt(idx)] || '');
+        for (let i = 0; i < sections.length; i++) {
+            sections[i].body = restore(sections[i].body);
+            sections[i].heading = restore(sections[i].heading);
+        }
+
+        // Build rich HTML
+        let html = '';
+        const preamble = restore(preambleLines.join('\n').trim());
+        if (preamble) {
+            html += `<div style="margin-bottom:10px;">${this._renderMarkdown(preamble)}</div>`;
+        }
+
+        // Section count header
+        if (sections.length > 1) {
+            html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">`;
+            html += `<span style="font-size:10px;color:rgba(129,140,248,0.4);display:flex;align-items:center;gap:4px;">▦ ${sections.length} sections</span>`;
+            html += `<button onclick="(function(btn){var card=btn.closest('.message-content');var bodies=card.querySelectorAll('.rich-section-body');var chevs=card.querySelectorAll('.rich-chevron');var anyOpen=false;bodies.forEach(function(b){if(b.style.display!=='none')anyOpen=true;});bodies.forEach(function(b){b.style.display=anyOpen?'none':'block';});chevs.forEach(function(c){c.textContent=anyOpen?'▸':'▾';});btn.textContent=anyOpen?'▸ Expand all':'▾ Collapse all';})(this)" style="font-size:10px;color:rgba(129,140,248,0.3);background:none;border:none;cursor:pointer;font-family:'Inter',sans-serif;padding:0;transition:color 0.2s;">▾ Collapse all</button>`;
+            html += `</div>`;
+        }
+
+        // Sections
+        html += `<div style="margin-top:4px;">`;
+        for (let si = 0; si < sections.length; si++) {
+            const sec = sections[si];
+            html += `<div style="border-left:2px solid rgba(129,140,248,0.15);padding-left:12px;margin:8px 0;">`;
+            html += `<button onclick="(function(btn){var body=btn.nextElementSibling;var chev=btn.querySelector('.rich-chevron');if(body.style.display==='none'){body.style.display='block';chev.textContent='▾';}else{body.style.display='none';chev.textContent='▸';}})(this)" style="display:flex;align-items:center;gap:6px;background:none;border:none;color:rgba(255,255,255,0.7);font-size:12.5px;font-weight:600;font-family:'Inter',sans-serif;cursor:pointer;padding:3px 0;width:100%;text-align:left;transition:color 0.2s;">`;
+            html += `<span class="rich-chevron" style="font-size:9px;color:rgba(129,140,248,0.35);transition:transform 0.2s;">▾</span>`;
+            html += `<span>${this._escapeHtml(sec.heading)}</span>`;
+            html += `</button>`;
+            html += `<div class="rich-section-body" style="margin-top:6px;margin-left:16px;font-size:12.5px;color:rgba(255,255,255,0.6);line-height:1.65;">${this._renderMarkdown(sec.body)}</div>`;
+            html += `</div>`;
+        }
+        html += `</div>`;
+
+        // Source URL pills
+        if (sourceUrls.length > 0) {
+            const linkSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:10px;height:10px;flex-shrink:0;"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>';
+            html += `<div style="margin-top:12px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.04);">`;
+            html += `<div style="font-size:9px;color:rgba(255,255,255,0.25);text-transform:uppercase;letter-spacing:0.5px;font-weight:600;margin-bottom:6px;">Sources</div>`;
+            html += `<div style="display:flex;flex-wrap:wrap;gap:6px;">`;
+            const maxSrc = Math.min(sourceUrls.length, 8);
+            for (let i = 0; i < maxSrc; i++) {
+                html += `<a href="${sourceUrls[i].url}" target="_blank" rel="noopener noreferrer" style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:6px;background:rgba(34,211,238,0.06);border:1px solid rgba(34,211,238,0.10);color:rgba(34,211,238,0.55);font-size:10px;text-decoration:none;transition:all 0.2s;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:'Inter',sans-serif;" onmouseenter="this.style.color='rgba(34,211,238,0.85)';this.style.background='rgba(34,211,238,0.12)';this.style.borderColor='rgba(34,211,238,0.25)'" onmouseleave="this.style.color='rgba(34,211,238,0.55)';this.style.background='rgba(34,211,238,0.06)';this.style.borderColor='rgba(34,211,238,0.10)'">${linkSvg} ${this._escapeHtml(sourceUrls[i].label)}</a>`;
+            }
+            if (sourceUrls.length > 8) html += `<span style="font-size:9px;color:rgba(255,255,255,0.2);">+${sourceUrls.length - 8} more</span>`;
+            html += `</div></div>`;
+        }
+
+        // Stats footer
+        if (codeBlockCount > 0 || listItemCount > 3) {
+            html += `<div style="display:flex;gap:12px;margin-top:8px;font-size:9px;color:rgba(255,255,255,0.18);">`;
+            if (codeBlockCount > 0) html += `<span># ${codeBlockCount} code block${codeBlockCount !== 1 ? 's' : ''}</span>`;
+            if (listItemCount > 3) html += `<span>⁃ ${listItemCount} items</span>`;
+            html += `</div>`;
+        }
+
+        // Copy button
+        html += `<button onclick="(function(btn){var msg=btn.closest('.message');var content=msg?msg.querySelector('.message-content'):'';var raw=content?content.innerText:'';navigator.clipboard.writeText(raw).then(function(){btn.textContent='Copied!';setTimeout(function(){btn.textContent='⎘ Copy';},1200)}).catch(function(){})})(this)" style="display:inline-flex;align-items:center;gap:4px;margin-top:8px;padding:4px 8px;border-radius:6px;background:none;border:none;color:rgba(255,255,255,0.25);font-size:10px;font-family:'Inter',sans-serif;cursor:pointer;transition:all 0.2s;" onmouseenter="this.style.color='rgba(255,255,255,0.6)';this.style.background='rgba(255,255,255,0.06)'" onmouseleave="this.style.color='rgba(255,255,255,0.25)';this.style.background='none'">⎘ Copy</button>`;
+
         return html;
     }
 
@@ -280,22 +430,12 @@ class RawTextRenderer {
         const textContainer = document.createElement('div');
         textContainer.className = 'message-content';
         textContainer.style.cssText = `
-            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-            font-size: 14px;
-            line-height: 1.6;
-            word-break: break-word;
-            margin: 0;
-            padding: 12px;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 8px;
-            border: 2px solid rgba(255, 255, 255, 0.2);
-            color: white;
             max-height: 60vh;
             overflow-y: auto;
             scrollbar-width: thin;
-            scrollbar-color: rgba(255,255,255,0.3) transparent;
+            scrollbar-color: rgba(255,255,255,0.15) transparent;
         `;
-        textContainer.innerHTML = this._renderMarkdown(text);
+        textContainer.innerHTML = this._renderRichMessage(text);
         container.appendChild(textContainer);
         
         this.outputContainer.appendChild(container);
@@ -334,18 +474,11 @@ class RawTextRenderer {
         
         const contentDiv = document.createElement('div');
         contentDiv.className = 'message-content';
-        contentDiv.style.cssText = `
-            margin: 0; padding: 12px;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 8px;
-            border: 2px solid rgba(255, 255, 255, 0.2);
-            color: white;
-        `;
         
         // Caption text above image
         if (caption) {
             const capEl = document.createElement('div');
-            capEl.style.cssText = 'font-size:13px;margin-bottom:8px;color:rgba(255,255,255,0.8);font-family:Consolas,Monaco,"Courier New",monospace;';
+            capEl.style.cssText = "font-size:13px;margin-bottom:8px;color:rgba(255,255,255,0.7);font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;";
             capEl.textContent = caption;
             contentDiv.appendChild(capEl);
         }
@@ -412,7 +545,7 @@ class RawTextRenderer {
         
         const panel = document.createElement('div');
         panel.className = 'thinking-panel';
-        panel.style.cssText = 'margin:6px 0;border-radius:8px;background:rgba(0,0,0,0.25);border:1px solid rgba(180,140,255,0.15);overflow:hidden;font-family:Consolas,Monaco,"Courier New",monospace;';
+        panel.style.cssText = "margin:6px 0;border-radius:8px;background:rgba(0,0,0,0.25);border:1px solid rgba(180,140,255,0.15);overflow:hidden;font-family:'JetBrains Mono','Fira Code','Consolas',monospace;";
         
         // Header bar
         const header = document.createElement('div');
@@ -499,7 +632,7 @@ class RawTextRenderer {
             panel.style.cssText = `
                 margin-top: 8px;
                 padding: 0;
-                font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+                font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
                 font-size: 12px;
                 line-height: 1.5;
                 color: rgba(255, 255, 255, 0.7);
@@ -905,7 +1038,7 @@ class RawTextRenderer {
                         // Terminal-style panel for exec commands
                         const cmdText = message.code_preview;
                         const execDisplay = this._toolStepsExpanded ? 'block' : 'none';
-                        outputDiv.style.cssText = `display:${execDisplay};margin:2px 0 4px 26px;padding:0;background:rgba(0,0,0,0.4);border-radius:6px;font-size:11px;line-height:1.5;color:rgba(255,255,255,0.7);max-height:300px;overflow-y:auto;overflow-x:auto;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.15) transparent;border:1px solid rgba(255,255,255,0.08);font-family:Consolas,Monaco,"Courier New",monospace;`;
+                        outputDiv.style.cssText = `display:${execDisplay};margin:2px 0 4px 26px;padding:0;background:rgba(0,0,0,0.4);border-radius:6px;font-size:11px;line-height:1.5;color:rgba(255,255,255,0.7);max-height:300px;overflow-y:auto;overflow-x:auto;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.15) transparent;border:1px solid rgba(255,255,255,0.08);font-family:'JetBrains Mono','Fira Code','Consolas',monospace;`;
                         // Terminal header bar
                         const termHeader = document.createElement('div');
                         termHeader.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:4px 10px;background:rgba(255,255,255,0.05);border-bottom:1px solid rgba(255,255,255,0.06);border-radius:6px 6px 0 0;';
@@ -934,7 +1067,7 @@ class RawTextRenderer {
                         const codeText = message.code_preview;
                         const lines = codeText.split('\n');
                         const writeDisplay = this._toolStepsExpanded ? 'block' : 'none';
-                        outputDiv.style.cssText = `display:${writeDisplay};margin:2px 0 4px 26px;padding:0;background:rgba(0,0,0,0.35);border-radius:6px;font-size:11px;line-height:1.5;color:rgba(255,255,255,0.7);max-height:350px;overflow-y:auto;overflow-x:auto;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.15) transparent;border:1px solid rgba(80,200,120,0.15);font-family:Consolas,Monaco,"Courier New",monospace;`;
+                        outputDiv.style.cssText = `display:${writeDisplay};margin:2px 0 4px 26px;padding:0;background:rgba(0,0,0,0.35);border-radius:6px;font-size:11px;line-height:1.5;color:rgba(255,255,255,0.7);max-height:350px;overflow-y:auto;overflow-x:auto;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.15) transparent;border:1px solid rgba(80,200,120,0.15);font-family:'JetBrains Mono','Fira Code','Consolas',monospace;`;
                         // Editor header bar
                         const editorHeader = document.createElement('div');
                         editorHeader.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:4px 10px;background:rgba(80,200,120,0.08);border-bottom:1px solid rgba(80,200,120,0.1);border-radius:6px 6px 0 0;';
@@ -988,7 +1121,7 @@ class RawTextRenderer {
                         const oldLines = (diffData.old || '').split('\n');
                         const newLines = (diffData.new || '').split('\n');
                         const diffDisplay = this._toolStepsExpanded ? 'block' : 'none';
-                        outputDiv.style.cssText = `display:${diffDisplay};margin:2px 0 4px 26px;padding:0;background:rgba(0,0,0,0.35);border-radius:6px;font-size:11px;line-height:1.5;color:rgba(255,255,255,0.7);max-height:350px;overflow-y:auto;overflow-x:auto;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.15) transparent;border:1px solid rgba(100,180,255,0.15);font-family:Consolas,Monaco,"Courier New",monospace;`;
+                        outputDiv.style.cssText = `display:${diffDisplay};margin:2px 0 4px 26px;padding:0;background:rgba(0,0,0,0.35);border-radius:6px;font-size:11px;line-height:1.5;color:rgba(255,255,255,0.7);max-height:350px;overflow-y:auto;overflow-x:auto;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.15) transparent;border:1px solid rgba(100,180,255,0.15);font-family:'JetBrains Mono','Fira Code','Consolas',monospace;`;
                         // Diff header bar
                         const diffHeader = document.createElement('div');
                         diffHeader.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:4px 10px;background:rgba(100,180,255,0.08);border-bottom:1px solid rgba(100,180,255,0.1);border-radius:6px 6px 0 0;';
@@ -1182,13 +1315,13 @@ class RawTextRenderer {
                     } else if (message.status === 'done') {
                         // Final text - set complete text and stop
                         console.log('%c ✅ REPLACE_LAST DONE - Finishing replacement', 'background: #00ff00; color: #000; font-size: 14px;');
-                        textContainer.innerHTML = this._renderMarkdown(text);
+                        textContainer.innerHTML = this._renderRichMessage(text);
                         // Stop glowing eyes
                         this.stopAvatarGlowingEyes();
                         this.stopSearchMode();
                     } else {
                         // Just replace
-                        textContainer.innerHTML = this._renderMarkdown(text);
+                        textContainer.innerHTML = this._renderRichMessage(text);
                     }
                 }
             }
@@ -1214,7 +1347,7 @@ class RawTextRenderer {
                     // Same text or empty plan — update in place, no duplicate
                     const textContainer = activeMsg.querySelector('.message-content');
                     if (textContainer) {
-                        textContainer.innerHTML = this._renderMarkdown(text.trim());
+                        textContainer.innerHTML = this._renderRichMessage(text.trim());
                         this._autoScroll();
                         return;
                     }
