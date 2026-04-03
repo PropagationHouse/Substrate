@@ -621,7 +621,7 @@
             display: inline-flex;
         }
 
-        #upload-button {
+        #dashboard-button {
             position: relative;
             z-index: 4;
         }
@@ -1864,7 +1864,7 @@
                     </div>
                     <button id="record-mic-button" title="Record (Brainstorm)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="1" width="6" height="11" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="21" x2="12" y2="17"/></svg></button>
                     <div id="upload-wrapper">
-                        <button class="tool-button" id="upload-button" data-tooltip="Upload Image">🗁</button>
+                        <button class="tool-button" id="dashboard-button" data-tooltip="Open Dashboard"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg></button>
                         <div id="radial-menu">
                             <button class="tool-button radial-item" id="mute-button" data-tooltip="Mute Microphone">၊၊||၊</button>
                             <button class="tool-button radial-item" id="toggle-user-msgs-button" data-tooltip="Toggle User Messages">U</button>
@@ -2440,7 +2440,7 @@ REQUIREMENTS:
         });
         const loadingIndicator = document.getElementById('loading-indicator');
         const imagePreview = document.getElementById('image-preview');
-        const uploadButton = document.getElementById('upload-button');
+        const dashboardButton = document.getElementById('dashboard-button');
         const fileInput = document.getElementById('file-input');
         const configButton = document.getElementById('config-button');
         const configPanel = document.getElementById('config-panel');
@@ -2917,8 +2917,15 @@ REQUIREMENTS:
                 clearFile();
             }
 
-            // File upload button
-            uploadButton.addEventListener('click', () => fileInput.click());
+            // Dashboard button — opens dashboard in default browser
+            dashboardButton.addEventListener('click', () => {
+                const dashUrl = 'http://localhost:8765/dashboard';
+                if (window.api && window.api.send) {
+                    window.api.send('open-external-link', dashUrl);
+                } else {
+                    window.open(dashUrl, '_blank');
+                }
+            });
             fileInput.addEventListener('change', (e) => {
                 if (e.target.files.length > 0) {
                     handleFile(e.target.files[0]);
@@ -3944,11 +3951,11 @@ REQUIREMENTS:
             // Radial menu hover — semicircle arc
             const radialMenu = document.getElementById('radial-menu');
             const buttonContainer = document.getElementById('button-container');
-            const uploadButton = document.getElementById('upload-button');
+            const dashboardBtn = document.getElementById('dashboard-button');
             const uploadWrapper = document.getElementById('upload-wrapper');
             let radialTimeout;
 
-            if (uploadButton && radialMenu && uploadWrapper) {
+            if (dashboardBtn && radialMenu && uploadWrapper) {
                 uploadWrapper.addEventListener('mouseenter', () => {
                     clearTimeout(radialTimeout);
                     radialMenu.classList.add('active');

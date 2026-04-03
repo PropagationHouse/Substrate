@@ -1568,6 +1568,12 @@ function createTray() {
                 }
             },
             { 
+                label: 'Dashboard', 
+                click: () => {
+                    shell.openExternal('http://localhost:8765/dashboard');
+                }
+            },
+            { 
                 label: 'Web UI', 
                 click: () => {
                     shell.openExternal('http://localhost:8765/webui/');

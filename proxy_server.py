@@ -9173,6 +9173,7 @@ def api_network_info():
     best_ip = zerotier_ip or local_ip
     # Build URLs — prefer HTTPS (required for mobile camera/notifications)
     best_url = f'https://{best_ip}:8766/ui' if has_https else f'http://{best_ip}:8765/ui'
+    best_dashboard = f'https://{best_ip}:8766/dashboard' if has_https else f'http://{best_ip}:8765/dashboard'
     return jsonify({
         'status': 'ok',
         'local_ip': local_ip,
@@ -9184,7 +9185,12 @@ def api_network_info():
         'webui_https': f'https://{local_ip}:8766/ui' if has_https else None,
         'webui_zt_http': f'http://{zerotier_ip}:8765/ui' if zerotier_ip else None,
         'webui_zt_https': f'https://{zerotier_ip}:8766/ui' if zerotier_ip and has_https else None,
+        'dashboard_http': f'http://{local_ip}:8765/dashboard',
+        'dashboard_https': f'https://{local_ip}:8766/dashboard' if has_https else None,
+        'dashboard_zt_http': f'http://{zerotier_ip}:8765/dashboard' if zerotier_ip else None,
+        'dashboard_zt_https': f'https://{zerotier_ip}:8766/dashboard' if zerotier_ip and has_https else None,
         'best_url': best_url,
+        'best_dashboard': best_dashboard,
     })
 
 # ==== Substrate Gateway REST API ====
