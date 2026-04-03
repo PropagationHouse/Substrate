@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html><head><title>WS Diagnostic</title>
+<style>body{font:14px/1.6 monospace;background:#111;color:#ccc;padding:20px}
+.pass{color:#0f0}.fail{color:#f44}.warn{color:#fa0}pre{white-space:pre-wrap}</style>
+</head><body>
+<h2>Substrate Dashboard WS Diagnostic</h2>
+<div id="log"></div>
+<script>
+const log = document.getElementById('log');
+function add(cls, msg) {
+  const d = document.createElement('div');
+  d.className = cls;
+  d.textContent = msg;
+  log.appendChild(d);
+}
+
+async function run() {
+  // 1. auth/status
+  add('', '1. GET /api/auth/status');
+  try {
+    const r = await fetch('/api/auth/status');
+    const d = await r.json();
+    add('pass', '   OK: ' + JSON.stringify(d));
+  } catch(e) { add('fail', '   FAIL: ' + e); return; }
+
+  // 2. electron-login (bypass password)
+  add('', '2. POST /api/auth/electron-login');
+  let token = '';
+  try {
+    const r = await fetch('/api/auth/electron-login', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'});
+    const d = await r.json();
+    token = d.token || '';
+    add(token ? 'pass' : 'fail', '   token-length=' + token.length + ' status=' + d.status);
+  } catch(e) { add('fail', '   FAIL: ' + e); return; }
+
+  // 3. WS connect
+  add('', '3. WebSocket connect to /ws');
+  try {
+    const result = await new Promise((resolve, reject) => {
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const ws = new WebSocket(proto + '//' + location.host + '/ws');
+      let step = 'open';
+      ws.onopen = () => { add('pass', '   WS opened'); step = 'challenge'; };
+      ws.onerror = (e) => { add('fail', '   WS error: ' + e.type); reject(e); };
+      ws.onclose = (e) => { add('warn', '   WS closed: code=' + e.code + ' reason=' + e.reason); if(step!=='done') reject(new Error('closed')); };
+      ws.onmessage = (ev) => {
+        const msg = JSON.parse(ev.data);
+        if (step === 'challenge' && msg.event === 'gateway.challenge') {
+          add('pass', '   Challenge received: ' + msg.event);
+          step = 'handshake';
+          ws.send(JSON.stringify({
+            type:'req', id:'1', method:'connect',
+            params:{
+              minProtocol:3, maxProtocol:3,
+              client:{id:'diag-browser',version:'0.1',platform:'web',mode:'webchat',instanceId:'diag-'+Date.now()},
+              role:'operator', scopes:['operator.admin'],
+              auth:{token: token},
+              caps:['tool-events']
+            }
+          }));
+          add('', '   Sent handshake with token-length=' + token.length);
+        } else if (step === 'handshake' && msg.type === 'res') {
+          if (msg.ok) {
+            add('pass', '   Handshake OK: ' + JSON.stringify(msg.payload));
+            step = 'status';
+            ws.send(JSON.stringify({type:'req',id:'2',method:'status',params:{}}));
+          } else {
+            add('fail', '   Handshake FAILED: ' + JSON.stringify(msg.error));
+            ws.close();
+            reject(new Error('handshake failed'));
+          }
+        } else if (step === 'status' && msg.type === 'res') {
+          add('pass', '   Status RPC: ' + JSON.stringify(msg.payload));
+          step = 'sessions';
+          ws.send(JSON.stringify({type:'req',id:'3',method:'sessions.list',params:{activeMinutes:1440,limit:200}}));
+        } else if (step === 'sessions' && msg.type === 'res') {
+          const sessions = msg.payload?.sessions || [];
+          add('pass', '   Sessions: count=' + sessions.length);
+          step = 'done';
+          ws.close();
+          resolve('ALL PASSED');
+        }
+      };
+      setTimeout(() => { if(step!=='done'){add('fail','   TIMEOUT after 10s at step='+step); ws.close(); reject(new Error('timeout'));} }, 10000);
+    });
+    add('pass', '=== ' + result + ' ===');
+  } catch(e) { add('fail', '   Final: ' + e.message); }
+}
+run();
+</script></body></html>

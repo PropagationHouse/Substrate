@@ -1400,15 +1400,247 @@
     statusEl.textContent = '';
   }
 
+  // ── Markdown → HTML renderer for assistant messages ──────────────────────
+  function renderMarkdownToHtml(text) {
+    if (!text) return '';
+    var s = text;
+
+    // Escape HTML entities (but we'll unescape inside code blocks)
+    function esc(t) { return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+    // Extract fenced code blocks first, replace with placeholders
+    var codeBlocks = [];
+    s = s.replace(/```(\w*)\n([\s\S]*?)```/g, function(_, lang, code) {
+      var idx = codeBlocks.length;
+      var langLabel = lang ? '<span class="code-lang">' + esc(lang) + '</span>' : '';
+      var copyBtn = '<button class="copy-btn" onclick="navigator.clipboard.writeText(this.parentElement.querySelector(\'code\').textContent).then(function(){event.target.textContent=\'Copied!\';setTimeout(function(){event.target.textContent=\'Copy\'},1200)})">Copy</button>';
+      codeBlocks.push('<pre>' + langLabel + copyBtn + '<code>' + esc(code.replace(/^\n|\n$/g, '')) + '</code></pre>');
+      return '\x00CB' + idx + '\x00';
+    });
+
+    // Escape remaining HTML
+    s = esc(s);
+
+    // Restore code blocks
+    s = s.replace(/\x00CB(\d+)\x00/g, function(_, idx) { return codeBlocks[parseInt(idx)]; });
+
+    // Headings (must be at start of line)
+    s = s.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
+    s = s.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+    s = s.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+    s = s.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+
+    // Horizontal rules
+    s = s.replace(/^---+$/gm, '<hr>');
+
+    // Bold and italic
+    s = s.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+    s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    s = s.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em>$1</em>');
+
+    // Inline code
+    s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+    // Links
+    s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+
+    // Blockquotes
+    s = s.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>');
+    // Merge adjacent blockquotes
+    s = s.replace(/<\/blockquote>\n<blockquote>/g, '\n');
+
+    // Tables (simple GFM-style)
+    s = s.replace(/^(\|.+\|)\n(\|[-| :]+\|)\n((?:\|.+\|\n?)+)/gm, function(_, header, sep, body) {
+      var ths = header.split('|').filter(function(c){return c.trim();}).map(function(c){return '<th>'+c.trim()+'</th>';}).join('');
+      var rows = body.trim().split('\n').map(function(row) {
+        var tds = row.split('|').filter(function(c){return c.trim();}).map(function(c){return '<td>'+c.trim()+'</td>';}).join('');
+        return '<tr>' + tds + '</tr>';
+      }).join('');
+      return '<table><thead><tr>' + ths + '</tr></thead><tbody>' + rows + '</tbody></table>';
+    });
+
+    // Unordered lists
+    s = s.replace(/^(?:[-*+] .+\n?)+/gm, function(block) {
+      var items = block.trim().split('\n').map(function(line) {
+        return '<li>' + line.replace(/^[-*+] /, '') + '</li>';
+      }).join('');
+      return '<ul>' + items + '</ul>';
+    });
+
+    // Ordered lists
+    s = s.replace(/^(?:\d+\. .+\n?)+/gm, function(block) {
+      var items = block.trim().split('\n').map(function(line) {
+        return '<li>' + line.replace(/^\d+\. /, '') + '</li>';
+      }).join('');
+      return '<ol>' + items + '</ol>';
+    });
+
+    // Paragraphs — wrap remaining text blocks separated by blank lines
+    // First split on double newlines
+    var parts = s.split(/\n{2,}/);
+    s = parts.map(function(part) {
+      var trimmed = part.trim();
+      if (!trimmed) return '';
+      // Don't wrap block-level elements
+      if (/^<(?:h[1-6]|pre|ul|ol|table|blockquote|hr)/.test(trimmed)) return trimmed;
+      // Convert single newlines to <br> within paragraphs
+      return '<p>' + trimmed.replace(/\n/g, '<br>') + '</p>';
+    }).join('\n');
+
+    return s;
+  }
+
+  // ── Rich structured message renderer (matches dashboard RichMessageCard) ──
+  function renderRichMessage(rawText) {
+    if (!rawText || rawText.length < 300) return renderMarkdownToHtml(rawText);
+
+    // Strip fenced code blocks before section parsing (headings inside code blocks aren't real sections)
+    var codeBlockPlaceholders = [];
+    var textForParsing = rawText.replace(/```[\s\S]*?```/g, function(match) {
+      var idx = codeBlockPlaceholders.length;
+      codeBlockPlaceholders.push(match);
+      return '\x00CBLOCK' + idx + '\x00';
+    });
+
+    // Parse sections from headings
+    var lines = textForParsing.split('\n');
+    var sections = [];
+    var preambleLines = [];
+    var currentHeading = '';
+    var currentBody = [];
+    var foundFirst = false;
+
+    for (var li = 0; li < lines.length; li++) {
+      var hm = lines[li].match(/^#{1,3}\s+(.+)/);
+      if (hm) {
+        if (foundFirst && (currentHeading || currentBody.length)) {
+          sections.push({ heading: currentHeading || 'Overview', body: currentBody.join('\n').trim() });
+        }
+        foundFirst = true;
+        currentHeading = hm[1].trim();
+        currentBody = [];
+      } else if (!foundFirst) {
+        preambleLines.push(lines[li]);
+      } else {
+        currentBody.push(lines[li]);
+      }
+    }
+    if (foundFirst && (currentHeading || currentBody.length)) {
+      sections.push({ heading: currentHeading || 'Overview', body: currentBody.join('\n').trim() });
+    }
+
+    // Extract source URLs
+    var sourceUrls = [];
+    var seenUrls = {};
+    var mdLinkRe = /\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g;
+    var mlm;
+    while ((mlm = mdLinkRe.exec(rawText)) !== null) {
+      if (!seenUrls[mlm[2]]) { seenUrls[mlm[2]] = true; sourceUrls.push({ url: mlm[2], label: mlm[1].slice(0, 40) }); }
+    }
+    var bareRe = /(?<!\()https?:\/\/[^\s)<>\]]+/g;
+    while ((mlm = bareRe.exec(rawText)) !== null) {
+      var burl = mlm[0].replace(/[.,;:!?]+$/, '');
+      if (!seenUrls[burl]) {
+        seenUrls[burl] = true;
+        try { var host = new URL(burl).hostname.replace(/^www\./, ''); sourceUrls.push({ url: burl, label: host }); } catch(e) { sourceUrls.push({ url: burl, label: burl.slice(0, 35) }); }
+      }
+    }
+
+    // Count code blocks and list items
+    var codeBlockCount = Math.floor((rawText.match(/```/g) || []).length / 2);
+    var listItemCount = (rawText.match(/^[-*+] |^\d+\. /gm) || []).length;
+
+    // Decide if rich
+    var isRich = sections.length >= 2 ||
+      (sections.length >= 1 && sourceUrls.length > 0) ||
+      (sections.length >= 1 && codeBlockCount >= 2) ||
+      (sections.length >= 1 && listItemCount >= 5);
+
+    if (!isRich) return renderMarkdownToHtml(rawText);
+
+    // Restore code block placeholders in parsed text
+    function restoreCodeBlocks(text) {
+      return text.replace(/\x00CBLOCK(\d+)\x00/g, function(_, idx) { return codeBlockPlaceholders[parseInt(idx)] || ''; });
+    }
+    for (var ri = 0; ri < sections.length; ri++) {
+      sections[ri].body = restoreCodeBlocks(sections[ri].body);
+      sections[ri].heading = restoreCodeBlocks(sections[ri].heading);
+    }
+
+    // Build rich HTML
+    var html = '';
+    var preamble = restoreCodeBlocks(preambleLines.join('\n').trim());
+    if (preamble) {
+      html += '<div style="margin-bottom:8px">' + renderMarkdownToHtml(preamble) + '</div>';
+    }
+
+    // Section count header
+    if (sections.length > 1) {
+      html += '<div class="rich-header">';
+      html += '<span class="rich-section-count">▦ ' + sections.length + ' sections</span>';
+      html += '<button class="rich-collapse-all" onclick="(function(btn){var card=btn.closest(\'.msg-content\');var bodies=card.querySelectorAll(\'.rich-section-body\');var chevs=card.querySelectorAll(\'.chevron\');var anyOpen=false;bodies.forEach(function(b){if(b.style.display!==\'none\')anyOpen=true;});bodies.forEach(function(b){b.style.display=anyOpen?\'none\':\'block\';});chevs.forEach(function(c){anyOpen?c.classList.remove(\'open\'):c.classList.add(\'open\');});btn.textContent=anyOpen?\'▸ Expand all\':\'▾ Collapse all\';})(this)">▾ Collapse all</button>';
+      html += '</div>';
+    }
+
+    // Sections
+    html += '<div class="rich-sections">';
+    for (var si = 0; si < sections.length; si++) {
+      var sec = sections[si];
+      html += '<div class="rich-section">';
+      html += '<button class="rich-section-toggle" onclick="(function(btn){var body=btn.nextElementSibling;var chev=btn.querySelector(\'.chevron\');if(body.style.display===\'none\'){body.style.display=\'block\';chev.classList.add(\'open\');}else{body.style.display=\'none\';chev.classList.remove(\'open\');}})(this)">';
+      html += '<span class="chevron open">▸</span>';
+      html += '<span>' + sec.heading.replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</span>';
+      html += '</button>';
+      html += '<div class="rich-section-body">' + renderMarkdownToHtml(sec.body) + '</div>';
+      html += '</div>';
+    }
+    html += '</div>';
+
+    // Source URLs
+    if (sourceUrls.length > 0) {
+      var linkSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>';
+      html += '<div class="rich-sources">';
+      html += '<div class="rich-sources-label">Sources</div>';
+      html += '<div class="rich-sources-list">';
+      var maxSrc = Math.min(sourceUrls.length, 8);
+      for (var sui = 0; sui < maxSrc; sui++) {
+        html += '<a class="rich-source-pill" href="' + sourceUrls[sui].url + '" target="_blank" rel="noopener noreferrer">' + linkSvg + ' ' + sourceUrls[sui].label.replace(/</g,'&lt;') + '</a>';
+      }
+      if (sourceUrls.length > 8) html += '<span style="font-size:9px;color:rgba(255,255,255,0.2)">+' + (sourceUrls.length - 8) + ' more</span>';
+      html += '</div></div>';
+    }
+
+    // Stats
+    if (codeBlockCount > 0 || listItemCount > 3) {
+      html += '<div class="rich-stats">';
+      if (codeBlockCount > 0) html += '<span># ' + codeBlockCount + ' code block' + (codeBlockCount !== 1 ? 's' : '') + '</span>';
+      if (listItemCount > 3) html += '<span>⁃ ' + listItemCount + ' items</span>';
+      html += '</div>';
+    }
+
+    // Copy button
+    html += '<button class="rich-copy-btn" onclick="navigator.clipboard.writeText(this.closest(\'.msg\').dataset.rawText||\'Copy failed\').then(function(){event.target.textContent=\'Copied!\';setTimeout(function(){event.target.textContent=\'⎘ Copy\';},1200)})">⎘ Copy</button>';
+
+    return html;
+  }
+
   function addMsg(content, who, audioUrl = null){
     const div = document.createElement('div');
     div.className = 'msg ' + (who || 'assistant');
     div.style.position = 'relative';
     
-    // Create text content span
-    const textSpan = document.createElement('span');
-    textSpan.textContent = content;
-    div.appendChild(textSpan);
+    // Create content — render rich markdown for assistant, plain text for user
+    if (who === 'user') {
+      const textSpan = document.createElement('span');
+      textSpan.textContent = content;
+      div.appendChild(textSpan);
+    } else {
+      div.dataset.rawText = content;
+      const contentDiv = document.createElement('div');
+      contentDiv.className = 'msg-content';
+      contentDiv.innerHTML = renderRichMessage(content);
+      div.appendChild(contentDiv);
+    }
     
     // Add audio playback button for assistant messages with audio
     if ((who === 'assistant' || !who) && audioUrl) {
@@ -1604,19 +1836,28 @@
 
   // Maintain a live assistant bubble for streaming
   let currentAssistantDiv = null;
+  let currentAssistantRaw = ''; // accumulated raw text for re-rendering markdown
   let lastAssistantText = '';
   let recentAssistantTexts = []; // Track last few assistant texts for dedup
   function upsertAssistantChunk(text){
+    currentAssistantRaw += (text || '');
     if (!currentAssistantDiv){
-      currentAssistantDiv = addMsg(text || '', 'assistant');
+      currentAssistantDiv = addMsg(currentAssistantRaw, 'assistant');
     } else {
-      currentAssistantDiv.textContent = (currentAssistantDiv.textContent || '') + (text || '');
+      // Re-render markdown from accumulated raw text
+      var contentEl = currentAssistantDiv.querySelector('.msg-content');
+      if (contentEl) {
+        contentEl.innerHTML = renderMarkdownToHtml(currentAssistantRaw);
+      } else {
+        currentAssistantDiv.textContent = currentAssistantRaw;
+      }
       _chatScroll();
     }
-    lastAssistantText = currentAssistantDiv.textContent || '';
+    lastAssistantText = currentAssistantRaw;
   }
   function finalizeAssistant(){
     currentAssistantDiv = null;
+    currentAssistantRaw = '';
   }
   let lastIndex = 0;
   async function poll(){
@@ -1724,8 +1965,25 @@
           }
           continue;
         }
-        // Thinking indicator
+        // Thinking indicator — also extract user message if present (sync from dashboard)
         if (msg.status === 'thinking'){
+          if (Array.isArray(msg.messages)) {
+            for (var ti = 0; ti < msg.messages.length; ti++) {
+              if (msg.messages[ti] && msg.messages[ti].role === 'user' && msg.messages[ti].content) {
+                var uText = msg.messages[ti].content.trim();
+                if (uText) {
+                  // Avoid duplicating user messages already shown (e.g. from /api/input send)
+                  var lastUserEl = chatEl.querySelector('.msg.user:last-of-type');
+                  if (!lastUserEl || lastUserEl.textContent.trim() !== uText) {
+                    addMsg(uText, 'user');
+                    lastAssistantText = '';
+                    if (currentAssistantDiv) finalizeAssistant();
+                  }
+                }
+                break;
+              }
+            }
+          }
           statusEl.textContent = 'Thinking...';
           continue;
         }
@@ -1759,11 +2017,15 @@
           if (!trimmed || trimmed === 'No response generated.' || trimmed === 'No content') continue;
           // If we streamed earlier, REPLACE the bubble with final content to avoid duplication
           if (currentAssistantDiv){
+            currentAssistantDiv.dataset.rawText = content;
             if (hasImageContent(content)) {
-              currentAssistantDiv.textContent = '';
-              renderTextWithImages(content, currentAssistantDiv);
+              var contentEl = currentAssistantDiv.querySelector('.msg-content');
+              if (contentEl) { contentEl.innerHTML = ''; renderTextWithImages(content, contentEl); }
+              else { currentAssistantDiv.textContent = ''; renderTextWithImages(content, currentAssistantDiv); }
             } else {
-              currentAssistantDiv.textContent = content;
+              var contentEl2 = currentAssistantDiv.querySelector('.msg-content');
+              if (contentEl2) { contentEl2.innerHTML = renderRichMessage(content); }
+              else { currentAssistantDiv.innerHTML = '<div class="msg-content">' + renderRichMessage(content) + '</div>'; }
             }
             _chatScroll();
             lastAssistantText = content;
