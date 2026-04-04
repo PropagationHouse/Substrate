@@ -201,6 +201,19 @@ class SubagentRegistry:
             
             logger.info(f"Subagent task completed: {task.name} ({task.id}) - {task.status.value}")
             
+            # Emit event bus notification
+            try:
+                from .event_bus import bus
+                _duration_ms = int((task.completed_at - task.started_at) * 1000) if task.started_at else 0
+                bus.emit('subagent_completed', {
+                    'task_id': task.id,
+                    'name': task.name,
+                    'success': task.status == SubagentStatus.COMPLETED,
+                    'duration_ms': _duration_ms,
+                })
+            except Exception:
+                pass
+
             # Notify system events so parent agent learns about completion
             try:
                 from .system_events import enqueue_system_event

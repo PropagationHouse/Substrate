@@ -21,6 +21,7 @@ disabling the entire tool system.
 from .exec_tool import ExecTool, exec_command
 from .file_tool import FileTool, read_file, write_file, edit_file
 from .tool_registry import ToolRegistry, get_tool_registry, load_contextual_tools
+from .tool_validator import validate_tool_input
 
 __all__ = [
     'ExecTool',
@@ -32,4 +33,5 @@ __all__ = [
     'ToolRegistry',
     'get_tool_registry',
     'load_contextual_tools',
+    'validate_tool_input',
 ]

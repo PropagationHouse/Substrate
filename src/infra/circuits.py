@@ -47,6 +47,8 @@ class CircuitsConfig:
     model_override: Optional[str] = None
     skip_if_empty: bool = True  # Skip circuits if CIRCUITS.md has no actionable content
     suppress_duplicates: bool = True  # Suppress identical output within 24h window
+    max_run_seconds: int = 300  # Max time for a single circuits run before stall detection
+    max_consecutive_stalls: int = 3  # After this many stalls, double the interval
     
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -60,6 +62,8 @@ class CircuitsConfig:
             "modelOverride": self.model_override,
             "skipIfEmpty": self.skip_if_empty,
             "suppressDuplicates": self.suppress_duplicates,
+            "maxRunSeconds": self.max_run_seconds,
+            "maxConsecutiveStalls": self.max_consecutive_stalls,
         }
 
 
@@ -110,6 +114,13 @@ class CircuitsRunner:
         # Duplicate suppression state
         self._last_circuits_text: Optional[str] = None
         self._last_circuits_sent_at: Optional[float] = None
+        
+        # Stall detection state
+        self._current_run_start: Optional[float] = None
+        self._current_run_thread: Optional[threading.Thread] = None
+        self._consecutive_stalls: int = 0
+        self._stall_backoff_active: bool = False
+        self._total_stalls: int = 0
     
     def start(self, session_key: str = "main"):
         """Start the circuits runner."""
@@ -172,6 +183,9 @@ class CircuitsRunner:
                 "nextDueIn": f"{(self._next_due_ms - now_ms) // 1000}s" if self._next_due_ms else None,
                 "runCount": self._run_count,
                 "sessionKey": self._session_key,
+                "consecutiveStalls": self._consecutive_stalls,
+                "totalStalls": self._total_stalls,
+                "stallBackoff": self._stall_backoff_active,
             }
     
     def _schedule_next(self):
@@ -183,14 +197,19 @@ class CircuitsRunner:
             return
         
         now_ms = int(time.time() * 1000)
-        interval_ms = self.config.interval_seconds * 1000
-        self._next_due_ms = now_ms + interval_ms
+        # Apply stall backoff: double the interval if in backoff mode
+        effective_interval = self.config.interval_seconds
+        if self._stall_backoff_active:
+            effective_interval = min(effective_interval * 2, 3600)  # Cap at 1 hour
         
-        self._timer = threading.Timer(self.config.interval_seconds, self._on_timer)
+        self._next_due_ms = now_ms + effective_interval * 1000
+        
+        self._timer = threading.Timer(effective_interval, self._on_timer)
         self._timer.daemon = True
         self._timer.start()
         
-        logger.debug(f"Next circuits run in {self.config.interval_seconds}s")
+        logger.debug(f"Next circuits run in {effective_interval}s"
+                     f"{' (backoff)' if self._stall_backoff_active else ''}")
     
     def _on_timer(self):
         """Timer callback - run circuits."""
@@ -214,14 +233,99 @@ class CircuitsRunner:
             self._schedule_next()
             return
         
-        # Run circuits
-        result = self._run_circuits()
+        # Run circuits with stall detection
+        result = self._run_circuits_guarded()
         
-        # Schedule next
+        # Schedule next (with backoff if stalling)
         with self._lock:
             if self._running:
                 self._schedule_next()
     
+    def _run_circuits_guarded(self) -> CircuitsResult:
+        """Run circuits with stall/timeout detection."""
+        timeout = self.config.max_run_seconds
+        result_holder: List[Optional[CircuitsResult]] = [None]
+        error_holder: List[Optional[str]] = [None]
+
+        def _worker():
+            try:
+                result_holder[0] = self._run_circuits()
+            except Exception as e:
+                error_holder[0] = str(e)
+
+        self._current_run_start = time.time()
+        worker = threading.Thread(target=_worker, daemon=True, name="circuits-run")
+        self._current_run_thread = worker
+        worker.start()
+        worker.join(timeout=timeout)
+
+        if worker.is_alive():
+            # Stall detected — the run exceeded max_run_seconds
+            self._consecutive_stalls += 1
+            self._total_stalls += 1
+            elapsed = int(time.time() - self._current_run_start)
+            logger.warning(
+                f"Circuits stall detected: run #{self._run_count} exceeded "
+                f"{timeout}s (elapsed {elapsed}s, consecutive stalls: {self._consecutive_stalls})"
+            )
+            self._emit_event("stall", {
+                "runCount": self._run_count,
+                "timeoutSeconds": timeout,
+                "elapsedSeconds": elapsed,
+                "consecutiveStalls": self._consecutive_stalls,
+                "totalStalls": self._total_stalls,
+            })
+
+            # Emit on event bus for observability
+            try:
+                from .event_bus import bus
+                bus.emit('circuits_stall', {
+                    'run_count': self._run_count,
+                    'timeout_seconds': timeout,
+                    'elapsed_seconds': elapsed,
+                    'consecutive_stalls': self._consecutive_stalls,
+                })
+            except Exception:
+                pass
+
+            # Apply backoff if too many consecutive stalls
+            if self._consecutive_stalls >= self.config.max_consecutive_stalls:
+                self._stall_backoff_active = True
+                logger.warning(
+                    f"Circuits backoff: {self._consecutive_stalls} consecutive stalls, "
+                    f"doubling interval to {self.config.interval_seconds * 2}s"
+                )
+                self._emit_event("backoff", {
+                    "consecutiveStalls": self._consecutive_stalls,
+                    "newIntervalSeconds": self.config.interval_seconds * 2,
+                })
+
+            self._current_run_start = None
+            self._current_run_thread = None
+            return CircuitsResult(
+                success=False,
+                error=f"Stall: run exceeded {timeout}s timeout",
+                duration_ms=elapsed * 1000,
+            )
+
+        # Run completed within timeout
+        self._current_run_start = None
+        self._current_run_thread = None
+
+        if error_holder[0]:
+            return CircuitsResult(success=False, error=error_holder[0])
+
+        result = result_holder[0] or CircuitsResult(success=False, error="No result")
+
+        # Reset consecutive stalls on successful non-stall run
+        if result.success:
+            if self._consecutive_stalls > 0:
+                logger.info(f"Circuits recovered after {self._consecutive_stalls} stall(s)")
+            self._consecutive_stalls = 0
+            self._stall_backoff_active = False
+
+        return result
+
     def _run_circuits(self) -> CircuitsResult:
         """Execute a circuits run."""
         from .system_events import drain_system_events, has_system_events

@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Substrate Thought Visualization v2</title>
+<style>
+  body {
+    margin: 0;
+    overflow: hidden;
+    background: radial-gradient(circle at center, #0a0a1a 0%, #000000 100%);
+    cursor: none;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    color: #fff;
+  }
+  canvas {
+    display: block;
+  }
+  #info {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.8em;
+  }
+</style>
+</head>
+<body>
+
+<canvas id="thoughtCanvas"></canvas>
+<div id="info">Substrate Thought Visualization v2</div>
+
+<script>
+  const canvas = document.getElementById("thoughtCanvas");
+  const ctx = canvas.getContext("2d");
+
+  let width = window.innerWidth;
+  let height = window.innerHeight;
+  canvas.width = width;
+  canvas.height = height;
+
+  window.addEventListener("resize", () => {
+    width = window.innerWidth;
+    height = window.innerHeight;
+    canvas.width = width;
+    canvas.height = height;
+    initSystem();
+  });
+
+  // --- Configuration ---
+  const config = {
+    numParticles: 400,
+    particleSize: { min: 0.8, max: 2.5 },
+    particleSpeed: { min: 0.1, max: 0.8 },
+    connectionDistance: 100,
+    repulsionRadius: 30,
+    repulsionForce: 0.8,
+    attractionForce: 0.00008, // Subtle pull
+    activationDecay: 0.96,
+    activationGain: 0.08,
+    coreRadius: 60,
+    corePulseIntensity: 8,
+    corePulseSpeed: 0.06,
+    trailLength: 5, // Number of previous positions to store for trails
+    backgroundColor: 'rgba(0, 0, 0, 0.1)' // For subtle trails
+  };
+
+  // --- Vector Class for cleaner physics ---
+  class Vector {
+    constructor(x, y) {
+      this.x = x || 0;
+      this.y = y || 0;
+    }
+
+    add(v) {
+      this.x += v.x;
+      this.y += v.y;
+      return this;
+    }
+
+    sub(v) {
+      this.x -= v.x;
+      this.y -= v.y;
+      return this;
+    }
+
+    mult(s) {
+      this.x *= s;
+      this.y *= s;
+      return this;
+    }
+
+    div(s) {
+      this.x /= s;
+      this.y /= s;
+      return this;
+    }
+
+    mag() {
+      return Math.sqrt(this.x * this.x + this.y * this.y);
+    }
+
+    normalize() {
+      if (this.mag() > 0) {
+        return this.div(this.mag());
+      }
+      return new Vector(0,0);
+    }
+
+    limit(max) {
+      if (this.mag() > max) {
+        this.normalize().mult(max);
+      }
+      return this;
+    }
+
+    static dist(v1, v2) {
+      return Math.sqrt((v1.x - v2.x)**2 + (v1.y - v2.y)**2);
+    }
+
+    static sub(v1, v2) {
+      return new Vector(v1.x - v2.x, v1.y - v2.y);
+    }
+
+    static mult(v, s) {
+      return new Vector(v.x * s, v.y * s);
+    }
+  }
+
+  // --- Particle Class ---
+  class Particle {
+    constructor(x, y) {
+      this.position = new Vector(x, y);
+      this.velocity = new Vector(Math.random() * 2 - 1, Math.random() * 2 - 1).mult(config.particleSpeed.min + Math.random() * (config.particleSpeed.max - config.particleSpeed.min));
+      this.acceleration = new Vector();
+      this.size = config.particleSize.min + Math.random() * (config.particleSize.max - config.particleSize.min);
+      this.baseColorHue = Math.random() * 360; // HSL hue
+      this.color = `hsl(${this.baseColorHue}, 70%, 80%)`;
+      this.activation = 0; // 0-1
+      this.history = []; // For trails
+    }
+
+    applyForce(force) {
+      this.acceleration.add(force);
+    }
+
+    update(core) {
+      // Store current position for trail
+      this.history.push(new Vector(this.position.x, this.position.y));
+      if (this.history.length > config.trailLength) {
+        this.history.shift();
+      }
+
+      // Repulsion from other particles (handled externally for efficiency)
+
+      // Attraction to the processing core
+      const dirToCore = Vector.sub(core.position, this.position);
+      const distToCore = dirToCore.mag();
+      if (distToCore > 1) { // Avoid division by zero
+        const attraction = Vector.mult(dirToCore.normalize(), config.attractionForce);
+        this.applyForce(attraction);
+      }
+
+      this.velocity.add(this.acceleration);
+      this.velocity.limit(config.particleSpeed.max * 1.5); // Prevent excessive speed
+      this.position.add(this.velocity);
+      this.acceleration.mult(0); // Reset acceleration
+
+      // Bounce off walls
+      if (this.position.x < 0 || this.position.x > width) {
+        this.velocity.x *= -0.9;
+        if (this.position.x < 0) this.position.x = 0;
+        if (this.position.x > width) this.position.x = width;
+      }
+      if (this.position.y < 0 || this.position.y > height) {
+        this.velocity.y *= -0.9;
+        if (this.position.y < 0) this.position.y = 0;
+        if (this.position.y > height) this.position.y = height;
+      }
+
+      // Update activation
+      this.activation *= config.activationDecay; // Decay
+      if (distToCore < core.currentRadius * 1.5) {
+        this.activation += config.activationGain; // Activate near core
+      }
+      this.activation = Math.min(1, this.activation); // Cap at 1
+
+      // Adjust color based on activation
+      this.color = `hsl(${this.baseColorHue}, ${70 + this.activation * 30}%, ${80 + this.activation * 10}%)`;
+    }
+
+    draw() {
+      // Draw trails
+      ctx.beginPath();
+      ctx.moveTo(this.history[0].x, this.history[0].y);
+      for (let i = 1; i < this.history.length; i++) {
+        const p = this.history[i];
+        const alpha = (i / config.trailLength) * 0.2; // Fading trail
+        ctx.lineTo(p.x, p.y);
+        ctx.strokeStyle = `hsla(${this.baseColorHue}, 70%, 80%, ${alpha})`;
+        ctx.stroke();
+      }
+
+      // Draw particle
+      ctx.fillStyle = this.color;
+      ctx.beginPath();
+      ctx.arc(this.position.x, this.position.y, this.size * (1 + this.activation * 0.7), 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // --- Processing Core Class ---
+  class ProcessingCore {
+    constructor(x, y) {
+      this.position = new Vector(x, y);
+      this.radius = config.coreRadius;
+      this.pulse = 0;
+      this.currentRadius = this.radius;
+    }
+
+    update() {
+      this.pulse = (this.pulse + config.corePulseSpeed) % (Math.PI * 2);
+      this.currentRadius = this.radius + Math.sin(this.pulse) * config.corePulseIntensity;
+    }
+
+    draw() {
+      // Inner glow
+      ctx.beginPath();
+      ctx.arc(this.position.x, this.position.y, this.currentRadius, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(100, 150, 255, ${0.1 + Math.sin(this.pulse * 2) * 0.05})`;
+      ctx.fill();
+
+      // Outer aura
+      const gradient = ctx.createRadialGradient(
+        this.position.x, this.position.y, this.currentRadius * 0.5,
+        this.position.x, this.position.y, this.currentRadius * 2
+      );
+      gradient.addColorStop(0, `rgba(100, 150, 255, ${0.3 + Math.sin(this.pulse) * 0.1})`);
+      gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(this.position.x, this.position.y, this.currentRadius * 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  let particles = [];
+  let processingCore;
+
+  function initSystem() {
+    particles = [];
+    for (let i = 0; i < config.numParticles; i++) {
+      particles.push(new Particle(Math.random() * width, Math.random() * height));
+    }
+    processingCore = new ProcessingCore(width / 2, height / 2);
+  }
+
+  function connectParticles() {
+    for (let a = 0; a < particles.length; a++) {
+      for (let b = a; b < particles.length; b++) {
+        const dist = Vector.dist(particles[a].position, particles[b].position);
+
+        // Particle-particle repulsion
+        if (dist < config.repulsionRadius && dist > 0) {
+          const force = Vector.sub(particles[a].position, particles[b].position).normalize().mult(config.repulsionForce / dist);
+          particles[a].applyForce(force);
+          particles[b].applyForce(Vector.mult(force, -1)); // Apply opposite force
+        }
+
+        if (dist < config.connectionDistance) {
+          const avgActivation = (particles[a].activation + particles[b].activation) / 2;
+          const opacity = (1 - dist / config.connectionDistance) * avgActivation * 0.8;
+          ctx.strokeStyle = `rgba(255, 255, 255, ${opacity})`;
+          ctx.lineWidth = 0.5 + avgActivation * 1.5; // Thicker lines for active connections
+          ctx.beginPath();
+          ctx.moveTo(particles[a].position.x, particles[a].position.y);
+          ctx.lineTo(particles[b].position.x, particles[b].position.y);
+          ctx.stroke();
+        }
+      }
+    }
+  }
+
+  function animate() {
+    // Clear canvas with a slight fade for trails
+    ctx.fillStyle = config.backgroundColor;
+    ctx.fillRect(0, 0, width, height);
+
+    processingCore.update();
+    processingCore.draw();
+
+    connectParticles(); // Handles particle-particle repulsion and draws connections
+
+    particles.forEach(particle => {
+      particle.update(processingCore);
+      particle.draw();
+    });
+
+    requestAnimationFrame(animate);
+  }
+
+  initSystem();
+  animate();
+</script>
+
+</body>
+</html>

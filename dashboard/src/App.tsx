@@ -20,6 +20,7 @@ import {
   LayoutGrid,
   Code,
   Zap,
+  BarChart3,
 } from 'lucide-react';
 import { useGateway } from '@/contexts/GatewayContext';
 import { useSessionContext } from '@/contexts/SessionContext';
@@ -36,6 +37,7 @@ import { ResearchPanel } from '@/components/ResearchPanel';
 import { FloatingWindow } from '@/components/FloatingWindow';
 import { KanbanBoard } from '@/components/KanbanBoard';
 import { CircuitsView } from '@/components/CircuitsView';
+import { AgentStatsTab } from '@/components/AgentStatsTab';
 import type { GatewayEvent } from '@/types';
 import '@/glass.css';
 
@@ -170,6 +172,40 @@ function useSpecialFolders(ready: boolean): SpecialFolders | null {
   }, [ready]);
 
   return data;
+}
+
+// ─── Subagents fetcher (for ForceGraph visualization) ──────────────
+interface SubagentInfo { id: string; name: string; status: string; parentSession?: string; message?: string }
+function useSubagents(ready: boolean): SubagentInfo[] {
+  const [subs, setSubs] = useState<SubagentInfo[]>([]);
+
+  useEffect(() => {
+    if (!ready) return;
+    let cancelled = false;
+
+    const fetchSubs = () => {
+      fetch('/api/agent/stats')
+        .then(r => r.ok ? r.json() : null)
+        .then(d => {
+          if (cancelled || !d?.ok) return;
+          const subagents: SubagentInfo[] = (d.subagents || []).map((sa: any) => ({
+            id: sa.id || sa.taskId || `sub-${Math.random().toString(36).slice(2, 8)}`,
+            name: sa.name || sa.task || 'Subagent',
+            status: sa.status || 'unknown',
+            parentSession: sa.parentSession || sa.sessionKey,
+            message: sa.message || sa.output?.slice(0, 120),
+          }));
+          setSubs(subagents);
+        })
+        .catch(() => {});
+    };
+
+    fetchSubs();
+    const iv = setInterval(fetchSubs, 10000);
+    return () => { cancelled = true; clearInterval(iv); };
+  }, [ready]);
+
+  return subs;
 }
 
 // ─── Chat timeline fetcher (reads dates from Vite middleware) ──────
@@ -337,6 +373,7 @@ export default function App({ onLogout }: AppProps) {
   const chatTimeline = useChatTimeline(connectionState === 'connected');
   const realMemory = useRealMemory(connectionState === 'connected');
   const specialFolders = useSpecialFolders(connectionState === 'connected');
+  const subagents = useSubagents(connectionState === 'connected');
 
   // Fetch gateway model catalog + discover models from API keys in custom_settings
   const [gatewayModels, setGatewayModels] = useState<Array<{ id: string; label: string; provider: string }>>([]);
@@ -473,6 +510,7 @@ export default function App({ onLogout }: AppProps) {
     hoveredFileRef.current.current = `${prefix}${normalized}`;
   }, []);
   const [researchOpen, setResearchOpen] = useState(false);
+  const [statsOpen, setStatsOpen] = useState(false);
   const [tasksOpen, setTasksOpen] = useState(false);
   const [tasksTab, setTasksTab] = useState<'board' | 'circuits'>('board');
   const [booted, setBooted] = useState(false);
@@ -663,6 +701,21 @@ export default function App({ onLogout }: AppProps) {
             <Sparkles size={15} />
           </button>
 
+          {/* Agent Stats toggle */}
+          <button
+            onClick={() => setStatsOpen(o => !o)}
+            className={`
+              relative w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200
+              ${statsOpen
+                ? 'bg-fuchsia-500/20 border border-fuchsia-400/25 text-fuchsia-300'
+                : 'bg-white/[0.04] border border-white/[0.06] text-white/40 hover:text-white/60 hover:bg-white/[0.06]'
+              }
+            `}
+            title="Agent Stats"
+          >
+            <BarChart3 size={15} />
+          </button>
+
           {/* Tasks toggle */}
           <button
             onClick={() => setTasksOpen(o => !o)}
@@ -724,6 +777,7 @@ export default function App({ onLogout }: AppProps) {
             chatDates={chatTimeline}
             realMemory={realMemory}
             specialFolders={specialFolders}
+            subagents={subagents}
             externalHighlightRef={hoveredFileRef.current}
             onNodeClick={(kind, id, detail) => {
               if (id.startsWith('doc:')) {
@@ -848,6 +902,22 @@ export default function App({ onLogout }: AppProps) {
               </div>
             </div>
           )}
+        </div>
+
+        {/* Agent Stats — Floating Window */}
+        <div className={statsOpen ? '' : 'hidden'}>
+          <FloatingWindow
+            id="agent-stats"
+            title="Agent Stats"
+            titleIcon={<BarChart3 size={13} className="text-fuchsia-400" />}
+            defaultWidth={780}
+            defaultHeight={640}
+            minWidth={520}
+            minHeight={400}
+            onClose={() => setStatsOpen(false)}
+          >
+            <AgentStatsTab />
+          </FloatingWindow>
         </div>
 
         {/* Research / Intelligence Hub — Floating Window (always mounted to preserve state) */}

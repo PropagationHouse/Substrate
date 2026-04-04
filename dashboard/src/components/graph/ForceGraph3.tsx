@@ -17,7 +17,7 @@ import { forceX, forceY } from 'd3-force';
 import { SlidersHorizontal, RotateCcw, ZoomIn, ZoomOut, X, Search } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────
-export type NodeKind = 'agent' | 'model' | 'memory' | 'file' | 'conversation' | 'task' | 'live' | 'skill' | 'macro' | 'tool';
+export type NodeKind = 'agent' | 'model' | 'memory' | 'file' | 'conversation' | 'task' | 'live' | 'skill' | 'macro' | 'tool' | 'subagent';
 
 export interface LiveEvent {
   id: string;
@@ -60,6 +60,7 @@ const PAL: Record<string, { color: string; rgb: string }> = {
   skill:  { color: '#f59e0b', rgb: '245,158,11' },
   macro:  { color: '#06b6d4', rgb: '6,182,212' },
   tool:   { color: '#ef4444', rgb: '239,68,68' },
+  subagent: { color: '#e879f9', rgb: '232,121,249' },
 };
 
 const KEY_FILES = new Set([
@@ -182,6 +183,7 @@ export interface ForceGraphProps {
     macros: Array<{ name: string; path: string; size: number }>;
     tools:  Array<{ name: string; path: string; size: number }>;
   } | null;
+  subagents?: Array<{ id: string; name: string; status: string; parentSession?: string; message?: string }>;
   externalHighlightRef?: { current: string | null };
   onNodeClick?: (kind: NodeKind, id: string, detail?: string) => void;
   onNodeDoubleClick?: (kind: NodeKind, id: string, detail?: string) => void;
@@ -210,6 +212,7 @@ function buildGraphData(
   realMemory: ForceGraphProps['realMemory'] = null,
   specialFolders: ForceGraphProps['specialFolders'] = null,
   daysShown: number = 20,
+  subagents: ForceGraphProps['subagents'] = [],
 ) {
   const nodes: GNode[] = [];
   const links: GLink[] = [];
@@ -577,6 +580,37 @@ function buildGraphData(
     links.push({ source: A, target: id, linkType: 'task' });
   });
 
+  // ── Subagents — active and recent subagent tasks ──────────────
+  if (subagents && subagents.length > 0) {
+    nodes.push({ id: 'hub-subagents', kind: 'subagent', nodeType: 'hub', label: 'Subagents', detail: `${subagents.length} subagent tasks`, size: 10, color: PAL.subagent.color, colorRgb: PAL.subagent.rgb, count: subagents.length });
+    links.push({ source: A, target: 'hub-subagents', linkType: 'core' });
+
+    subagents.forEach((sa) => {
+      const id = `subagent:${sa.id}`;
+      const isRunning = sa.status === 'running' || sa.status === 'pending';
+      const isFailed = sa.status === 'failed' || sa.status === 'error';
+      const shortName = sa.name.length > 22 ? sa.name.slice(0, 20) + '…' : sa.name;
+      const detail = sa.message ? `${sa.status} · ${sa.message.slice(0, 120)}` : sa.status;
+      nodes.push({
+        id, kind: 'subagent', nodeType: 'leaf', label: shortName, detail,
+        size: isRunning ? 5 : 3,
+        color: isFailed ? '#fb7185' : isRunning ? '#c084fc' : '#a78bfa',
+        colorRgb: isFailed ? '251,113,133' : isRunning ? '192,132,252' : '167,139,250',
+        pulse: isRunning,
+      });
+      links.push({ source: 'hub-subagents', target: id, linkType: 'subagent' });
+
+      // Link to parent session if it exists as a node
+      if (sa.parentSession) {
+        const sessNodeId = `sess:${sa.parentSession}`;
+        const sessExists = nodes.some(n => n.id === sessNodeId);
+        if (sessExists) {
+          links.push({ source: sessNodeId, target: id, linkType: 'subagent-parent' });
+        }
+      }
+    });
+  }
+
   // Live activity events (ephemeral)
   liveEvents.forEach(ev => {
     nodes.push({ id: ev.id, kind: 'live', nodeType: 'leaf', label: ev.label, detail: ev.detail || ev.label, size: 2.5, color: PAL.live.color, colorRgb: PAL.live.rgb, pulse: true });
@@ -587,7 +621,7 @@ function buildGraphData(
 }
 
 // ─── Component ────────────────────────────────────────────────────
-export function ForceGraph({ agentName, agentState, model, memories, files, messages, tasks, liveEvents = [], gatewayModels = [], sessions = [], chatDates = [], realMemory = null, specialFolders = null, externalHighlightRef, onNodeClick, onNodeDoubleClick }: ForceGraphProps) {
+export function ForceGraph({ agentName, agentState, model, memories, files, messages, tasks, liveEvents = [], gatewayModels = [], sessions = [], chatDates = [], realMemory = null, specialFolders = null, subagents = [], externalHighlightRef, onNodeClick, onNodeDoubleClick }: ForceGraphProps) {
   const fgRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [graphSize, setGraphSize] = useState({ w: 800, h: 600 });
@@ -651,7 +685,7 @@ export function ForceGraph({ agentName, agentState, model, memories, files, mess
   const prevSignatureRef = useRef('');
   const graphData = useMemo(
     () => {
-      const next = buildGraphData(agentName, agentStateRef.current, model, memories, files, messages, tasks, liveEventsRef.current, gatewayModels, sessions, chatDates, realMemory, specialFolders, Math.round(gpVal('daysShown', 20)));
+      const next = buildGraphData(agentName, agentStateRef.current, model, memories, files, messages, tasks, liveEventsRef.current, gatewayModels, sessions, chatDates, realMemory, specialFolders, Math.round(gpVal('daysShown', 20)), subagents);
       // Only return a new object if the graph structure actually changed
       // This prevents react-force-graph-2d from reheating on cosmetic changes
       const sig = next.nodes.length + ':' + next.links.length + ':' + next.nodes.map(n => n.id).join(',');
@@ -663,7 +697,7 @@ export function ForceGraph({ agentName, agentState, model, memories, files, mess
       return next;
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [agentName, model, memories, files, messages, tasks, gatewayModels, sessions, chatDates, realMemory, specialFolders, gpVal('daysShown', 20)],
+    [agentName, model, memories, files, messages, tasks, gatewayModels, sessions, chatDates, realMemory, specialFolders, gpVal('daysShown', 20), subagents],
   );
 
   // Pre-compute neighbor sets for click isolation
@@ -980,6 +1014,8 @@ export function ForceGraph({ agentName, agentState, model, memories, files, mess
           if (lt === 'skills' || lt === 'skills-dir') return 'rgba(245,158,11,0.12)';
           if (lt === 'macros' || lt === 'macros-dir') return 'rgba(6,182,212,0.12)';
           if (lt === 'tools' || lt === 'tools-dir') return 'rgba(239,68,68,0.12)';
+          if (lt === 'subagent') return 'rgba(232,121,249,0.15)';
+          if (lt === 'subagent-parent') return 'rgba(192,132,252,0.2)';
           return 'rgba(255,255,255,0.04)';
         }}
         linkWidth={(link: any) => {
@@ -989,6 +1025,8 @@ export function ForceGraph({ agentName, agentState, model, memories, files, mess
           if (link.linkType === 'directory') return 0.8;
           if (link.linkType === 'memory-cat') return 0.8;
           if (link.linkType === 'live') return 0.8;
+          if (link.linkType === 'subagent') return 0.8;
+          if (link.linkType === 'subagent-parent') return 1;
           return 0.3;
         }}
         linkCurvature={(link: any) => {
@@ -1005,6 +1043,8 @@ export function ForceGraph({ agentName, agentState, model, memories, files, mess
           if (link.linkType === 'session') return [3, 3];
           if (link.linkType === 'timeline') return [3, 2];
           if (link.linkType === 'live') return [2, 3];
+          if (link.linkType === 'subagent') return [3, 2];
+          if (link.linkType === 'subagent-parent') return [5, 3];
           return null;
         }}
       />

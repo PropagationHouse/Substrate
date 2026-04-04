@@ -434,7 +434,11 @@ def handle_status(client: GatewayClient, params: Dict[str, Any]) -> Dict[str, An
 
 @rpc_handler('chat.send')
 def handle_chat_send(client: GatewayClient, params: Dict[str, Any]) -> Dict[str, Any]:
-    """Send a chat message to the agent."""
+    """Send a chat message to the agent.
+    
+    If the agent is already processing, the message is queued and will be
+    processed automatically when the current request completes.
+    """
     message = params.get('message', '')
     session_key = params.get('sessionKey', 'main')
 
@@ -442,79 +446,138 @@ def handle_chat_send(client: GatewayClient, params: Dict[str, Any]) -> Dict[str,
         raise RPCError('Message is required', code=400)
 
     run_id = str(uuid.uuid4())[:8]
+
+    # Use the message queue — handles both immediate dispatch and queueing
+    from src.infra.message_queue import get_message_queue
+    mq = get_message_queue()
+
+    # Set up the executor if not already set
+    if not mq._executor:
+        mq.set_executor(_chat_message_executor)
+
+    result = mq.enqueue(
+        text=message,
+        run_id=run_id,
+        session_key=session_key,
+    )
+
+    return {'runId': run_id, 'status': result.get('status', 'processing'),
+            'position': result.get('position', 0)}
+
+
+def _chat_message_executor(queued_msg):
+    """Execute a chat message from the message queue.
+    
+    This is the same logic as the old chat.send handler, but structured
+    as a message queue executor so consecutive requests get queued.
+    """
+    global _stream_buffer
+    message = queued_msg.text
+    run_id = queued_msg.run_id
+
     _set_current_run_id(run_id)
 
-    # Process asynchronously — fire off to the agent
-    def _process():
-        global _stream_buffer
+    try:
+        import sys, traceback as _tb
+        print(f"[GW-PROCESS] Starting chat.send processing for run={run_id} msg={message[:60]}...", file=sys.stderr, flush=True)
+        proxy_mod = sys.modules.get('proxy_server') or sys.modules.get('__main__')
+        if not proxy_mod:
+            print("[GW-PROCESS] ERROR: proxy_mod not found!", file=sys.stderr, flush=True)
+            return
+        agent = getattr(proxy_mod, 'agent', None)
+        send_fn = getattr(proxy_mod, 'send_message_to_frontend', None)
+        print(f"[GW-PROCESS] agent={type(agent).__name__ if agent else None} send_fn={getattr(send_fn, '__name__', None)}", file=sys.stderr, flush=True)
+
+        # Emit bus event for chat start
         try:
-            import sys, traceback as _tb
-            print(f"[GW-PROCESS] Starting chat.send processing for run={run_id} msg={message[:60]}...", file=sys.stderr, flush=True)
-            proxy_mod = sys.modules.get('proxy_server') or sys.modules.get('__main__')
-            if not proxy_mod:
-                print("[GW-PROCESS] ERROR: proxy_mod not found!", file=sys.stderr, flush=True)
-                return
-            agent = getattr(proxy_mod, 'agent', None)
-            send_fn = getattr(proxy_mod, 'send_message_to_frontend', None)
-            print(f"[GW-PROCESS] agent={type(agent).__name__ if agent else None} send_fn={getattr(send_fn, '__name__', None)}", file=sys.stderr, flush=True)
-            if agent and send_fn:
-                # Show thinking state
-                send_fn({
-                    'status': 'thinking',
-                    'result': None,
-                    'messages': [{'role': 'user', 'content': message}],
-                    'new_message': True,
-                    'clear_thinking': False,
-                })
-                # Use process_message — same path as the main UI's /api/input.
-                # chat_response / chat_with_tools are called internally and
-                # send streaming + done events via send_message_to_frontend.
-                response = agent.process_message({'text': message, 'mode': 'code'})
-                print(f"[GW-PROCESS] process_message returned type={type(response).__name__ if response else 'None'} handled={response.get('_handled') if isinstance(response, dict) else 'N/A'}", file=sys.stderr, flush=True)
-                # If process_message didn't handle it (returned raw string or unhandled dict),
-                # send the final message ourselves.
-                if isinstance(response, str):
-                    send_fn({
-                        'status': 'done',
-                        'result': response,
-                        'clear_thinking': True,
-                        'new_message': True,
-                    })
-                elif isinstance(response, dict) and not response.get('_handled'):
-                    result_text = response.get('result') or response.get('content') or ''
-                    if result_text and not response.get('suppress_chat'):
-                        if 'clear_thinking' not in response:
-                            response['clear_thinking'] = True
-                        if 'new_message' not in response:
-                            response['new_message'] = True
-                        if 'messages' not in response:
-                            response['messages'] = [
-                                {'role': 'user', 'content': message},
-                                {'role': 'assistant', 'content': result_text},
-                            ]
-                        send_fn(response)
-            else:
-                print(f"[GW-PROCESS] ERROR: agent={agent is not None} send_fn={send_fn is not None}", file=sys.stderr, flush=True)
-        except Exception as e:
-            import traceback as _tb
-            print(f"[GW-PROCESS] EXCEPTION: {e}\n{_tb.format_exc()}", file=sys.stderr, flush=True)
-            logger.error(f"[GATEWAY] chat.send processing error: {e}")
-            set_agent_state('idle')
-            _set_current_run_id(None)
-            with _stream_buffer_lock:
-                _stream_buffer = ''
-            broadcast_event('chat', {
-                'sessionKey': 'agent:main:main',
-                'state': 'error',
-                'runId': run_id,
-                'seq': _next_chat_seq(),
-                'error': str(e),
+            from src.infra.event_bus import bus
+            bus.emit('chat_started', {
+                'user_message': message[:500],
+                'session_key': queued_msg.session_key,
+                'run_id': run_id,
             })
+        except Exception:
+            pass
 
-    thread = threading.Thread(target=_process, daemon=True, name=f"gw-chat-{run_id}")
-    thread.start()
+        _start_time = __import__('time').time()
 
-    return {'runId': run_id, 'status': 'started'}
+        if agent and send_fn:
+            # Show thinking state
+            send_fn({
+                'status': 'thinking',
+                'result': None,
+                'messages': [{'role': 'user', 'content': message}],
+                'new_message': True,
+                'clear_thinking': False,
+            })
+            # Use process_message — same path as the main UI's /api/input.
+            response = agent.process_message({'text': message, 'mode': 'code'})
+            print(f"[GW-PROCESS] process_message returned type={type(response).__name__ if response else 'None'} handled={response.get('_handled') if isinstance(response, dict) else 'N/A'}", file=sys.stderr, flush=True)
+            # If process_message didn't handle it (returned raw string or unhandled dict),
+            # send the final message ourselves.
+            if isinstance(response, str):
+                send_fn({
+                    'status': 'done',
+                    'result': response,
+                    'clear_thinking': True,
+                    'new_message': True,
+                })
+            elif isinstance(response, dict) and not response.get('_handled'):
+                result_text = response.get('result') or response.get('content') or ''
+                if result_text and not response.get('suppress_chat'):
+                    if 'clear_thinking' not in response:
+                        response['clear_thinking'] = True
+                    if 'new_message' not in response:
+                        response['new_message'] = True
+                    if 'messages' not in response:
+                        response['messages'] = [
+                            {'role': 'user', 'content': message},
+                            {'role': 'assistant', 'content': result_text},
+                        ]
+                    send_fn(response)
+
+            # Emit bus event for chat completion
+            try:
+                from src.infra.event_bus import bus
+                _duration = int((__import__('time').time() - _start_time) * 1000)
+                _resp_text = ''
+                if isinstance(response, str):
+                    _resp_text = response
+                elif isinstance(response, dict):
+                    _resp_text = response.get('result', '') or response.get('content', '') or ''
+                bus.emit('chat_completed', {
+                    'user_message': message[:200],
+                    'response_preview': str(_resp_text)[:200],
+                    'duration_ms': _duration,
+                    'session_key': queued_msg.session_key,
+                    'run_id': run_id,
+                })
+            except Exception:
+                pass
+        else:
+            print(f"[GW-PROCESS] ERROR: agent={agent is not None} send_fn={send_fn is not None}", file=sys.stderr, flush=True)
+    except Exception as e:
+        import traceback as _tb
+        print(f"[GW-PROCESS] EXCEPTION: {e}\n{_tb.format_exc()}", file=sys.stderr, flush=True)
+        logger.error(f"[GATEWAY] chat.send processing error: {e}")
+        set_agent_state('idle')
+        _set_current_run_id(None)
+        with _stream_buffer_lock:
+            _stream_buffer = ''
+        broadcast_event('chat', {
+            'sessionKey': 'agent:main:main',
+            'state': 'error',
+            'runId': run_id,
+            'seq': _next_chat_seq(),
+            'error': str(e),
+        })
+
+        # Emit error event
+        try:
+            from src.infra.event_bus import bus
+            bus.emit('error', {'source': 'chat.send', 'message': str(e)})
+        except Exception:
+            pass
 
 
 # ── chat.abort ────────────────────────────────────────────────────────
@@ -710,6 +773,204 @@ def handle_sessions_patch(client: GatewayClient, params: Dict[str, Any]) -> Dict
         result['thinkingLevel'] = thinking_level
 
     return result
+
+
+# ── sessions.save ────────────────────────────────────────────────────
+
+@rpc_handler('sessions.save')
+def handle_sessions_save(client: GatewayClient, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Save/snapshot the current conversation before clearing.
+
+    Pulls messages from the session manager or unified memory,
+    writes a timestamped JSON snapshot via session_memory, and
+    optionally clears the session afterwards.
+
+    Params:
+        sessionKey (str): Session to snapshot (default 'main').
+        summary   (str): Optional human-readable summary.
+        clear     (bool): Clear messages after saving (default False).
+    """
+    session_key = params.get('sessionKey', 'main')
+    summary = params.get('summary')
+    clear = params.get('clear', False)
+
+    # Collect messages — prefer session manager, fallback to unified memory
+    messages: list = []
+    try:
+        from src.infra.sessions import get_session_manager
+        mgr = get_session_manager()
+        session = mgr.get(session_key)
+        if session and session.messages:
+            messages = [m.to_dict() for m in session.messages]
+    except Exception:
+        pass
+
+    if not messages:
+        try:
+            agent = _get_agent_ref()
+            if agent and hasattr(agent, 'unified_memory'):
+                conn = agent.unified_memory._get_connection()
+                try:
+                    cursor = conn.execute(
+                        """SELECT timestamp, user_message, assistant_response
+                           FROM memories WHERE type != 'foundational'
+                           ORDER BY timestamp DESC LIMIT 100""",
+                    )
+                    for row in reversed(cursor.fetchall()):
+                        if row['user_message']:
+                            messages.append({'role': 'user', 'content': row['user_message'],
+                                             'timestamp': row['timestamp']})
+                        if row['assistant_response']:
+                            messages.append({'role': 'assistant', 'content': row['assistant_response'],
+                                             'timestamp': row['timestamp']})
+                finally:
+                    conn.close()
+        except Exception:
+            pass
+
+    if not messages:
+        return {'saved': False, 'reason': 'No messages to save'}
+
+    # Persist snapshot
+    try:
+        from src.gateway.session_memory import save_session_memory
+        filepath = save_session_memory(
+            session_id=session_key,
+            messages=messages,
+            metadata={'model': (_get_agent_config() or {}).get('model', 'unknown')},
+            summary=summary,
+        )
+    except Exception as e:
+        raise RPCError(f'Failed to save session: {e}')
+
+    # Optionally clear after save
+    if clear:
+        try:
+            from src.infra.sessions import get_session_manager
+            get_session_manager().clear_session(session_key)
+        except Exception:
+            pass
+
+    # Emit event
+    try:
+        from src.infra.event_bus import bus
+        bus.emit('session_saved', {
+            'session_key': session_key,
+            'message_count': len(messages),
+            'filepath': filepath,
+        })
+    except Exception:
+        pass
+
+    return {
+        'saved': True,
+        'sessionKey': session_key,
+        'messageCount': len(messages),
+        'filepath': filepath,
+    }
+
+
+# ── sessions.memories ────────────────────────────────────────────────
+
+@rpc_handler('sessions.memories')
+def handle_sessions_memories(client: GatewayClient, params: Dict[str, Any]) -> Dict[str, Any]:
+    """List saved session snapshots.
+
+    Params:
+        sessionId (str): Filter by session ID (optional).
+        query     (str): Search within saved memories (optional).
+        limit     (int): Max results (default 20).
+    """
+    session_id = params.get('sessionId')
+    query = params.get('query', '')
+    limit = params.get('limit', 20)
+
+    try:
+        from src.gateway.session_memory import list_session_memories, search_session_memories
+
+        if query:
+            results = search_session_memories(query=query, limit=limit)
+            return {'memories': results, 'query': query}
+        else:
+            results = list_session_memories(session_id=session_id, limit=limit)
+            return {'memories': results}
+    except Exception as e:
+        raise RPCError(f'Failed to list session memories: {e}')
+
+
+# ── sessions.resume ──────────────────────────────────────────────────
+
+@rpc_handler('sessions.resume')
+def handle_sessions_resume(client: GatewayClient, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Resume a previously saved conversation.
+
+    Loads the snapshot file and injects its messages into the session
+    manager so subsequent chat.history calls return them. The agent's
+    unified memory is NOT modified — this is a UI-level restoration.
+
+    Params:
+        filepath   (str): Path to the snapshot JSON (from sessions.memories).
+        sessionKey (str): Target session to load into (default 'main').
+        append     (bool): Append to existing messages (default False = replace).
+    """
+    filepath = params.get('filepath', '')
+    if not filepath:
+        raise RPCError('filepath is required', code=400)
+
+    session_key = params.get('sessionKey', 'main')
+    append = params.get('append', False)
+
+    # Load snapshot
+    try:
+        from src.gateway.session_memory import load_session_memory
+        snapshot = load_session_memory(filepath)
+        if not snapshot:
+            raise RPCError(f'Could not load snapshot: {filepath}', code=404)
+    except RPCError:
+        raise
+    except Exception as e:
+        raise RPCError(f'Failed to load snapshot: {e}')
+
+    # Inject messages into session manager
+    try:
+        from src.infra.sessions import get_session_manager
+        mgr = get_session_manager()
+        session = mgr.get_or_create(session_key, session_type='main')
+
+        if not append:
+            session.clear_messages()
+
+        restored = 0
+        for msg in snapshot.messages:
+            role = msg.get('role', 'user')
+            content = msg.get('content', '')
+            if content:
+                session.add_message(role, content, metadata=msg.get('metadata'))
+                restored += 1
+
+        mgr.update(session)
+    except Exception as e:
+        raise RPCError(f'Failed to resume session: {e}')
+
+    # Emit event
+    try:
+        from src.infra.event_bus import bus
+        bus.emit('session_resumed', {
+            'session_key': session_key,
+            'filepath': filepath,
+            'message_count': restored,
+            'summary': snapshot.summary,
+        })
+    except Exception:
+        pass
+
+    return {
+        'resumed': True,
+        'sessionKey': session_key,
+        'messageCount': restored,
+        'summary': snapshot.summary,
+        'originalSessionId': snapshot.session_id,
+    }
 
 
 # ── RPCError ──────────────────────────────────────────────────────────

@@ -151,7 +151,7 @@ _AUTH_EXEMPT_PREFIXES = (
     '/api/commands',
     '/api/models', '/api/discover-models',
     '/api/gmail/status',
-    '/api/server-info', '/api/tokens', '/api/agentlog',
+    '/api/agent/stats', '/api/server-info', '/api/tokens', '/api/agentlog',
     '/api/connect-defaults', '/api/kanban/', '/api/transcribe/config',
     '/api/sessions/', '/api/memories', '/api/workspace',
     '/api/codex-limits', '/api/claude-code-limits',
@@ -2800,6 +2800,17 @@ class ChatAgent:
                         config = self.deep_merge(default_config, custom_settings)
                         logger.info(f"LOAD CONFIG: After merge, config has keys: {list(config.keys())}")
                         
+                        # Validate merged config against schema
+                        try:
+                            from src.infra.settings_validator import validate_settings
+                            _cfg_errors, _cfg_warnings = validate_settings(config)
+                            if _cfg_errors:
+                                logger.warning(f"LOAD CONFIG: Validation errors (non-fatal): {_cfg_errors}")
+                            if _cfg_warnings:
+                                logger.debug(f"LOAD CONFIG: Validation warnings: {_cfg_warnings}")
+                        except Exception as _val_err:
+                            logger.debug(f"LOAD CONFIG: Validation skipped: {_val_err}")
+                        
                         _apply_remote_env_defaults(config)
                         return config
                 except json.JSONDecodeError as e:
@@ -3060,15 +3071,39 @@ class ChatAgent:
                 """Execute a subagent task in an isolated context."""
                 from src.infra import SubagentResult
                 try:
-                    # Build a fresh, minimal context — no parent history
+                    # Build a fresh context with enough detail for the LLM to use tools
+                    _workspace = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'workspace')
+                    _soma = os.path.dirname(os.path.abspath(__file__))
+                    _temp_dir = os.path.join(_workspace, 'temp')
                     isolated_messages = [
                         {
                             "role": "system",
                             "content": (
                                 f"You are a focused sub-agent executing a specific task. "
-                                f"Complete the task below using the tools available to you. "
-                                f"Be direct and efficient — report results when done.\n"
-                                f"User's OS: {platform.system()}"
+                                f"You MUST use the provided tools to accomplish your task. "
+                                f"Do NOT answer with text alone — you MUST use tool calls to "
+                                f"perform actions (read files, write files, run commands, etc.).\n\n"
+                                f"CRITICAL RULES:\n"
+                                f"1. If the task involves writing, creating, or saving a file, "
+                                f"you MUST call text_editor(action='write', ...) with the full content.\n"
+                                f"2. If the task involves computation, write the result to a file "
+                                f"using text_editor AND report it.\n"
+                                f"3. NEVER just describe what you would do — actually DO it with tool calls.\n"
+                                f"4. Always use ABSOLUTE paths for file operations.\n\n"
+                                f"Environment:\n"
+                                f"- OS: {platform.system()} ({platform.release()})\n"
+                                f"- Project root: {_soma}\n"
+                                f"- Workspace directory: {_workspace}\n"
+                                f"- Temp directory: {_temp_dir}\n\n"
+                                f"File operations use the `text_editor` tool:\n"
+                                f"- text_editor(action='write', path='<absolute_path>', content='...') — create/write files\n"
+                                f"- text_editor(action='write', path='<absolute_path>', content='...', overwrite=true) — overwrite existing\n"
+                                f"- text_editor(action='read', path='<path>') — read files\n"
+                                f"- text_editor(action='edit', path='<path>', old_string='...', new_string='...') — find/replace\n"
+                                f"- text_editor(action='list', path='<dir>') — list directory\n"
+                                f"Always use absolute paths when writing files. "
+                                f"For temp files use: {_temp_dir}\n"
+                                f"Use bash(command='...') for shell commands."
                             ),
                         },
                         {
@@ -3084,10 +3119,22 @@ class ChatAgent:
                         max_tool_rounds=30,
                         _isolated_messages=isolated_messages,
                     )
+                    # chat_with_tools returns 'result' key, not 'response'
+                    output = result.get('result', '') or result.get('response', '') or ''
+                    tool_hist = result.get('tool_history', [])
+                    status = result.get('status', '')
+                    _success = status != 'error' and bool(output)
+                    if not _success and tool_hist:
+                        # Had tool calls but no final text — still count as success
+                        _success = not any(
+                            h.get('result', {}).get('status') == 'error'
+                            for h in tool_hist
+                        )
+                    logger.info(f"[SUBAGENT] Executor done: success={_success}, tools={len(tool_hist)}, output_len={len(output)}")
                     return SubagentResult(
                         task_id=task.id,
-                        success=True,
-                        output=result.get('response', ''),
+                        success=_success,
+                        output=output,
                         session_key=session.key,
                     )
                 except Exception as e:
@@ -3100,6 +3147,22 @@ class ChatAgent:
             
             init_subagent_registry(on_execute=subagent_executor, max_concurrent=3)
             logger.info("Subagent registry initialized")
+            
+            # Initialize event logger (persists bus events to JSONL)
+            try:
+                from src.infra.event_logger import init_event_logger
+                init_event_logger()
+                logger.info("Event logger initialized")
+            except Exception as el_err:
+                logger.warning(f"Event logger initialization failed (non-fatal): {el_err}")
+            
+            # Initialize skill hot-reload watcher
+            try:
+                from src.infra.skill_watcher import start_skill_watcher
+                start_skill_watcher()
+                logger.info("Skill watcher initialized")
+            except Exception as sw_err:
+                logger.warning(f"Skill watcher initialization failed (non-fatal): {sw_err}")
             
             # Initialize MCP client — connect to configured MCP servers and register tools
             try:
@@ -5531,6 +5594,31 @@ class ChatAgent:
         logger.info(f"[CHAT_WITH_TOOLS] *** ENTERED chat_with_tools *** message={message[:50] if message else 'None'}...")
         print(f"[CHAT_WITH_TOOLS] *** ENTERED chat_with_tools ***", flush=True)
         
+        # ── Reliable tool event logging (direct file write only) ──
+        def _ensure_tool_event_logged(event_type, data):
+            """Log tool events reliably via direct file write.
+            
+            Does NOT emit via event bus to avoid duplicate logging
+            (the event_logger wildcard subscriber would write a second copy).
+            """
+            try:
+                import json as _json, time as _time
+                from pathlib import Path as _Path
+                from datetime import datetime as _dt
+                _events_dir = _Path(__file__).parent / "data" / "events"
+                _events_dir.mkdir(parents=True, exist_ok=True)
+                _log_path = _events_dir / f"{_dt.now().strftime('%Y-%m-%d')}.jsonl"
+                _record = {
+                    'ts': _time.time(),
+                    'event': event_type,
+                    'data': {k: v for k, v in data.items() if not str(k).startswith('_')},
+                }
+                with open(_log_path, 'a', encoding='utf-8') as _f:
+                    _f.write(_json.dumps(_record, default=str, ensure_ascii=False) + '\n')
+                print(f"[EVENT] Wrote {event_type} for {data.get('name', '?')} to {_log_path.name}", flush=True)
+            except Exception as _we:
+                print(f"[EVENT] Direct write FAILED for {event_type}: {_we}", flush=True)
+        
         # Vision fallback: if image attached and current model lacks vision, swap to fallback
         if image_data and not model_override:
             current_model = self.config.get('model', 'llama3.2-vision:11b')
@@ -5589,7 +5677,8 @@ class ChatAgent:
         # ── Isolated execution (subagents) ──
         # When _isolated_messages is provided, skip all parent context injection
         # and use the pre-built messages directly with a fresh tool loop.
-        if _isolated_messages is not None:
+        _is_subagent = _isolated_messages is not None
+        if _is_subagent:
             _skip_init = True
             messages = list(_isolated_messages)
             registry = get_tool_registry()
@@ -5601,7 +5690,15 @@ class ChatAgent:
             original_task = message
             overflow_retries = 0
             auto_continue_count = 0
-            logger.info(f"[TOOLS] Subagent isolated execution with {len(messages)} pre-built messages")
+            _null_retries = 0
+            # Use a thread-local interrupt event so the parent's interrupt doesn't
+            # kill this subagent's tool loop, and restore it when done.
+            _parent_interrupt = self._interrupt
+            _subagent_interrupt = threading.Event()
+            self._interrupt = _subagent_interrupt
+            logger.info(f"[TOOLS] Subagent isolated execution with {len(messages)} pre-built messages, {len(tool_schemas)} tool schemas")
+            logger.info(f"[TOOLS] Subagent tool names: {[s.get('function',{}).get('name','?') for s in tool_schemas]}")
+            # _parent_interrupt is restored in a finally block after the tool loop
         
         if not _skip_init:
             # Store current task for persistence
@@ -5773,7 +5870,30 @@ class ChatAgent:
             max_tool_rounds = 9999
             logger.info(f"[TOOLS] Auto-continue enabled — loop limit bypassed (cap {max_tool_rounds})")
         
-        while round_count < max_tool_rounds:
+        # Subagent-safe frontend sender: subagents don't need UI streaming and
+        # send_message_to_frontend can block/fail/dedup in thread context.
+        # Only allow critical log-level messages through for subagents.
+        # NOTE: We use a local alias _send_fe to avoid shadowing the module-level
+        # send_message_to_frontend (which causes UnboundLocalError for non-subagent calls).
+        if _is_subagent:
+            def _subagent_send(msg, silent=False):
+                # Let subagent tool execution proceed without frontend noise
+                try:
+                    _status = msg.get('status', '') if isinstance(msg, dict) else ''
+                    _type = msg.get('type', '') if isinstance(msg, dict) else ''
+                    # Only log, don't actually send to frontend
+                    if _status == 'tool_executing':
+                        logger.debug(f"[SUBAGENT] Tool executing: {msg.get('tool', '?')}")
+                    elif _status == 'tool_result':
+                        logger.debug(f"[SUBAGENT] Tool result: {msg.get('tool', '?')}")
+                except Exception:
+                    pass
+            _send_fe = _subagent_send
+        else:
+            _send_fe = send_message_to_frontend
+        
+        try:  # try/finally to restore _parent_interrupt for subagents
+         while round_count < max_tool_rounds:
             # Check for user interrupt before each round
             if self._interrupt.is_set():
                 logger.info(f"[TOOLS] Interrupted by user after round {round_count}")
@@ -5839,9 +5959,33 @@ class ChatAgent:
             send_message_to_frontend({"type": "thinking_start"})
             
             # Call LLM with tools
-            logger.info(f"[TOOLS] Calling _call_llm_with_tools...")
+            logger.info(f"[TOOLS] Calling _call_llm_with_tools... (subagent={_is_subagent}, round={round_count}, tools={len(tool_schemas)})")
             response = self._call_llm_with_tools(messages, tool_schemas, model_override)
             logger.info(f"[TOOLS] LLM response: content_len={len(response.get('content', '')) if response else 0}, tool_calls={len(response.get('tool_calls', [])) if response else 0}")
+            
+            # ── Record token cost from LLM response ──
+            if response:
+                try:
+                    from src.infra.cost_tracker import tracker as _cost_trk
+                    _u = response.get('_usage', {})
+                    _model = model_override or self.config.get('model', 'unknown')
+                    if _u:
+                        _cost_trk.record(input_tokens=_u.get('input_tokens', 0), output_tokens=_u.get('output_tokens', 0), model=_model)
+                        print(f"[COST] Recorded usage tokens: in={_u.get('input_tokens',0)} out={_u.get('output_tokens',0)} model={_model}", flush=True)
+                    else:
+                        # Estimate from content lengths
+                        _in_t = max(sum(len(str(m.get('content', ''))) for m in messages) // 4, 1)
+                        _out_t = max(len(response.get('content', '')) // 4, 1)
+                        _cost_trk.record(input_tokens=_in_t, output_tokens=_out_t, model=_model)
+                        print(f"[COST] Recorded estimated tokens: in={_in_t} out={_out_t} model={_model}", flush=True)
+                except Exception as _cte:
+                    print(f"[COST] Cost tracking FAILED: {type(_cte).__name__}: {_cte}", flush=True)
+                    logger.warning(f"[TOOLS] Cost tracking error: {_cte}")
+            
+            if _is_subagent:
+                _tc = response.get('tool_calls', []) if response else []
+                _ct_preview = (response.get('content', '') or '')[:200] if response else ''
+                logger.info(f"[SUBAGENT] Round {round_count}: tool_calls={len(_tc)}, content_preview='{_ct_preview}', tool_names={[tc.get('function',{}).get('name','?') for tc in _tc]}")
             
             # (Explicit reasoning tokens from response['thinking'] are merged
             #  into _all_thinking below, alongside the model's content text)
@@ -6073,6 +6217,27 @@ class ChatAgent:
                         })
                         continue
                 
+                # Subagent nudge: subagents MUST use tools — if the model
+                # responded with text only on round 1 (no tools used yet),
+                # re-prompt it to actually call the tools instead of just
+                # describing what it would do.
+                if _is_subagent and round_count <= 2 and not tool_history:
+                    logger.info(f"[SUBAGENT] Model responded with text only on round {round_count} — nudging to use tools")
+                    messages.append({"role": "assistant", "content": content})
+                    messages.append({
+                        "role": "user",
+                        "content": (
+                            "You responded with text instead of using tools. "
+                            "You MUST use tool calls to complete this task — do NOT just describe what you would do. "
+                            "Call the appropriate tool NOW. For example:\n"
+                            "- To write a file: use text_editor with action='write'\n"
+                            "- To run a command: use bash with command='...'\n"
+                            "- To read a file: use text_editor with action='read'\n\n"
+                            "Execute the task using actual tool calls."
+                        )
+                    })
+                    continue
+                
                 # Accept the response — model decided it's done
                 logger.info(f"[TOOLS] Model responded without tool calls (round {round_count}, {len(tool_history)} tools used) — accepting")
                 final_response = self._strip_echoed_instructions(content)
@@ -6218,6 +6383,17 @@ class ChatAgent:
                 if cpm: msg_payload["code_preview_meta"] = cpm
                 send_message_to_frontend(msg_payload)
                 
+                # Emit tool_invoked event (direct write + bus)
+                _tool_start_t = time.time()
+                try:
+                    _ensure_tool_event_logged('tool_invoked', {
+                        'name': tname,
+                        'args': {k: str(v)[:200] for k, v in targs.items()},
+                        'session_key': 'main',
+                    })
+                except Exception as _einv:
+                    print(f"[EVENT] tool_invoked FAILED for '{tname}': {_einv}", flush=True)
+
                 # Execute
                 try:
                     res = registry.execute(tname, targs)
@@ -6226,9 +6402,30 @@ class ChatAgent:
                             res = {k: v for k, v in res.__dict__.items() if not k.startswith('_')}
                         else:
                             res = {"status": "success", "output": str(res)}
+                    # Emit tool_completed/tool_failed event (direct write + bus)
+                    try:
+                        _is_err = isinstance(res, dict) and (res.get('status') == 'error' or res.get('error'))
+                        _evt = 'tool_failed' if _is_err else 'tool_completed'
+                        _ensure_tool_event_logged(_evt, {
+                            'name': tname,
+                            'duration_ms': round((time.time() - _tool_start_t) * 1000),
+                            'status': res.get('status', 'success') if isinstance(res, dict) else 'success',
+                            'error': str(res.get('error', ''))[:200] if isinstance(res, dict) and _is_err else None,
+                        })
+                    except Exception as _ecomp:
+                        print(f"[EVENT] tool result emit FAILED for '{tname}': {_ecomp}", flush=True)
                 except Exception as e:
                     logger.error(f"[TOOLS] Tool '{tname}' threw: {e}")
                     res = {"status": "error", "error": f"{type(e).__name__}: {str(e)[:200]}", "tool": tname}
+                    # Emit tool_failed event (direct write + bus)
+                    try:
+                        _ensure_tool_event_logged('tool_failed', {
+                            'name': tname,
+                            'duration_ms': round((time.time() - _tool_start_t) * 1000),
+                            'error': str(e)[:200],
+                        })
+                    except Exception as _efail:
+                        print(f"[EVENT] tool_failed emit FAILED for '{tname}': {_efail}", flush=True)
                 
                 # Self-verification layer
                 venrich = ""
@@ -6403,6 +6600,10 @@ class ChatAgent:
                     "role": "system",
                     "content": f"⚠ {len(had_errors)} tool(s) failed: {'; '.join(had_errors)}. Retry with fixed args or try a different approach."
                 })
+        finally:
+            # Restore parent interrupt for subagents (see line ~5671)
+            if _is_subagent and '_parent_interrupt' in dir():
+                self._interrupt = _parent_interrupt
         
         # Safety: close any orphaned thinking panel before sending final response
         send_message_to_frontend({"type": "thinking_end"})
@@ -6642,6 +6843,13 @@ class ChatAgent:
         reasoning = message.get('reasoning_content') or message.get('reasoning') or ''
         if reasoning:
             resp['thinking'] = reasoning
+        # Extract real token usage from API response
+        usage = result.get('usage', {})
+        if usage:
+            resp['_usage'] = {
+                'input_tokens': usage.get('prompt_tokens', 0),
+                'output_tokens': usage.get('completion_tokens', 0),
+            }
         return resp
     
     def _call_anthropic_with_tools(self, messages, tools, metadata):
@@ -6790,6 +6998,13 @@ class ChatAgent:
         }
         if thinking_content:
             resp['thinking'] = thinking_content
+        # Extract real token usage from Anthropic response
+        usage = result.get('usage', {})
+        if usage:
+            resp['_usage'] = {
+                'input_tokens': usage.get('input_tokens', 0),
+                'output_tokens': usage.get('output_tokens', 0),
+            }
         return resp
     
     def _call_google_with_tools(self, messages, tools, metadata):
@@ -6983,14 +7198,19 @@ class ChatAgent:
                 }
                 tool_calls.append(tc_entry)
         
-        # Preserve raw Gemini parts (including thoughtSignature) so they can
-        # be echoed back verbatim — Gemini 3 requires thoughtSignature in
-        # functionCall turns or it rejects the request with a 400.
-        return {
+        # Extract real token usage from Gemini response
+        usage_meta = result.get('usageMetadata', {})
+        resp = {
             'content': text_content,
             'tool_calls': tool_calls,
             '_gemini_raw_parts': content_parts
         }
+        if usage_meta:
+            resp['_usage'] = {
+                'input_tokens': usage_meta.get('promptTokenCount', 0),
+                'output_tokens': usage_meta.get('candidatesTokenCount', 0),
+            }
+        return resp
     
     def _call_ollama_with_tools(self, messages, tools, model_name):
         """Call Ollama with function calling via /api/chat endpoint."""
@@ -8164,6 +8384,21 @@ class ChatAgent:
                 return
 
             timestamp = time.time()
+
+            # ── Cost tracking ──
+            try:
+                from src.infra.cost_tracker import tracker as _cost_tracker
+                model = self.config.get('model', 'unknown')
+                # Estimate tokens: ~4 chars per token is a reasonable approximation
+                _input_tokens = max(len(str(user_message)) // 4, 1)
+                _output_tokens = max(len(full_response) // 4, 1)
+                _cost_tracker.record(
+                    input_tokens=_input_tokens,
+                    output_tokens=_output_tokens,
+                    model=model,
+                )
+            except Exception as _ce:
+                logger.debug(f"Cost tracking error (non-fatal): {_ce}")
 
             try:
                 if hasattr(self, 'memory') and isinstance(self.memory, list):
@@ -9392,6 +9627,193 @@ def api_subagents_list():
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 
+@app.route('/api/agent/stats', methods=['GET'])
+def api_agent_stats():
+    """Comprehensive agent stats for the dashboard stats tab.
+    Returns: uptime, cost/token data, tool history, errors, subagent activity, event summary.
+    Query params: date (YYYY-MM-DD), eventLimit (int), eventType (str)
+    """
+    try:
+        import time as _time
+        result = {'ok': True}
+
+        # ── Uptime ───────────────────────────────────────────────────
+        try:
+            from src.infra.cost_tracker import tracker
+            stats = tracker.get_stats()
+            session_stats = stats.get('session', {})
+            result['uptime'] = {
+                'startedAt': session_stats.get('startedAt', 0),
+                'durationMinutes': session_stats.get('durationMinutes', 0),
+                'durationSeconds': round((_time.time() - session_stats.get('startedAt', _time.time())), 1),
+            }
+            result['cost'] = stats
+        except Exception as e:
+            result['uptime'] = {'startedAt': 0, 'durationMinutes': 0, 'durationSeconds': 0}
+            result['cost'] = {'session': {}, 'cumulative': {}}
+            logger.debug(f"[STATS] Cost tracker unavailable: {e}")
+
+        # ── Event bus stats ──────────────────────────────────────────
+        try:
+            from src.infra.event_bus import bus
+            result['eventBus'] = bus.get_stats()
+        except Exception:
+            result['eventBus'] = {}
+
+        # ── Event log: today's summary + recent events ───────────────
+        try:
+            from src.infra.event_logger import read_events, get_event_summary, list_event_dates
+            date_param = request.args.get('date')
+            event_limit = int(request.args.get('eventLimit', '200'))
+            event_type = request.args.get('eventType')
+
+            result['eventSummary'] = get_event_summary(date_param)
+            result['eventDates'] = list_event_dates()
+            result['events'] = read_events(
+                date=date_param,
+                event_type=event_type,
+                limit=event_limit,
+            )
+        except Exception as e:
+            result['eventSummary'] = {}
+            result['eventDates'] = []
+            result['events'] = []
+            logger.debug(f"[STATS] Event logger unavailable: {e}")
+
+        # ── Tool history (from today's events) ───────────────────────
+        try:
+            from src.infra.event_logger import read_events as _re
+            date_param = request.args.get('date')
+            tool_events = _re(date=date_param, event_type='tool_completed', limit=500)
+            tool_events += _re(date=date_param, event_type='tool_failed', limit=100)
+            # Sort by timestamp descending
+            tool_events.sort(key=lambda e: e.get('ts', 0), reverse=True)
+            result['toolHistory'] = tool_events[:200]
+
+            # Tool usage summary
+            tool_counts = {}
+            tool_errors = 0
+            for ev in tool_events:
+                name = ev.get('data', {}).get('name', 'unknown')
+                tool_counts[name] = tool_counts.get(name, 0) + 1
+                if ev.get('event') == 'tool_failed':
+                    tool_errors += 1
+
+            # Fallback: if event log is empty, use ToolRegistry history
+            if not tool_events:
+                try:
+                    _reg = get_tool_registry()
+                    _hist = _reg.get_history(limit=200) if _reg else []
+                    for h in _hist:
+                        tname = h.get('tool_name', 'unknown')
+                        tool_counts[tname] = tool_counts.get(tname, 0) + 1
+                        if not h.get('success', True):
+                            tool_errors += 1
+                    # Build toolHistory from registry history
+                    result['toolHistory'] = [
+                        {'ts': h.get('started_at', 0), 'event': 'tool_failed' if not h.get('success', True) else 'tool_completed',
+                         'data': {'name': h.get('tool_name', 'unknown'), 'duration_ms': h.get('duration_ms', 0), 'status': 'error' if not h.get('success', True) else 'success'}}
+                        for h in reversed(_hist)
+                    ][:200]
+                except Exception:
+                    pass
+
+            result['toolSummary'] = {
+                'totalCalls': len(tool_events) or sum(tool_counts.values()),
+                'uniqueTools': len(tool_counts),
+                'errorCount': tool_errors,
+                'byTool': tool_counts,
+            }
+        except Exception:
+            result['toolHistory'] = []
+            result['toolSummary'] = {'totalCalls': 0, 'uniqueTools': 0, 'errorCount': 0, 'byTool': {}}
+
+        # ── Errors (from today's events) ─────────────────────────────
+        try:
+            from src.infra.event_logger import read_events as _re2
+            date_param = request.args.get('date')
+            errors = _re2(date=date_param, event_type='error', limit=50)
+            errors += _re2(date=date_param, event_type='tool_failed', limit=50)
+            errors.sort(key=lambda e: e.get('ts', 0), reverse=True)
+            result['errors'] = errors[:50]
+        except Exception:
+            result['errors'] = []
+
+        # ── Subagent activity ────────────────────────────────────────
+        try:
+            from src.infra.event_logger import read_events as _re3
+            date_param = request.args.get('date')
+            spawned = _re3(date=date_param, event_type='subagent_spawned', limit=100)
+            completed = _re3(date=date_param, event_type='subagent_completed', limit=100)
+            result['subagentHistory'] = {
+                'spawned': spawned,
+                'completed': completed,
+                'totalSpawned': len(spawned),
+                'totalCompleted': len(completed),
+                'successCount': sum(1 for c in completed if c.get('data', {}).get('success')),
+                'failCount': sum(1 for c in completed if not c.get('data', {}).get('success')),
+            }
+        except Exception:
+            result['subagentHistory'] = {'spawned': [], 'completed': [], 'totalSpawned': 0, 'totalCompleted': 0, 'successCount': 0, 'failCount': 0}
+
+        # ── Active subagents (live) ──────────────────────────────────
+        try:
+            registry = None
+            if 'agent' in globals() and agent and hasattr(agent, '_subagent_registry'):
+                registry = agent._subagent_registry
+            if registry is None:
+                try:
+                    from src.infra.subagents import get_subagent_registry
+                    registry = get_subagent_registry()
+                except Exception:
+                    pass
+            if registry:
+                tasks = []
+                lock = getattr(registry, '_lock', None)
+                task_dict = getattr(registry, '_tasks', {})
+                if lock:
+                    with lock:
+                        for task in task_dict.values():
+                            tasks.append({
+                                'id': task.id,
+                                'name': task.name,
+                                'status': task.status.value if hasattr(task.status, 'value') else str(task.status),
+                                'parentSession': getattr(task, 'parent_session', None),
+                                'message': (task.message or '')[:200],
+                            })
+                else:
+                    for task in task_dict.values():
+                        tasks.append({
+                            'id': task.id,
+                            'name': task.name,
+                            'status': task.status.value if hasattr(task.status, 'value') else str(task.status),
+                            'parentSession': getattr(task, 'parent_session', None),
+                            'message': (task.message or '')[:200],
+                        })
+                result['activeSubagents'] = tasks
+            else:
+                result['activeSubagents'] = []
+        except Exception:
+            result['activeSubagents'] = []
+
+        # ── Sessions overview ────────────────────────────────────────
+        try:
+            from src.infra.sessions import get_session_manager
+            mgr = get_session_manager()
+            sessions = mgr.list_sessions()
+            result['sessionsOverview'] = {
+                'total': len(sessions),
+                'sessions': sessions[:20],
+            }
+        except Exception:
+            result['sessionsOverview'] = {'total': 0, 'sessions': []}
+
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"[STATS] Error: {e}", exc_info=True)
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @app.route('/api/files/tree', methods=['GET'])
 def api_files_tree():
     """List workspace files as TreeEntry objects for the dashboard file browser."""
@@ -9678,6 +10100,593 @@ def api_gateway_status():
         })
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# === Dashboard Local Data API ===
+# These /api/local/* endpoints mirror the Vite dev-server middleware so the
+# production dashboard (served from dashboard/dist/) can read/write the same
+# workspace data that the Vite plugin provided during development.
+
+_PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+
+def _safe_read_json(p):
+    try:
+        if os.path.exists(p):
+            with open(p, 'r', encoding='utf-8') as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return None
+
+def _safe_read_text(p):
+    try:
+        if os.path.exists(p):
+            with open(p, 'r', encoding='utf-8') as f:
+                return f.read()
+    except Exception:
+        pass
+    return None
+
+def _load_conversations():
+    paths = [
+        os.path.join(_PROJECT_ROOT, 'data', 'conversation_history.json'),
+        os.path.join(_PROJECT_ROOT, 'conversation_history.json'),
+    ]
+    seen = set()
+    all_convos = []
+    for p in paths:
+        data = _safe_read_json(p)
+        if not data:
+            continue
+        for c in data.get('conversations', []):
+            ts = c.get('timestamp')
+            if not ts or int(ts) in seen:
+                continue
+            seen.add(int(ts))
+            all_convos.append(c)
+    all_convos.sort(key=lambda c: c.get('timestamp', 0))
+    return all_convos
+
+
+@app.route('/api/local/chat-dates', methods=['GET'])
+def api_local_chat_dates():
+    """Chat date distribution for the dashboard calendar."""
+    all_convos = _load_conversations()
+    from collections import Counter
+    from datetime import datetime, timezone
+    date_counts = Counter()
+    for c in all_convos:
+        ts = c.get('timestamp', 0)
+        d = datetime.fromtimestamp(ts, tz=timezone.utc).strftime('%Y-%m-%d')
+        date_counts[d] += 1
+    dates = [{'date': d, 'count': cnt} for d, cnt in sorted(date_counts.items(), reverse=True)]
+    return jsonify({'ok': True, 'dates': dates})
+
+
+@app.route('/api/local/chat-day', methods=['GET'])
+def api_local_chat_day():
+    """Chat messages for a specific day."""
+    date = request.args.get('date')
+    if not date:
+        return jsonify({'error': 'date required'}), 400
+    all_convos = _load_conversations()
+    from datetime import datetime, timezone
+    msgs = []
+    for c in all_convos:
+        ts = c.get('timestamp', 0)
+        d = datetime.fromtimestamp(ts, tz=timezone.utc).strftime('%Y-%m-%d')
+        if d != date:
+            continue
+        t = datetime.fromtimestamp(ts, tz=timezone.utc).strftime('%-I:%M %p')
+        msgs.append({
+            'timestamp': ts,
+            'time': t,
+            'user': (c.get('user_message') or '')[:200],
+            'assistant': (c.get('assistant_response') or '')[:300],
+            'model': c.get('model'),
+        })
+    return jsonify({'ok': True, 'date': date, 'count': len(msgs), 'messages': msgs})
+
+
+@app.route('/api/local/memory', methods=['GET'])
+def api_local_memory():
+    """Memory browser — user facts, lessons, config, system docs, visual memory."""
+    user_facts_text = _safe_read_text(os.path.join(_PROJECT_ROOT, 'data', 'user_facts.md')) or ''
+    lessons_data = _safe_read_json(os.path.join(_PROJECT_ROOT, 'workspace', 'state', 'lessons.json'))
+    config_data = _safe_read_json(os.path.join(_PROJECT_ROOT, 'custom_settings.json'))
+    memory_json = _safe_read_json(os.path.join(_PROJECT_ROOT, 'memory.json'))
+
+    facts = []
+    for line in user_facts_text.split('\n'):
+        if not line.startswith('- '):
+            continue
+        import re
+        m = re.match(r'^- (\w+):\s*(.+)', line)
+        if m:
+            facts.append({'key': m.group(1), 'value': m.group(2).strip()})
+        else:
+            facts.append({'key': 'note', 'value': line[2:].strip()})
+
+    lesson_list = []
+    for l in (lessons_data or {}).get('lessons', []):
+        lesson_list.append({
+            'id': l.get('id'), 'pattern': l.get('pattern'), 'lesson': l.get('lesson'),
+            'confidence': l.get('confidence'), 'type': l.get('type'),
+        })
+
+    memory_entries = len((memory_json or {}).get('entries', []))
+
+    config_entries = []
+    if config_data:
+        for k, v in config_data.items():
+            if isinstance(v, str):
+                preview = v[:60] + '…' if len(v) > 60 else v
+            elif isinstance(v, (int, float, bool)):
+                preview = str(v)
+            elif isinstance(v, list):
+                preview = f'[{len(v)} items]'
+            elif isinstance(v, dict):
+                preview = '{' + str(len(v)) + ' keys}'
+            else:
+                preview = str(v)
+            config_entries.append({'key': k, 'preview': preview})
+
+    md_files = ['PRIME.md', 'CIRCUITS.md', 'SUBSTRATE.md', 'TOOL_PROMPT.md', 'ORIGIN.md', 'README.md', 'CHANGELOG.md']
+    system_docs = []
+    for f in md_files:
+        full = os.path.join(_PROJECT_ROOT, f)
+        if os.path.exists(full):
+            try:
+                system_docs.append({'name': f, 'path': f, 'size': os.path.getsize(full)})
+            except Exception:
+                pass
+
+    img_exts = {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp'}
+    visual_memory = []
+    for dir_name in ['visual_memory/images', 'screenshots']:
+        full_dir = os.path.join(_PROJECT_ROOT, dir_name)
+        if not os.path.isdir(full_dir):
+            continue
+        try:
+            files = sorted([f for f in os.listdir(full_dir) if os.path.splitext(f)[1].lower() in img_exts])
+            for f in files[-30:]:
+                fp = os.path.join(full_dir, f)
+                try:
+                    st = os.stat(fp)
+                    import re as _re
+                    ts_match = _re.search(r'(\d{13})', f)
+                    visual_memory.append({
+                        'name': f, 'path': f'{dir_name}/{f}', 'size': st.st_size,
+                        'timestamp': int(ts_match.group(1)) if ts_match else None,
+                    })
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+    return jsonify({
+        'ok': True, 'facts': facts, 'lessons': lesson_list,
+        'memoryEntryCount': memory_entries, 'configEntries': config_entries,
+        'configKeys': list(config_data.keys()) if config_data else [],
+        'systemDocs': system_docs, 'visualMemory': visual_memory,
+    })
+
+
+@app.route('/api/local/file-read', methods=['GET'])
+def api_local_file_read():
+    """Read a workspace file (text or image)."""
+    file_path = request.args.get('path')
+    if not file_path:
+        return jsonify({'error': 'path required'}), 400
+    full = os.path.normpath(os.path.join(_PROJECT_ROOT, file_path))
+    if not full.startswith(os.path.normpath(_PROJECT_ROOT)):
+        return jsonify({'error': 'forbidden'}), 403
+    if not os.path.isfile(full):
+        return jsonify({'error': 'not found'}), 404
+
+    ext = os.path.splitext(file_path)[1].lower().lstrip('.')
+    IMAGE_EXTS = {'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'gif': 'image/gif',
+                  'webp': 'image/webp', 'svg': 'image/svg+xml', 'bmp': 'image/bmp', 'ico': 'image/x-icon'}
+    AUDIO_EXTS = {'mp3': 'audio/mpeg', 'wav': 'audio/wav', 'ogg': 'audio/ogg', 'flac': 'audio/flac',
+                  'm4a': 'audio/mp4', 'aac': 'audio/aac'}
+
+    import base64
+    if ext in IMAGE_EXTS:
+        try:
+            with open(full, 'rb') as f:
+                b64 = base64.b64encode(f.read()).decode('ascii')
+            mime = IMAGE_EXTS[ext]
+            data_url = f'data:image/svg+xml;base64,{b64}' if ext == 'svg' else f'data:{mime};base64,{b64}'
+            return jsonify({'ok': True, 'path': file_path, 'type': 'image', 'mime': mime, 'content': data_url})
+        except Exception:
+            return jsonify({'error': 'failed to read image'}), 500
+    elif ext in AUDIO_EXTS:
+        try:
+            with open(full, 'rb') as f:
+                b64 = base64.b64encode(f.read()).decode('ascii')
+            mime = AUDIO_EXTS[ext]
+            return jsonify({'ok': True, 'path': file_path, 'type': 'audio', 'mime': mime, 'content': f'data:{mime};base64,{b64}'})
+        except Exception:
+            return jsonify({'error': 'failed to read audio'}), 500
+    else:
+        content = _safe_read_text(full)
+        if content is None:
+            return jsonify({'error': 'not found'}), 404
+        return jsonify({'ok': True, 'path': file_path, 'type': 'text', 'content': content})
+
+
+@app.route('/api/local/file-write', methods=['POST'])
+def api_local_file_write():
+    """Write a workspace file."""
+    data = request.get_json(silent=True) or {}
+    file_path = data.get('path')
+    content = data.get('content', '')
+    if not file_path:
+        return jsonify({'error': 'path required'}), 400
+    full = os.path.normpath(os.path.join(_PROJECT_ROOT, file_path))
+    if not full.startswith(os.path.normpath(_PROJECT_ROOT)):
+        return jsonify({'error': 'forbidden'}), 403
+    try:
+        os.makedirs(os.path.dirname(full), exist_ok=True)
+        with open(full, 'w', encoding='utf-8') as f:
+            f.write(content)
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/local/dir', methods=['GET'])
+def api_local_dir():
+    """List directory contents for the workspace file browser."""
+    dir_path = request.args.get('path', '')
+    full = os.path.normpath(os.path.join(_PROJECT_ROOT, dir_path))
+    if not full.startswith(os.path.normpath(_PROJECT_ROOT)):
+        return jsonify({'error': 'forbidden'}), 403
+    if not os.path.isdir(full):
+        return jsonify({'error': 'not found'}), 404
+    try:
+        entries = []
+        skip = {'.', '..', '.git', 'node_modules', '__pycache__', 'venv'}
+        for name in sorted(os.listdir(full)):
+            if name.startswith('.') or name in skip:
+                continue
+            fp = os.path.join(full, name)
+            is_dir = os.path.isdir(fp)
+            size = 0 if is_dir else os.path.getsize(fp)
+            entries.append({
+                'name': name,
+                'type': 'directory' if is_dir else 'file',
+                'path': f'{dir_path}/{name}' if dir_path else name,
+                'size': size,
+            })
+        entries.sort(key=lambda e: (0 if e['type'] == 'directory' else 1, e['name'].lower()))
+        return jsonify({'ok': True, 'path': dir_path, 'entries': entries})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# ── Tasks CRUD ──────────────────────────────────────────────────────
+_TASKS_FILE = os.path.join(_PROJECT_ROOT, 'data', 'tasks.json')
+
+def _load_tasks():
+    d = _safe_read_json(_TASKS_FILE)
+    return (d or {}).get('tasks', [])
+
+def _save_tasks(tasks):
+    os.makedirs(os.path.dirname(_TASKS_FILE), exist_ok=True)
+    with open(_TASKS_FILE, 'w', encoding='utf-8') as f:
+        json.dump({'tasks': tasks, 'updatedAt': int(time.time() * 1000)}, f, indent=2)
+
+def _get_notion_token():
+    cfg = _safe_read_json(os.path.join(_PROJECT_ROOT, 'custom_settings.json'))
+    if not cfg:
+        return None
+    return cfg.get('remote_api_keys', {}).get('notion_api_key') or cfg.get('notion_api_key')
+
+def _get_notion_db_id():
+    d = _safe_read_json(_TASKS_FILE)
+    return (d or {}).get('notionDatabaseId')
+
+def _set_notion_db_id(db_id):
+    d = _safe_read_json(_TASKS_FILE) or {'tasks': []}
+    d['notionDatabaseId'] = db_id
+    d['updatedAt'] = int(time.time() * 1000)
+    os.makedirs(os.path.dirname(_TASKS_FILE), exist_ok=True)
+    with open(_TASKS_FILE, 'w', encoding='utf-8') as f:
+        json.dump(d, f, indent=2)
+
+
+@app.route('/api/local/tasks/agent-context', methods=['GET'])
+def api_local_tasks_agent_context():
+    """Task board summary for agent awareness."""
+    tasks = _load_tasks()
+    now = int(time.time() * 1000)
+    backlog = [t for t in tasks if t.get('column') == 'backlog']
+    in_progress = [t for t in tasks if t.get('column') == 'in_progress']
+    done = [t for t in tasks if t.get('column') == 'done']
+    overdue = [t for t in tasks if t.get('dueDate') and t.get('column') != 'done']
+    urgent = [t for t in tasks if t.get('priority') in ('critical', 'high') and t.get('column') != 'done']
+    agent_tasks = [t for t in tasks if t.get('owner') == 'agent' and t.get('column') != 'done']
+    human_tasks = [t for t in tasks if t.get('owner') == 'human' and t.get('column') != 'done']
+
+    fmt = lambda t: {k: t.get(k) for k in ('id', 'title', 'description', 'owner', 'priority', 'schedule', 'column', 'dueDate', 'progress', 'statusNote', 'recurringConfig')}
+
+    hint = (f'There are {len(overdue)} overdue task(s). Consider gently reminding the user.' if overdue
+            else f'You have {len(agent_tasks)} task(s) assigned to you. Check if any need attention.' if agent_tasks
+            else f'The user has {len(human_tasks)} active task(s). You could offer help if relevant.' if human_tasks
+            else 'No active tasks. The board is clear.')
+
+    return jsonify({
+        'ok': True,
+        'totalActive': len(backlog) + len(in_progress),
+        'overdue': [fmt(t) for t in overdue],
+        'urgent': [fmt(t) for t in urgent],
+        'agentTasks': [fmt(t) for t in agent_tasks],
+        'humanInProgress': [fmt(t) for t in human_tasks if t.get('column') == 'in_progress'],
+        'humanBacklog': [fmt(t) for t in human_tasks if t.get('column') == 'backlog'],
+        'recentlyCompleted': [fmt(t) for t in done if t.get('completedAt') and (now - t['completedAt']) < 86400000],
+        'hint': hint,
+    })
+
+
+@app.route('/api/local/tasks', methods=['GET', 'POST'])
+def api_local_tasks():
+    """Tasks CRUD for the kanban board."""
+    if request.method == 'GET':
+        tasks = _load_tasks()
+        db_id = _get_notion_db_id()
+        return jsonify({'ok': True, 'tasks': tasks, 'notionDatabaseId': db_id})
+
+    data = request.get_json(silent=True) or {}
+    action = data.get('action', 'save')
+
+    if action == 'save':
+        _save_tasks(data.get('tasks', []))
+        return jsonify({'ok': True})
+    elif action == 'upsert':
+        tasks = _load_tasks()
+        task = data.get('task', {})
+        idx = next((i for i, t in enumerate(tasks) if t.get('id') == task.get('id')), None)
+        now = int(time.time() * 1000)
+        if idx is not None:
+            tasks[idx] = {**tasks[idx], **task, 'updatedAt': now}
+        else:
+            tasks.append({**task, 'createdAt': now, 'updatedAt': now})
+        _save_tasks(tasks)
+        return jsonify({'ok': True, 'task': task})
+    elif action == 'delete':
+        tasks = [t for t in _load_tasks() if t.get('id') != data.get('taskId')]
+        _save_tasks(tasks)
+        return jsonify({'ok': True})
+    else:
+        return jsonify({'error': 'unknown action'}), 400
+
+
+# ── Notion sync helpers ─────────────────────────────────────────────
+def _notion_fetch(endpoint, method='GET', body=None):
+    token = _get_notion_token()
+    if not token:
+        return {'error': 'no_token'}
+    import urllib.request, urllib.error
+    url = f'https://api.notion.com/v1{endpoint}'
+    headers = {
+        'Authorization': f'Bearer {token}',
+        'Notion-Version': '2022-06-28',
+        'Content-Type': 'application/json',
+    }
+    data_bytes = json.dumps(body).encode('utf-8') if body else None
+    req = urllib.request.Request(url, data=data_bytes, headers=headers, method=method)
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return json.loads(resp.read().decode('utf-8'))
+    except Exception as e:
+        return {'error': str(e)}
+
+def _extract_notion_value(prop):
+    if not prop:
+        return ''
+    t = prop.get('type', '')
+    if t == 'title':
+        return ''.join(x.get('plain_text', '') for x in prop.get('title', []))
+    elif t == 'rich_text':
+        return ''.join(x.get('plain_text', '') for x in prop.get('rich_text', []))
+    elif t == 'select':
+        return (prop.get('select') or {}).get('name', '')
+    elif t == 'status':
+        return (prop.get('status') or {}).get('name', '')
+    elif t == 'date':
+        return (prop.get('date') or {}).get('start', '')
+    elif t == 'number':
+        n = prop.get('number')
+        return str(n) if n is not None else ''
+    elif t == 'checkbox':
+        return 'true' if prop.get('checkbox') else 'false'
+    elif t == 'people':
+        return ', '.join(p.get('name', p.get('id', '')) for p in prop.get('people', []))
+    return ''
+
+def _find_prop(props, keywords, prefer_types=None):
+    entries = list(props.items())
+    for name, prop in entries:
+        lower = name.lower()
+        if any(k == lower for k in keywords):
+            if not prefer_types or prop.get('type') in prefer_types:
+                return prop
+    for name, prop in entries:
+        lower = name.lower()
+        if any(k in lower for k in keywords):
+            if not prefer_types or prop.get('type') in prefer_types:
+                return prop
+    for name, prop in entries:
+        lower = name.lower()
+        if any(k in lower for k in keywords):
+            return prop
+    return None
+
+def _notion_page_to_task(page):
+    p = page.get('properties', {})
+    title_prop = next((v for v in p.values() if v.get('type') == 'title'), None)
+    title = _extract_notion_value(title_prop)
+
+    status_val = _extract_notion_value(_find_prop(p, ['status', 'stage', 'state', 'column'], ['status', 'select'])).lower()
+    backlog_words = ['not started', 'backlog', 'todo', 'to do', 'pending', 'queued', 'new', 'open', 'planned']
+    done_words = ['done', 'complete', 'completed', 'finished', 'closed', 'resolved', 'shipped']
+    in_progress_words = ['in progress', 'in-progress', 'doing', 'active', 'working', 'wip', 'started']
+    column = ('backlog' if any(w in status_val for w in backlog_words)
+              else 'done' if any(w in status_val for w in done_words)
+              else 'in_progress' if any(w in status_val for w in in_progress_words)
+              else 'backlog')
+
+    desc = _extract_notion_value(_find_prop(p, ['description', 'desc', 'details', 'notes'], ['rich_text']))
+    pri_val = _extract_notion_value(_find_prop(p, ['priority', 'urgency', 'importance'], ['select', 'status'])).lower()
+    priority = ('critical' if 'critical' in pri_val
+                else 'high' if 'high' in pri_val or 'urgent' in pri_val
+                else 'low' if 'low' in pri_val else 'medium')
+    owner_val = _extract_notion_value(_find_prop(p, ['owner', 'assign', 'assignee'], ['select', 'people'])).lower()
+    owner = 'agent' if any(w in owner_val for w in ('agent', 'bot', 'ai')) else 'human'
+    due_date = _extract_notion_value(_find_prop(p, ['due', 'deadline', 'date'], ['date'])) or None
+
+    return {
+        'id': f'notion-{page["id"]}', 'notionId': page['id'],
+        'title': title or 'Untitled', 'description': desc or None,
+        'column': column, 'owner': owner, 'priority': priority, 'dueDate': due_date,
+        'createdAt': int(time.time() * 1000), 'updatedAt': int(time.time() * 1000),
+        'notionUrl': page.get('url'),
+    }
+
+
+@app.route('/api/local/notion/databases', methods=['GET'])
+def api_local_notion_databases():
+    """List Notion databases the integration can access."""
+    result = _notion_fetch('/search', 'POST', {'filter': {'property': 'object', 'value': 'database'}, 'page_size': 20})
+    if result.get('error'):
+        return jsonify({'ok': False, 'error': result['error']}), 500
+    dbs = [{'id': db['id'], 'title': (db.get('title', [{}])[0] or {}).get('plain_text', 'Untitled'), 'url': db.get('url')}
+           for db in result.get('results', [])]
+    return jsonify({'ok': True, 'databases': dbs})
+
+
+@app.route('/api/local/notion/link', methods=['POST'])
+def api_local_notion_link():
+    """Link a Notion database for sync."""
+    data = request.get_json(silent=True) or {}
+    db_id = data.get('databaseId')
+    if not db_id:
+        return jsonify({'error': 'databaseId required'}), 400
+    _set_notion_db_id(db_id)
+    return jsonify({'ok': True, 'databaseId': db_id})
+
+
+@app.route('/api/local/notion/pull', methods=['GET'])
+def api_local_notion_pull():
+    """Pull tasks from linked Notion database."""
+    db_id = _get_notion_db_id()
+    if not db_id:
+        return jsonify({'ok': False, 'error': 'no database linked'})
+    result = _notion_fetch(f'/databases/{db_id}/query', 'POST', {'page_size': 100})
+    if result.get('error'):
+        return jsonify({'ok': False, 'error': result['error']}), 500
+    notion_tasks = [_notion_page_to_task(p) for p in result.get('results', [])]
+    local_tasks = _load_tasks()
+    notion_ids = {t['notionId'] for t in notion_tasks}
+    local_only = [t for t in local_tasks if not t.get('notionId') or t['notionId'] not in notion_ids]
+    merged = local_only + notion_tasks
+    _save_tasks(merged)
+    return jsonify({'ok': True, 'pulled': len(notion_tasks), 'total': len(merged), 'tasks': merged})
+
+
+@app.route('/api/local/notion/push', methods=['POST'])
+def api_local_notion_push():
+    """Push a task to linked Notion database."""
+    data = request.get_json(silent=True) or {}
+    task = data.get('task', {})
+    db_id = _get_notion_db_id()
+    if not db_id:
+        return jsonify({'ok': False, 'error': 'no database linked'})
+
+    props = {
+        'Title': {'title': [{'text': {'content': task.get('title', 'Untitled')}}]},
+        'Status': {'select': {'name': 'Done' if task.get('column') == 'done' else 'In Progress' if task.get('column') == 'in_progress' else 'Backlog'}},
+        'Owner': {'select': {'name': 'Agent' if task.get('owner') == 'agent' else 'Human'}},
+        'Priority': {'select': {'name': (task.get('priority', 'medium') or 'medium').capitalize()}},
+    }
+    if task.get('description'):
+        props['Description'] = {'rich_text': [{'text': {'content': task['description'][:2000]}}]}
+    if task.get('dueDate'):
+        props['Due Date'] = {'date': {'start': task['dueDate']}}
+
+    if task.get('notionId'):
+        result = _notion_fetch(f'/pages/{task["notionId"]}', 'PATCH', {'properties': props})
+        if result.get('error'):
+            return jsonify({'ok': False, 'error': result['error']}), 500
+        return jsonify({'ok': True, 'action': 'updated', 'notionId': task['notionId']})
+    else:
+        result = _notion_fetch('/pages', 'POST', {'parent': {'database_id': db_id}, 'properties': props})
+        if result.get('error') or not result.get('id'):
+            return jsonify({'ok': False, 'error': result.get('error', 'no id returned')}), 500
+        tasks = _load_tasks()
+        for i, t in enumerate(tasks):
+            if t.get('id') == task.get('id'):
+                tasks[i]['notionId'] = result['id']
+                tasks[i]['notionUrl'] = result.get('url')
+                _save_tasks(tasks)
+                break
+        return jsonify({'ok': True, 'action': 'created', 'notionId': result['id'], 'notionUrl': result.get('url')})
+
+
+# ── Research data persistence ───────────────────────────────────────
+@app.route('/api/local/research-topics', methods=['GET', 'POST'])
+def api_local_research_topics():
+    """Read/write research topic subscriptions."""
+    topics_file = os.path.join(_PROJECT_ROOT, 'data', 'research_topics.json')
+    if request.method == 'POST':
+        data = request.get_json(silent=True) or {}
+        try:
+            os.makedirs(os.path.dirname(topics_file), exist_ok=True)
+            with open(topics_file, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2)
+            return jsonify({'ok': True})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    else:
+        data = _safe_read_json(topics_file) or {}
+        return jsonify({'ok': True, 'topics': data.get('topics', []), 'feeds': data.get('feeds', [])})
+
+
+@app.route('/api/local/research-feed', methods=['GET', 'POST'])
+def api_local_research_feed():
+    """Read/write research results."""
+    feed_file = os.path.join(_PROJECT_ROOT, 'data', 'research_feed.json')
+    if request.method == 'POST':
+        data = request.get_json(silent=True) or {}
+        try:
+            os.makedirs(os.path.dirname(feed_file), exist_ok=True)
+            with open(feed_file, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2)
+            return jsonify({'ok': True})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    else:
+        data = _safe_read_json(feed_file) or {}
+        return jsonify({'ok': True, 'items': data.get('items', []), 'briefs': data.get('briefs', [])})
+
+
+@app.route('/api/local/research-prompts', methods=['GET', 'POST'])
+def api_local_research_prompts():
+    """Read/write research prompt templates."""
+    prompts_file = os.path.join(_PROJECT_ROOT, 'data', 'research_prompts.json')
+    if request.method == 'POST':
+        data = request.get_json(silent=True) or {}
+        try:
+            os.makedirs(os.path.dirname(prompts_file), exist_ok=True)
+            with open(prompts_file, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2)
+            return jsonify({'ok': True})
+        except Exception as e:
+            return jsonify({'error': str(e)}), 500
+    else:
+        data = _safe_read_json(prompts_file) or {}
+        return jsonify({'ok': True, 'prompts': data.get('prompts', {})})
 
 
 # === Serve Substrate Dashboard ===
@@ -11073,6 +12082,32 @@ def api_memory_consolidate():
         logger.error(f"Error running memory consolidation: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
+@app.route('/api/cost', methods=['GET'])
+def api_cost_stats():
+    """Get token usage and cost tracking stats (session + cumulative)."""
+    try:
+        from src.infra.cost_tracker import tracker as _cost_tracker
+        stats = _cost_tracker.get_stats()
+        return jsonify({"status": "success", **stats})
+    except Exception as e:
+        logger.error(f"Error getting cost stats: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/api/cost/reset', methods=['POST'])
+def api_cost_reset():
+    """Reset session cost stats (cumulative stats are preserved)."""
+    try:
+        from src.infra.cost_tracker import tracker as _cost_tracker
+        _cost_tracker._session = __import__('src.infra.cost_tracker', fromlist=['SessionStats']).SessionStats()
+        return jsonify({"status": "success", "message": "Session cost stats reset"})
+    except Exception as e:
+        logger.error(f"Error resetting cost stats: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+
+
 @app.route('/api/memory/stats', methods=['GET'])
 def api_memory_stats():
     """Get memory system statistics."""
@@ -12287,9 +13322,23 @@ def main():
             print("[STARTUP] Port 8765 already in use — another instance is running. Exiting.", file=sys.stderr, flush=True)
             sys.exit(0)
         
+        # Ensure critical runtime directories exist (gitignored, not in build)
+        _app_root = os.path.dirname(os.path.abspath(__file__))
+        for _d in ['data', 'data/events', 'data/sessions', 'workspace', 'logs',
+                    'uploads', 'screenshots', 'config', 'skills', 'profiles']:
+            os.makedirs(os.path.join(_app_root, _d), exist_ok=True)
+
         # Initialize the agent
         global agent
         agent = ChatAgent()
+
+        # Initialize event logger (structured JSONL logging via event bus)
+        try:
+            from src.infra.event_logger import init_event_logger
+            init_event_logger()
+            print("[STARTUP] Event logger initialized", flush=True)
+        except Exception as _el_err:
+            print(f"[STARTUP] Event logger init failed (non-fatal): {_el_err}", flush=True)
         
         # Initialize voice settings from the config
         init_from_config(agent.config)

@@ -509,6 +509,18 @@ def _agent_dispatch(action: str, **kwargs) -> Dict[str, Any]:
             wait=wait,
         )
         
+        # Emit event bus notification
+        try:
+            from ..infra.event_bus import bus
+            bus.emit('subagent_spawned', {
+                'task_id': task.id,
+                'name': task.name,
+                'parent_session': 'main',
+                'wait': wait,
+            })
+        except Exception:
+            pass
+        
         result = {
             "status": "accepted" if not wait else task.status.value,
             "run_id": task.id,
@@ -939,6 +951,31 @@ class ToolRegistry:
                     "message": f"Tool '{name}' requires confirmation before execution",
                 }
         
+        # Validate input against schema
+        if tool.schema:
+            try:
+                from .tool_validator import validate_tool_input
+                args, validation_errors = validate_tool_input(args, tool.schema, tool_name=name)
+                if validation_errors:
+                    return {
+                        "status": "error",
+                        "error": f"Invalid input: {'; '.join(validation_errors)}",
+                        "validation_errors": validation_errors,
+                    }
+            except Exception as _ve:
+                logger.debug(f"Tool validation skipped for {name}: {_ve}")
+        
+        # Emit tool_invoked event
+        try:
+            from ..infra.event_bus import bus as _evt_bus
+            _evt_bus.emit('tool_invoked', {
+                'name': name,
+                'args': {k: str(v)[:200] for k, v in args.items()},
+                'session_key': 'main',
+            })
+        except Exception:
+            pass
+
         # Execute tool
         try:
             logger.info(f"Executing tool: {name} with args: {list(args.keys())}")
@@ -983,6 +1020,20 @@ class ToolRegistry:
                 self._history = self._history[-self._max_history:]
         
         logger.info(f"Tool {name} completed in {execution.duration_ms}ms (success={success})")
+
+        # Emit tool_completed or tool_failed event
+        try:
+            from ..infra.event_bus import bus as _evt_bus
+            _evt_name = 'tool_failed' if not success else 'tool_completed'
+            _evt_bus.emit(_evt_name, {
+                'name': name,
+                'duration_ms': duration_ms,
+                'status': 'error' if not success else 'success',
+                'error': str(error)[:200] if error else None,
+                'session_key': 'main',
+            })
+        except Exception:
+            pass
         
         return result
     
@@ -1212,6 +1263,31 @@ def _register_default_tools(registry: ToolRegistry) -> None:
         },
     )
 
+    # ── agent: sub-agent spawning ────────────────────────────────────
+    registry.register(
+        name="agent",
+        execute=lambda action, **kwargs: _agent_dispatch(action, **kwargs),
+        description=(
+            "Spawn and manage background sub-agents for parallel work. "
+            "Use action='spawn' with a 'task' string to delegate work to an isolated child agent. "
+            "Use action='status' or action='result' with 'run_id' to check on or collect output. "
+            "Actions: spawn, status, list, cancel, result, cleanup."
+        ),
+        schema={
+            "type": "object",
+            "properties": {
+                "action": {"type": "string", "enum": ["spawn", "status", "list", "cancel", "result", "cleanup"]},
+                "task": {"type": "string", "description": "Task description for spawn"},
+                "label": {"type": "string", "description": "Short label for the sub-agent task"},
+                "run_id": {"type": "string", "description": "Task ID for status/cancel/result"},
+                "model": {"type": "string", "description": "Optional model override"},
+                "wait": {"type": "boolean", "description": "Wait for completion (default false)"},
+                "timeout": {"type": "integer", "description": "Timeout in seconds"},
+            },
+            "required": ["action"],
+        },
+    )
+
     logger.info(f"Registered {len(registry._tools)} core tools")
 
 
@@ -1386,23 +1462,6 @@ _ON_DEMAND_TOOLS = {
                 "required": ["action"],
             },
             category="automation",
-        ),
-    },
-    "agent": {
-        "keywords": ["sub-agent", "subagent", "background task", "parallel", "spawn agent", "run in background"],
-        "register": lambda reg: reg.register(
-            name="agent",
-            execute=lambda action, **kwargs: _agent_dispatch(action, **kwargs),
-            description="Spawn and manage background sub-agents for parallel work. Actions: spawn, status, list, cancel, result.",
-            schema={
-                "type": "object",
-                "properties": {
-                    "action": {"type": "string", "enum": ["spawn", "status", "list", "cancel", "result"]},
-                    "task": {"type": "string"}, "run_id": {"type": "string"},
-                    "wait": {"type": "boolean"},
-                },
-                "required": ["action"],
-            },
         ),
     },
 }

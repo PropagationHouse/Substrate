@@ -9,6 +9,11 @@ Modules:
 - exec_approvals: Granular command permissions
 - event_watcher: File-based self-scheduling event system
 - circuits_tasks: Agent-managed CIRCUITS.md task list
+- event_bus: Lightweight publish/subscribe for internal events
+- cost_tracker: Token and cost tracking per conversation
+- event_logger: Structured JSONL event persistence
+- message_queue: Queue consecutive user requests
+- skill_watcher: Hot-reload watcher for skills/ directory
 """
 
 from .system_events import (
@@ -116,6 +121,34 @@ from .circuits_tasks import (
     heartbeat_clear_completed,
 )
 
+from .event_bus import bus as event_bus
+
+from .cost_tracker import (
+    CostTracker,
+    tracker as cost_tracker,
+)
+
+from .event_logger import (
+    init_event_logger,
+    read_events,
+    get_event_summary,
+    list_event_dates,
+)
+
+from .message_queue import (
+    MessageQueue,
+    QueuedMessage,
+    get_message_queue,
+)
+
+from .skill_watcher import (
+    SkillWatcher,
+    start_skill_watcher,
+    stop_skill_watcher,
+    get_skill_watcher,
+    get_skill_watcher_status,
+)
+
 from .mcp_client import (
     MCPClientManager,
     MCPServerConfig,
@@ -215,4 +248,24 @@ __all__ = [
     'build_system_prompt',
     'SILENT_TOKEN',
     'HEARTBEAT_OK_TOKEN',
+    # Event bus
+    'event_bus',
+    # Cost tracker
+    'CostTracker',
+    'cost_tracker',
+    # Event logger
+    'init_event_logger',
+    'read_events',
+    'get_event_summary',
+    'list_event_dates',
+    # Message queue
+    'MessageQueue',
+    'QueuedMessage',
+    'get_message_queue',
+    # Skill watcher
+    'SkillWatcher',
+    'start_skill_watcher',
+    'stop_skill_watcher',
+    'get_skill_watcher',
+    'get_skill_watcher_status',
 ]

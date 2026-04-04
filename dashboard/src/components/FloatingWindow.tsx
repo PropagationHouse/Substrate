@@ -41,7 +41,15 @@ function loadState(id: string, defaults: WindowState): WindowState {
     const raw = localStorage.getItem(`fw-${id}`);
     if (raw) {
       const s = JSON.parse(raw);
-      if (s.x != null && s.y != null && s.w != null && s.h != null) return s;
+      if (s.x != null && s.y != null && s.w != null && s.h != null) {
+        // Ensure window is at least partially visible on current screen
+        const vw = window.innerWidth || 1280;
+        const vh = window.innerHeight || 720;
+        if (s.x + s.w < 50 || s.x > vw - 50 || s.y > vh - 50 || s.y + s.h < 10) {
+          return defaults; // off-screen — reset to centered
+        }
+        return s;
+      }
     }
   } catch { /* ignore */ }
   return defaults;
@@ -84,6 +92,21 @@ export function FloatingWindow({
 
   // Persist on change
   useEffect(() => { if (!maximized) saveState(id, state); }, [id, state, maximized]);
+
+  // Re-check bounds when window becomes visible (parent removes 'hidden' class)
+  const containerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    // Check if we're actually visible (not inside a display:none parent)
+    if (el.offsetParent === null) return;
+    const vw = window.innerWidth || 1280;
+    const vh = window.innerHeight || 720;
+    const s = stateRef.current;
+    if (s.x + s.w < 50 || s.x > vw - 50 || s.y > vh - 50 || s.y + s.h < 10) {
+      setState(defaultState);
+    }
+  });
 
   // ── Drag (title bar) ──
   const dragStart = useRef<{ mx: number; my: number; sx: number; sy: number } | null>(null);
@@ -173,6 +196,7 @@ export function FloatingWindow({
 
   return (
     <div
+      ref={containerRef}
       className={`fixed flex flex-col ${className}`}
       onMouseDown={focus}
       style={{
