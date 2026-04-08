@@ -108,7 +108,14 @@
         "to": "first_run.py"
       }
     ],
-    "asar": false
+    "asar": false,
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "PropagationHouse",
+        "repo": "Substrate"
+      }
+    ]
   },
   "devDependencies": {
     "electron": "28.1.0",
@@ -117,6 +124,7 @@
   "dependencies": {
     "@electron/remote": "2.0.11",
     "croner": "^10.0.1",
+    "electron-updater": "^6.8.3",
     "node-fetch": "^2.7.0"
   }
 }

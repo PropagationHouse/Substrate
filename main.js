@@ -4,9 +4,62 @@ const fs = require('fs');
 const { spawn, execSync } = require('child_process');
 const os = require('os');
 const remote = require('@electron/remote/main');
+const { autoUpdater } = require('electron-updater');
 
 // Initialize remote module
 remote.initialize();
+
+// ── Auto-Updater (checks GitHub Releases for new versions) ──────────────
+autoUpdater.autoDownload = true;
+autoUpdater.autoInstallOnAppQuit = true;
+autoUpdater.logger = null; // we handle logging ourselves
+
+function setupAutoUpdater() {
+    autoUpdater.on('checking-for-update', () => {
+        debugLog('[AutoUpdater] Checking for update...');
+    });
+    autoUpdater.on('update-available', (info) => {
+        debugLog(`[AutoUpdater] Update available: v${info.version}`);
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('python-message', {
+                type: 'notification',
+                status: 'info',
+                result: `Update v${info.version} is downloading in the background...`
+            });
+        }
+    });
+    autoUpdater.on('update-not-available', () => {
+        debugLog('[AutoUpdater] App is up to date.');
+    });
+    autoUpdater.on('download-progress', (progress) => {
+        debugLog(`[AutoUpdater] Download: ${Math.round(progress.percent)}%`);
+    });
+    autoUpdater.on('update-downloaded', (info) => {
+        debugLog(`[AutoUpdater] Update downloaded: v${info.version}`);
+        dialog.showMessageBox(mainWindow, {
+            type: 'info',
+            title: 'Substrate Update Ready',
+            message: `Version ${info.version} has been downloaded.`,
+            detail: 'The update will be installed when you restart. Restart now?',
+            buttons: ['Restart Now', 'Later'],
+            defaultId: 0
+        }).then(({ response }) => {
+            if (response === 0) {
+                autoUpdater.quitAndInstall(false, true);
+            }
+        });
+    });
+    autoUpdater.on('error', (err) => {
+        debugLog(`[AutoUpdater] Error: ${err.message}`);
+    });
+
+    // Check after a short delay so the app finishes loading first
+    setTimeout(() => {
+        autoUpdater.checkForUpdates().catch((err) => {
+            debugLog(`[AutoUpdater] Check failed: ${err.message}`);
+        });
+    }, 10000);
+}
 
 // File-based debug logging for diagnosing startup issues
 // Use userData dir so logs are writable even in installed app
@@ -160,6 +213,7 @@ if (!gotTheLock) {
     // Create the main window and start the application
     app.whenReady().then(() => {
         createWindow();
+        setupAutoUpdater();
         
         // Create system tray icon
         createTray();
