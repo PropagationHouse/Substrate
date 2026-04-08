@@ -51,6 +51,7 @@ workspace/
 # Agent-generated apps / UGC (created by the agent at user request)
 cocktail_app/
 cosmic_weave/
+skills/
 
 # Runtime-generated data files
 src/commands/app_paths.json
