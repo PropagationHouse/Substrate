@@ -11011,6 +11011,13 @@ def api_local_slide_design():
         _t1 = _time.time()
         logger.debug(f"[SLIDE_DESIGN] Map context skipped (bulk mode)")
 
+    # Pre-compute edit block outside f-string (backslashes not allowed in f-string expressions in Python <3.12)
+    if edit_instruction:
+        _html_part = "\n\nCurrent HTML:\n" + existing_html if existing_html else ""
+        _edit_block = "The user wants you to EDIT the existing slide. Their request: " + edit_instruction + _html_part
+    else:
+        _edit_block = "No edit -- design from scratch."
+
     design_prompt = f"""You are an elite presentation designer (Apple Keynote x Bloomberg x Figma quality).
 Design ONE slide as a single <div> with ALL styles inline. Return ONLY that HTML.
 
@@ -11137,7 +11144,7 @@ Use this map pattern whenever content mentions specific locations, cities, count
 
 {map_context}
 === EDIT INSTRUCTION ===
-{f'The user wants you to EDIT the existing slide. Their request: {edit_instruction}' + (f'\n\nCurrent HTML:\n{existing_html}' if existing_html else '') if edit_instruction else 'No edit -- design from scratch.'}"""
+{_edit_block}"""
 
     try:
         messages = [
