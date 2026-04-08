@@ -48,6 +48,9 @@ speech_components/vosk-model-*/
 # Workspace artifacts (runtime-generated)
 workspace/
 
+# Agent-generated apps / UGC (created by the agent at user request)
+cocktail_app/
+
 # Runtime-generated data files
 src/commands/app_paths.json
 src/cache/
