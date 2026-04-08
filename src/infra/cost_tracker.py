@@ -115,6 +115,30 @@ def _estimate_cost(model: str, input_tokens: int, output_tokens: int) -> float:
 
 
 @dataclass
+class CallRecord:
+    """A single LLM API call record for per-conversation tracking."""
+    timestamp: float
+    model: str
+    input_tokens: int
+    output_tokens: int
+    cost_usd: float
+    conversation_id: str = 'main'
+    is_estimated: bool = False
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            'ts': self.timestamp,
+            'model': self.model,
+            'inputTokens': self.input_tokens,
+            'outputTokens': self.output_tokens,
+            'totalTokens': self.input_tokens + self.output_tokens,
+            'costUsd': round(self.cost_usd, 6),
+            'conversationId': self.conversation_id,
+            'isEstimated': self.is_estimated,
+        }
+
+
+@dataclass
 class SessionStats:
     """Stats for the current agent session (resets on restart)."""
     input_tokens: int = 0
@@ -140,6 +164,10 @@ class SessionStats:
         }
 
 
+# Maximum call records to keep in memory (rolling window)
+_MAX_CALL_LOG = 500
+
+
 class CostTracker:
     """Thread-safe token and cost tracker with persistence."""
 
@@ -149,6 +177,7 @@ class CostTracker:
         self._lock = threading.Lock()
         self._threshold_usd: Optional[float] = None  # Alert threshold
         self._threshold_callback = None
+        self._call_log: list = []  # Rolling log of CallRecord instances
 
     def record(
         self,
@@ -156,11 +185,25 @@ class CostTracker:
         output_tokens: int = 0,
         model: str = '',
         session_key: str = 'main',
+        conversation_id: str = 'main',
+        is_estimated: bool = False,
     ):
         """Record token usage from an API call."""
         cost = _estimate_cost(model, input_tokens, output_tokens)
 
         with self._lock:
+            # Per-call log for conversation-level tracking
+            self._call_log.append(CallRecord(
+                timestamp=time.time(),
+                model=model or 'unknown',
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                cost_usd=cost,
+                conversation_id=conversation_id,
+                is_estimated=is_estimated,
+            ))
+            if len(self._call_log) > _MAX_CALL_LOG:
+                self._call_log = self._call_log[-_MAX_CALL_LOG:]
             # Session stats
             self._session.input_tokens += input_tokens
             self._session.output_tokens += output_tokens
@@ -237,6 +280,50 @@ class CostTracker:
         """Get session stats only."""
         with self._lock:
             return self._session.to_dict()
+
+    def get_call_log(self, last_n: int = 50) -> list:
+        """Get the most recent N call records."""
+        with self._lock:
+            return [r.to_dict() for r in self._call_log[-last_n:]]
+
+    def get_conversation_breakdown(self) -> list:
+        """Get token usage grouped by conversation_id (most recent first)."""
+        with self._lock:
+            convos: Dict[str, Dict[str, Any]] = {}
+            for r in self._call_log:
+                cid = r.conversation_id
+                if cid not in convos:
+                    convos[cid] = {
+                        'conversationId': cid,
+                        'inputTokens': 0,
+                        'outputTokens': 0,
+                        'totalTokens': 0,
+                        'costUsd': 0.0,
+                        'callCount': 0,
+                        'firstCall': r.timestamp,
+                        'lastCall': r.timestamp,
+                        'models': set(),
+                        'estimatedCalls': 0,
+                    }
+                c = convos[cid]
+                c['inputTokens'] += r.input_tokens
+                c['outputTokens'] += r.output_tokens
+                c['totalTokens'] += r.input_tokens + r.output_tokens
+                c['costUsd'] += r.cost_usd
+                c['callCount'] += 1
+                c['lastCall'] = max(c['lastCall'], r.timestamp)
+                c['firstCall'] = min(c['firstCall'], r.timestamp)
+                c['models'].add(r.model)
+                if r.is_estimated:
+                    c['estimatedCalls'] += 1
+
+            result = []
+            for c in convos.values():
+                c['costUsd'] = round(c['costUsd'], 6)
+                c['models'] = sorted(c['models'])
+                result.append(c)
+            result.sort(key=lambda x: x['lastCall'], reverse=True)
+            return result
 
     def _load_cumulative(self) -> Dict[str, Any]:
         """Load cumulative stats from disk."""

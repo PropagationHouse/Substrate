@@ -650,7 +650,99 @@ function substrateLocalPlugin() {
         }
       })
 
-      // 8) Research feed — read/write research results
+      // 8) Research feed — read/write research results + deferred workspace sync
+      const researchDir = path.join(workspaceRoot, 'workspace', 'research')
+      let _researchSyncTimer: ReturnType<typeof setTimeout> | null = null
+      const _syncResearchToWorkspace = (data: any) => {
+        const items: any[] = data?.items || []
+        const completed = items.filter((i: any) => !i.pending && i.title)
+        if (completed.length === 0) return
+        try {
+          mkdirSync(researchDir, { recursive: true })
+          const topicMap: Record<string, string[]> = {}
+          for (const item of completed) {
+            for (const t of (item.topics || [])) {
+              const key = t.toLowerCase()
+              if (!topicMap[key]) topicMap[key] = []
+              topicMap[key].push(item.id)
+            }
+          }
+          for (const item of completed) {
+            const slug = item.id || String(item.timestamp || Date.now())
+            const filePath = path.join(researchDir, `${slug}.md`)
+            const connectedIds = new Set<string>()
+            for (const t of (item.topics || [])) {
+              for (const cid of (topicMap[t.toLowerCase()] || [])) {
+                if (cid !== item.id) connectedIds.add(cid)
+              }
+            }
+            const connections = Array.from(connectedIds).slice(0, 10)
+            const connectedTitles = connections.map(cid => {
+              const c = completed.find((ci: any) => ci.id === cid)
+              return c ? c.title : cid
+            })
+            const date = new Date(item.timestamp || Date.now()).toISOString()
+            const tags = (item.topics || []).map((t: string) => t.replace(/['"]/g, ''))
+            const sources = (item.sourceUrls || []).map((s: any) => s.url || s).filter(Boolean)
+            let md = '---\n'
+            md += `title: "${(item.title || '').replace(/"/g, '\\"')}"\n`
+            md += `type: ${item.type || 'research'}\n`
+            md += `date: ${date}\n`
+            md += `tags: [${tags.map((t: string) => `"${t}"`).join(', ')}]\n`
+            if (item.saved) md += `saved: true\n`
+            if (connections.length > 0) {
+              md += `connections:\n`
+              for (const ct of connectedTitles) {
+                md += `  - "${ct.replace(/"/g, '\\"')}"\n`
+              }
+            }
+            if (sources.length > 0) {
+              md += `sources:\n`
+              for (const src of sources.slice(0, 20)) {
+                md += `  - ${src}\n`
+              }
+            }
+            md += '---\n\n'
+            md += `# ${item.title || 'Untitled Research'}\n\n`
+            if (item.summary) md += `> ${item.summary}\n\n`
+            if (item.sections && item.sections.length > 0) {
+              for (const s of item.sections) {
+                md += `## ${s.heading || 'Section'}\n\n${s.body || ''}\n\n`
+              }
+            } else if (item.content) {
+              md += item.content + '\n'
+            }
+            if (sources.length > 0) {
+              md += `\n## Sources\n\n`
+              for (const src of sources) { md += `- ${src}\n` }
+            }
+            writeFileSync(filePath, md, 'utf-8')
+          }
+          // Write research index
+          const indexPath = path.join(researchDir, 'INDEX.md')
+          let idx = '# Research Library\n\n'
+          idx += `> ${completed.length} entries | Last updated: ${new Date().toLocaleString()}\n\n`
+          const byTopic: Record<string, any[]> = {}
+          for (const item of completed) {
+            for (const t of (item.topics || ['uncategorized'])) {
+              const key = t.toLowerCase()
+              if (!byTopic[key]) byTopic[key] = []
+              byTopic[key].push(item)
+            }
+          }
+          for (const [topic, topicItems] of Object.entries(byTopic).sort((a, b) => b[1].length - a[1].length)) {
+            idx += `## ${topic} (${topicItems.length})\n\n`
+            for (const ti of topicItems.slice(0, 20)) {
+              const d = new Date(ti.timestamp || 0).toLocaleDateString()
+              idx += `- [${ti.title}](./${ti.id}.md) — ${d}${ti.saved ? ' ★' : ''}\n`
+            }
+            idx += '\n'
+          }
+          writeFileSync(indexPath, idx, 'utf-8')
+        } catch (syncErr: any) {
+          console.warn('[research-feed] Workspace sync warning:', syncErr.message)
+        }
+      }
       server.middlewares.use('/api/local/research-feed', (req: any, res: any) => {
         const feedFile = path.join(workspaceRoot, 'data', 'research_feed.json')
         if (req.method === 'POST') {
@@ -661,8 +753,15 @@ function substrateLocalPlugin() {
               const data = JSON.parse(body)
               mkdirSync(path.dirname(feedFile), { recursive: true })
               writeFileSync(feedFile, JSON.stringify(data, null, 2), 'utf-8')
+              // Respond immediately — don't block on workspace sync
               res.setHeader('Content-Type', 'application/json')
               res.end(JSON.stringify({ ok: true }))
+              // Debounced deferred workspace sync (2s after last POST)
+              if (_researchSyncTimer) clearTimeout(_researchSyncTimer)
+              _researchSyncTimer = setTimeout(() => {
+                _researchSyncTimer = null
+                _syncResearchToWorkspace(data)
+              }, 2000)
             } catch (e: any) { res.statusCode = 500; res.end(JSON.stringify({ error: e.message })) }
           })
         } else {

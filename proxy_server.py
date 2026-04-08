@@ -445,6 +445,10 @@ REMOTE_KEY_ROUTE_ALLOWLIST = {
     "gmail_app_password": {
         "field": "remote_api_keys/gmail_app_password",
         "env": "GMAIL_APP_PASSWORD"
+    },
+    "google_maps": {
+        "field": "remote_api_keys/google_maps_api_key",
+        "env": "GOOGLE_MAPS_API_KEY"
     }
 }
 
@@ -2530,13 +2534,14 @@ class ChatAgent:
         logger.info("Weather query received but functionality is disabled")
         return None
     
-    def call_llm_sync(self, messages, model_override=None):
+    def call_llm_sync(self, messages, model_override=None, max_tokens_override=None):
         """
         Synchronous LLM call for internal use (e.g., Midjourney prompt generation).
         
         Args:
             messages: List of message dicts with 'role' and 'content'
             model_override: Optional model to use instead of config default
+            max_tokens_override: Optional max tokens override (default: config value or 2048)
             
         Returns:
             Dict with 'content' key containing the response text
@@ -2557,10 +2562,10 @@ class ChatAgent:
                     'stream': False,
                     'options': {
                         'temperature': self.config.get('temperature', 0.7),
-                        'num_predict': self.config.get('max_tokens', 2048)
+                        'num_predict': max_tokens_override or self.config.get('max_tokens', 4096)
                     }
                 }
-                response = requests.post(f"{ollama_url}/api/chat", json=payload, timeout=120)
+                response = requests.post(f"{ollama_url}/api/chat", json=payload, timeout=180)
                 if response.status_code == 200:
                     result = response.json()
                     content = result.get('message', {}).get('content', '')
@@ -2581,9 +2586,9 @@ class ChatAgent:
                     'model': model_metadata.get('remote_model', 'grok-4-latest'),
                     'messages': messages,
                     'temperature': self.config.get('temperature', 0.7),
-                    'max_tokens': self.config.get('max_tokens', 2048)
+                    'max_tokens': max_tokens_override or self.config.get('max_tokens', 4096)
                 }
-                response = requests.post(endpoint, headers=headers, json=payload, timeout=120)
+                response = requests.post(endpoint, headers=headers, json=payload, timeout=180)
                 if response.status_code == 200:
                     result = response.json()
                     content = result.get('choices', [{}])[0].get('message', {}).get('content', '')
@@ -2609,8 +2614,8 @@ class ChatAgent:
                         role = 'user'  # Gemini doesn't have system role
                     contents.append({'role': role, 'parts': [{'text': msg['content']}]})
                 
-                payload = {'contents': contents}
-                response = requests.post(endpoint, json=payload, timeout=120)
+                payload = {'contents': contents, 'generationConfig': {'maxOutputTokens': max_tokens_override or self.config.get('max_tokens', 4096)}}
+                response = requests.post(endpoint, json=payload, timeout=180)
                 if response.status_code == 200:
                     result = response.json()
                     content = result.get('candidates', [{}])[0].get('content', {}).get('parts', [{}])[0].get('text', '')
@@ -2630,9 +2635,9 @@ class ChatAgent:
                     'model': model_metadata.get('remote_model', 'gpt-4o'),
                     'messages': messages,
                     'temperature': self.config.get('temperature', 0.7),
-                    'max_tokens': self.config.get('max_tokens', 2048)
+                    'max_tokens': max_tokens_override or self.config.get('max_tokens', 4096)
                 }
-                response = requests.post(endpoint, headers=headers, json=payload, timeout=120)
+                response = requests.post(endpoint, headers=headers, json=payload, timeout=180)
                 if response.status_code == 200:
                     result = response.json()
                     content = result.get('choices', [{}])[0].get('message', {}).get('content', '')
@@ -2666,7 +2671,7 @@ class ChatAgent:
                         })
                 payload = {
                     'model': model_metadata.get('remote_model', 'MiniMax-M2.5'),
-                    'max_tokens': self.config.get('max_tokens', 2048),
+                    'max_tokens': max_tokens_override or self.config.get('max_tokens', 4096),
                     'temperature': self.config.get('temperature', 0.7),
                     'messages': anthropic_msgs
                 }
@@ -2755,7 +2760,8 @@ class ChatAgent:
                 "elevenlabs_voice_id": "",
                 "elevenlabs_agent_id": "",
                 "notion_api_key": "",
-                "minimax_api_key": ""
+                "minimax_api_key": "",
+                "google_maps_api_key": ""
             },
             "profiles": {
                 "default": {
@@ -5594,6 +5600,9 @@ class ChatAgent:
         logger.info(f"[CHAT_WITH_TOOLS] *** ENTERED chat_with_tools *** message={message[:50] if message else 'None'}...")
         print(f"[CHAT_WITH_TOOLS] *** ENTERED chat_with_tools ***", flush=True)
         
+        # Unique conversation ID for per-query token tracking
+        _conversation_id = f"conv_{int(time.time())}_{id(message) % 10000}"
+        
         # ── Reliable tool event logging (direct file write only) ──
         def _ensure_tool_event_logged(event_type, data):
             """Log tool events reliably via direct file write.
@@ -5970,14 +5979,22 @@ class ChatAgent:
                     _u = response.get('_usage', {})
                     _model = model_override or self.config.get('model', 'unknown')
                     if _u:
-                        _cost_trk.record(input_tokens=_u.get('input_tokens', 0), output_tokens=_u.get('output_tokens', 0), model=_model)
+                        _cost_trk.record(input_tokens=_u.get('input_tokens', 0), output_tokens=_u.get('output_tokens', 0), model=_model, conversation_id=_conversation_id)
                         print(f"[COST] Recorded usage tokens: in={_u.get('input_tokens',0)} out={_u.get('output_tokens',0)} model={_model}", flush=True)
                     else:
-                        # Estimate from content lengths
-                        _in_t = max(sum(len(str(m.get('content', ''))) for m in messages) // 4, 1)
+                        # Estimate tokens when API doesn't return usage data.
+                        # Only count the last user message as input (not the full
+                        # messages array which includes the huge system prompt and
+                        # would massively over-count on every tool-loop round).
+                        _last_user = ''
+                        for _m in reversed(messages):
+                            if _m.get('role') == 'user':
+                                _last_user = str(_m.get('content', ''))
+                                break
+                        _in_t = max(len(_last_user) // 4, 1)
                         _out_t = max(len(response.get('content', '')) // 4, 1)
-                        _cost_trk.record(input_tokens=_in_t, output_tokens=_out_t, model=_model)
-                        print(f"[COST] Recorded estimated tokens: in={_in_t} out={_out_t} model={_model}", flush=True)
+                        _cost_trk.record(input_tokens=_in_t, output_tokens=_out_t, model=_model, conversation_id=_conversation_id, is_estimated=True)
+                        print(f"[COST] Recorded estimated tokens (no _usage from API): in={_in_t} out={_out_t} model={_model}", flush=True)
                 except Exception as _cte:
                     print(f"[COST] Cost tracking FAILED: {type(_cte).__name__}: {_cte}", flush=True)
                     logger.warning(f"[TOOLS] Cost tracking error: {_cte}")
@@ -7238,16 +7255,29 @@ class ChatAgent:
             tool_calls = message.get('tool_calls', [])
             content = message.get('content', '')
             
+            # Extract real token usage from Ollama response
+            _ollama_usage = {}
+            if result.get('prompt_eval_count') or result.get('eval_count'):
+                _ollama_usage = {
+                    'input_tokens': result.get('prompt_eval_count', 0),
+                    'output_tokens': result.get('eval_count', 0),
+                }
+            
             print(f"[OLLAMA_TOOLS] Native tool_calls: {len(tool_calls)}, content_len: {len(content)}", flush=True)
             print(f"[OLLAMA_TOOLS] Content: {content[:200] if content else 'empty'}...", flush=True)
+            if _ollama_usage:
+                print(f"[OLLAMA_TOOLS] Usage: in={_ollama_usage.get('input_tokens',0)} out={_ollama_usage.get('output_tokens',0)}", flush=True)
             
             # If we got native tool calls, use them
             if tool_calls:
                 print(f"[OLLAMA_TOOLS] Using native tool calls", flush=True)
-                return {
+                resp = {
                     'content': content,
                     'tool_calls': tool_calls
                 }
+                if _ollama_usage:
+                    resp['_usage'] = _ollama_usage
+                return resp
             
             # Otherwise, try to parse tool calls from text output
             print(f"[OLLAMA_TOOLS] No native tool calls, attempting text parsing...", flush=True)
@@ -7255,16 +7285,22 @@ class ChatAgent:
             parsed_calls = self._parse_text_tool_calls(content, tools)
             if parsed_calls:
                 logger.info(f"[TOOLS] Parsed {len(parsed_calls)} tool calls from text output: {[c.get('function',{}).get('name') for c in parsed_calls]}")
-                return {
+                resp = {
                     'content': content,
                     'tool_calls': parsed_calls
                 }
+                if _ollama_usage:
+                    resp['_usage'] = _ollama_usage
+                return resp
             
             logger.info(f"[TOOLS] No tool calls parsed from text")
-            return {
+            resp = {
                 'content': content,
                 'tool_calls': []
             }
+            if _ollama_usage:
+                resp['_usage'] = _ollama_usage
+            return resp
         
         # Fallback: try without tools parameter
         logger.warning(f"Ollama /api/chat with tools failed, trying without tools")
@@ -7288,10 +7324,16 @@ class ChatAgent:
             
             # Parse tool calls from text
             parsed_calls = self._parse_text_tool_calls(content, tools)
-            return {
+            resp = {
                 'content': content,
                 'tool_calls': parsed_calls
             }
+            if result.get('prompt_eval_count') or result.get('eval_count'):
+                resp['_usage'] = {
+                    'input_tokens': result.get('prompt_eval_count', 0),
+                    'output_tokens': result.get('eval_count', 0),
+                }
+            return resp
         
         # Log the actual error
         print(f"[OLLAMA_TOOLS] ERROR: Ollama returned {response.status_code}: {response.text[:500]}", flush=True)
@@ -8396,6 +8438,8 @@ class ChatAgent:
                     input_tokens=_input_tokens,
                     output_tokens=_output_tokens,
                     model=model,
+                    is_estimated=True,
+                    conversation_id=f"stream_{int(time.time())}",
                 )
             except Exception as _ce:
                 logger.debug(f"Cost tracking error (non-fatal): {_ce}")
@@ -9648,6 +9692,8 @@ def api_agent_stats():
                 'durationSeconds': round((_time.time() - session_stats.get('startedAt', _time.time())), 1),
             }
             result['cost'] = stats
+            result['callLog'] = tracker.get_call_log(last_n=100)
+            result['conversations'] = tracker.get_conversation_breakdown()
         except Exception as e:
             result['uptime'] = {'startedAt': 0, 'durationMinutes': 0, 'durationSeconds': 0}
             result['cost'] = {'session': {}, 'cumulative': {}}
@@ -10687,6 +10733,449 @@ def api_local_research_prompts():
     else:
         data = _safe_read_json(prompts_file) or {}
         return jsonify({'ok': True, 'prompts': data.get('prompts', {})})
+
+
+# ── Map helpers for slide design ──────────────────────────────────────────────
+
+def _get_google_maps_key():
+    """Resolve Google Maps API key from config or environment.
+    Falls back to the regular google_api_key (Gemini key) since Google API keys
+    work across all enabled APIs in the same project.
+    """
+    if 'agent' in globals() and agent is not None:
+        # Try dedicated maps key first
+        key = _resolve_remote_key(agent.config, provider='google_maps')
+        if key:
+            return key
+        # Fall back to the regular Google API key (same key works for Maps + Gemini)
+        key = _resolve_remote_key(agent.config, provider='google')
+        if key:
+            return key
+    # Fallback: try env directly
+    return os.environ.get('GOOGLE_MAPS_API_KEY', '').strip() or os.environ.get('GOOGLE_API_KEY', '').strip() or None
+
+
+def _extract_locations_via_llm(heading, body):
+    """Use a lightweight LLM call to extract geographic locations from slide content.
+    Returns list of dicts: [{"name": "...", "query": "..."}, ...]
+    """
+    if 'agent' not in globals() or agent is None:
+        return []
+    
+    combined = f"{heading}. {body}"
+    combined_lower = combined.lower()
+    
+    # Strong signals: words that almost always mean geographic content
+    strong_signals = [
+        'located in', 'located near', 'based in', 'headquartered in',
+        'middle east', 'southeast asia', 'latin america', 'sub-saharan',
+        'dirt bike', 'dirt biking', 'riding spot', 'riding trail',
+        'travel to', 'traveling to', 'fly to', 'flight to',
+        'breaking news in', 'crisis in', 'conflict in', 'war in',
+        'earthquake', 'hurricane', 'tornado', 'wildfire',
+        'coordinates', 'latitude', 'longitude', 'GPS',
+    ]
+    # Geographic proper nouns: continents, well-known regions
+    geo_nouns = [
+        'africa', 'antarctica', 'asia', 'europe', 'australia',
+        'pacific', 'atlantic', 'arctic', 'mediterranean', 'caribbean',
+        'sahara', 'himalayas', 'amazon', 'siberia', 'patagonia',
+        'california', 'texas', 'florida', 'new york', 'colorado',
+        'tokyo', 'london', 'paris', 'berlin', 'sydney', 'dubai',
+        'moscow', 'beijing', 'mumbai', 'istanbul', 'cairo',
+    ]
+    # Moderate signals: need at least 2 to trigger
+    moderate_signals = [
+        'city', 'country', 'town', 'village', 'island', 'mountain',
+        'trail', 'canyon', 'valley', 'peninsula', 'coast', 'border',
+        'province', 'district', 'territory', 'gulf', 'bay',
+    ]
+    
+    has_strong = any(sig in combined_lower for sig in strong_signals)
+    has_geo_noun = any(sig in combined_lower for sig in geo_nouns)
+    moderate_count = sum(1 for sig in moderate_signals if sig in combined_lower)
+    
+    if not has_strong and not has_geo_noun and moderate_count < 2:
+        return []
+    
+    try:
+        extract_msgs = [
+            {'role': 'system', 'content': 'Extract geographic locations from the text. Return ONLY a JSON array of objects with "name" (display name) and "query" (geocoding query). If no real geographic locations exist, return []. No explanation.'},
+            {'role': 'user', 'content': f'Extract locations from:\n{combined[:1500]}'}
+        ]
+        result = agent.call_llm_sync(extract_msgs, max_tokens_override=256)
+        raw = result.get('content', '').strip()
+        # Parse JSON array from response
+        if raw.startswith('```'):
+            raw = raw.split('\n', 1)[-1] if '\n' in raw else raw[3:]
+            if raw.endswith('```'):
+                raw = raw[:-3].strip()
+        # Find the JSON array
+        start = raw.find('[')
+        end = raw.rfind(']')
+        if start >= 0 and end > start:
+            import json
+            locations = json.loads(raw[start:end+1])
+            if isinstance(locations, list):
+                return [loc for loc in locations[:3] if isinstance(loc, dict) and loc.get('query')]
+    except Exception as e:
+        logger.debug(f"[MAP] Location extraction failed: {e}")
+    return []
+
+
+def _geocode_location(query, api_key):
+    """Geocode a location query using Google Geocoding API. Returns (lat, lng, formatted_address) or None."""
+    try:
+        resp = requests.get(
+            'https://maps.googleapis.com/maps/api/geocode/json',
+            params={'address': query, 'key': api_key},
+            timeout=10
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get('results'):
+                r = data['results'][0]
+                loc = r['geometry']['location']
+                return (loc['lat'], loc['lng'], r.get('formatted_address', query))
+    except Exception as e:
+        logger.debug(f"[MAP] Geocode failed for '{query}': {e}")
+    return None
+
+
+def _build_static_map_url(locations_with_coords, api_key, width=580, height=320, accent='818cf8'):
+    """Build a Google Static Maps URL with dark styling and markers.
+    locations_with_coords: list of (lat, lng, name) tuples
+    """
+    if not locations_with_coords or not api_key:
+        return None
+    
+    # Center on first location, or auto-fit
+    base = 'https://maps.googleapis.com/maps/api/staticmap'
+    
+    # Dark map style matching our slide aesthetic
+    style_params = [
+        'style=element:geometry|color:0x0a0a12',
+        'style=element:labels.text.stroke|color:0x0a0a12',
+        'style=element:labels.text.fill|color:0x746855',
+        'style=feature:administrative.locality|element:labels.text.fill|color:0xd59563',
+        'style=feature:poi|element:labels.text.fill|color:0xd59563',
+        'style=feature:poi.park|element:geometry|color:0x121a12',
+        'style=feature:poi.park|element:labels.text.fill|color:0x447530',
+        'style=feature:road|element:geometry|color:0x15151f',
+        'style=feature:road|element:geometry.stroke|color:0x1a1a2e',
+        'style=feature:road.highway|element:geometry|color:0x1a1a2e',
+        'style=feature:road.highway|element:geometry.stroke|color:0x22223a',
+        'style=feature:transit|element:geometry|color:0x15151f',
+        'style=feature:water|element:geometry|color:0x0e1626',
+        'style=feature:water|element:labels.text.fill|color:0x515c6d',
+    ]
+    
+    # Clean accent for marker color (remove # prefix)
+    marker_color = accent.lstrip('#')[:6]
+    
+    # Build markers
+    marker_params = []
+    for i, (lat, lng, name) in enumerate(locations_with_coords[:5]):
+        label = chr(65 + i)  # A, B, C, ...
+        marker_params.append(f'markers=color:0x{marker_color}|label:{label}|{lat},{lng}')
+    
+    params = f'size={width}x{height}&scale=2&maptype=roadmap&key={api_key}'
+    
+    if len(locations_with_coords) == 1:
+        lat, lng, _ = locations_with_coords[0]
+        params += f'&center={lat},{lng}&zoom=10'
+    # else: let Google auto-fit all markers
+    
+    url = f'{base}?{params}&{"&".join(style_params)}&{"&".join(marker_params)}'
+    return url
+
+
+def _generate_map_context_inner(heading, body, accent='#818cf8'):
+    """Full pipeline: extract locations -> geocode -> build map URL.
+    Returns a string to inject into the design prompt, or empty string.
+    """
+    api_key = _get_google_maps_key()
+    if not api_key:
+        return ''
+    
+    locations = _extract_locations_via_llm(heading, body)
+    if not locations:
+        return ''
+    
+    logger.info(f"[MAP] Extracted {len(locations)} locations: {[l.get('name') for l in locations]}")
+    
+    geocoded = []
+    for loc in locations:
+        result = _geocode_location(loc['query'], api_key)
+        if result:
+            geocoded.append(result)
+            logger.info(f"[MAP] Geocoded '{loc['name']}' -> {result[0]:.4f},{result[1]:.4f} ({result[2]})")
+    
+    if not geocoded:
+        return ''
+    
+    accent_hex = accent.lstrip('#')[:6]
+    map_url = _build_static_map_url(geocoded, api_key, accent=accent_hex)
+    if not map_url:
+        return ''
+    
+    # Build context string for the LLM
+    location_list = '\n'.join(
+        f'  {chr(65+i)}) {name} ({lat:.4f}, {lng:.4f})'
+        for i, (lat, lng, name) in enumerate(geocoded)
+    )
+    
+    return f"""
+=== REAL MAP DATA AVAILABLE ===
+The following REAL map image URL is ready to embed. You MUST include it in the slide as an <img> tag.
+Map image URL (dark-styled, with location pins):
+{map_url}
+
+Locations on the map:
+{location_list}
+
+INSTRUCTIONS FOR MAP EMBEDDING:
+1. Include the map using: <img src="{map_url}" style="width:100%;border-radius:12px;margin:12px 0" alt="Map" />
+2. Add a semi-transparent overlay with location labels styled to match the slide accent color.
+3. The map should be a PROMINENT visual element, not an afterthought. Give it at least 40% of slide area.
+4. Add location name labels near or below the map with coordinates in small muted text.
+5. You can layer info cards on top of the map using position:absolute for a polished look.
+"""
+
+
+def _generate_map_context(heading, body, accent='#818cf8'):
+    """Wrapper with hard 15s timeout -- never stalls the design loop."""
+    import threading
+    result = ['']
+    def run():
+        try:
+            result[0] = _generate_map_context_inner(heading, body, accent)
+        except Exception as e:
+            logger.debug(f"[MAP] Map context generation failed: {e}")
+    t = threading.Thread(target=run, daemon=True)
+    t.start()
+    t.join(timeout=15)
+    if t.is_alive():
+        logger.warning("[MAP] Map context generation timed out (15s) -- skipping")
+        return ''
+    return result[0]
+
+
+@app.route('/api/local/slide-design', methods=['POST'])
+def api_local_slide_design():
+    """Design a single slide — takes content, returns rich HTML.
+    
+    Body: {
+        "heading": "Slide heading",
+        "body": "Slide body text with stats/bullets/quotes",
+        "slideIndex": 0,
+        "totalSlides": 8,
+        "deckTitle": "Deck title for context",
+        "deckOutline": "Slide 1: ... | Slide 2: ... (for variety awareness)",
+        "accentColor": "#818cf8"
+    }
+    Returns: { "ok": true, "html": "<div style=\"...\">...</div>" }
+    """
+    data = request.get_json(silent=True) or {}
+    heading = data.get('heading', '')
+    body = data.get('body', '')
+    slide_index = data.get('slideIndex', 0)
+    total_slides = data.get('totalSlides', 8)
+    deck_title = data.get('deckTitle', '')
+    deck_outline = data.get('deckOutline', '')
+    accent = data.get('accentColor', '#818cf8')
+    edit_instruction = data.get('editInstruction', '')
+    existing_html = data.get('existingHtml', '')
+    skip_map = data.get('skipMap', False)
+
+    if not heading and not body:
+        return jsonify({'ok': False, 'error': 'No content provided'}), 400
+
+    if 'agent' not in globals() or agent is None:
+        return jsonify({'ok': False, 'error': 'Agent not initialized'}), 503
+
+    import time as _time
+    _t0 = _time.time()
+    logger.info(f"[SLIDE_DESIGN] Starting slide {slide_index + 1}/{total_slides}: '{heading[:60]}'")
+
+    # Generate real map context if locations are detected (skip during bulk design passes)
+    map_context = ''
+    if not skip_map:
+        map_context = _generate_map_context(heading, body, accent)
+        _t1 = _time.time()
+        if map_context:
+            logger.info(f"[SLIDE_DESIGN] Map context generated in {_t1 - _t0:.1f}s")
+        else:
+            logger.debug(f"[SLIDE_DESIGN] No map context ({_t1 - _t0:.1f}s)")
+    else:
+        _t1 = _time.time()
+        logger.debug(f"[SLIDE_DESIGN] Map context skipped (bulk mode)")
+
+    design_prompt = f"""You are an elite presentation designer (Apple Keynote x Bloomberg x Figma quality).
+Design ONE slide as a single <div> with ALL styles inline. Return ONLY that HTML.
+
+=== CONTENT ===
+Heading: {heading}
+Body: {body}
+
+=== DATA CONVENTIONS IN THE BODY -- parse and visualize these: ===
+The body may contain special markers. Convert each into the appropriate visual:
+* [STAT: value | description] -> Render as a hero stat: large gradient number + small label below
+* [COMPARE: A = val | B = val | C = val] -> Render as HORIZONTAL BAR CHART with bars at proportional widths, or a 2-3 column stat grid
+* [TIMELINE: 2023 = val | 2024 = val | 2025 = val] -> Render as a TIMELINE with dots/bars showing progression, or an SVG line/bar chart
+* [FLOW: Step1 -> Step2 -> Step3] -> Render as a FLOW DIAGRAM with connected pill boxes and arrows
+* > "quote text" -- Attribution -> Render as a CINEMATIC QUOTE with large watermark quotation mark
+* Bullet points with **bold lead-ins** -> Render as an icon grid or numbered list with accent-colored indices
+If no markers are present, analyze the text for implicit data (numbers, percentages, comparisons) and visualize those.
+NEVER just render the raw marker text -- always convert it into a rich visual element.
+
+=== CONTEXT ===
+Slide {slide_index + 1} of {total_slides} in "{deck_title}"
+Outline: {deck_outline}
+Accent: {accent}
+{"THIS IS THE OPENING SLIDE -- make it CINEMATIC and DRAMATIC. Use oversized hero typography (48-72px), decorative SVG geometry (dashed circles, crosshairs, grid lines at very low opacity), a bold gradient stat or pull-quote, and generous whitespace. This slide sets the visual tone for the entire deck." if slide_index == 0 else "THIS IS THE FINAL SLIDE -- make it a strong closer with a key takeaway stat, memorable quote, or bold call-to-action visual." if slide_index == total_slides - 1 else ""}
+
+=== DESIGN SYSTEM ===
+Canvas: dark bg (#0a0a12), ~580px wide, 16:10. You own the full card interior.
+Colors: text rgba(255,255,255,0.88), secondary rgba(255,255,255,0.50), muted rgba(255,255,255,0.22), accent {accent} at 04-cc opacity.
+Fonts: system stack. Hero: 48-72px/900/-0.04em. Title: 20-28px/700. Body: 11-13px/300/1.8. Micro: 8-9px/uppercase/0.2em spacing.
+
+=== VISUAL VOCABULARY -- pick the BEST fit, adapt creatively ===
+
+A) SVG BAR CHART -- for any comparative numbers:
+<div style="display:flex;flex-direction:column;gap:8px">
+  <div style="display:flex;align-items:center;gap:10px"><span style="font-size:9px;color:rgba(255,255,255,0.4);width:60px;text-align:right">Label</span><div style="height:22px;border-radius:6px;background:linear-gradient(90deg,{accent}cc,{accent}40);width:75%"></div><span style="font-size:11px;font-weight:700;color:{accent}">75%</span></div>
+</div>
+
+B) SVG DONUT/PIE -- for proportions:
+<svg viewBox="0 0 120 120" width="120" height="120"><circle cx="60" cy="60" r="50" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="10"/><circle cx="60" cy="60" r="50" fill="none" stroke="{accent}" stroke-width="10" stroke-dasharray="220 94" stroke-linecap="round" transform="rotate(-90 60 60)"/><text x="60" y="65" text-anchor="middle" fill="white" font-size="22" font-weight="800">70%</text></svg>
+
+C) FLOW DIAGRAM -- for processes, pipelines:
+<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+  <div style="padding:8px 14px;border-radius:10px;background:{accent}12;border:1px solid {accent}20;font-size:10px;color:{accent}cc">Step 1</div>
+  <span style="font-size:16px;color:{accent}40">&#8594;</span>
+  <div style="padding:8px 14px;border-radius:10px;background:{accent}12;border:1px solid {accent}20;font-size:10px;color:{accent}cc">Step 2</div>
+  <span style="font-size:16px;color:{accent}40">&#8594;</span>
+  <div style="padding:8px 14px;border-radius:10px;background:{accent}18;border:1px solid {accent}30;font-size:10px;font-weight:700;color:{accent}">Result</div>
+</div>
+
+D) RADIAL CONCEPT MAP -- for relationships:
+<div style="position:relative;width:280px;height:200px;margin:0 auto">
+  <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);padding:12px 20px;border-radius:50%;background:{accent}18;border:2px solid {accent}40;font-size:12px;font-weight:800;color:white">Core</div>
+  <div style="position:absolute;top:10px;left:20px;padding:6px 12px;border-radius:8px;background:rgba(255,255,255,0.04);border:1px solid {accent}15;font-size:9px;color:rgba(255,255,255,0.5)">Node A</div>
+  <div style="position:absolute;top:10px;right:20px;padding:6px 12px;border-radius:8px;background:rgba(255,255,255,0.04);border:1px solid {accent}15;font-size:9px;color:rgba(255,255,255,0.5)">Node B</div>
+</div>
+
+E) STAT GRID -- for multiple data points:
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+  <div style="padding:16px;border-radius:12px;background:{accent}06;border:1px solid {accent}0c"><div style="font-size:32px;font-weight:900;letter-spacing:-0.04em;background:linear-gradient(135deg,{accent},{accent}80);-webkit-background-clip:text;-webkit-text-fill-color:transparent">42M</div><div style="font-size:8px;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:0.15em;margin-top:4px">Active Users</div></div>
+</div>
+
+F) TIMELINE -- for chronological data:
+<div style="display:flex;flex-direction:column;gap:0;padding-left:20px;border-left:2px solid {accent}20">
+  <div style="position:relative;padding:10px 0 10px 20px"><div style="position:absolute;left:-7px;top:14px;width:12px;height:12px;border-radius:50%;background:{accent};box-shadow:0 0 12px {accent}60"></div><div style="font-size:8px;color:{accent}80;text-transform:uppercase;letter-spacing:0.1em">2024</div><div style="font-size:12px;color:rgba(255,255,255,0.8);font-weight:600;margin-top:2px">Event title</div></div>
+</div>
+
+G) COMPARISON TABLE -- for A vs B:
+<div style="display:grid;grid-template-columns:1fr auto 1fr;gap:0;border-radius:12px;overflow:hidden">
+  <div style="padding:20px;background:{accent}06;text-align:center"><div style="font-size:18px;font-weight:800;color:{accent}">Option A</div></div>
+  <div style="padding:20px;display:flex;align-items:center;background:rgba(255,255,255,0.02)"><span style="font-size:10px;font-weight:800;color:rgba(255,255,255,0.2);padding:4px 8px;border-radius:6px;background:rgba(255,255,255,0.04)">VS</span></div>
+  <div style="padding:20px;background:rgba(236,72,153,0.06);text-align:center"><div style="font-size:18px;font-weight:800;color:#ec4899">Option B</div></div>
+</div>
+
+H) CINEMATIC QUOTE:
+<div style="position:relative;padding:30px 20px">
+  <div style="position:absolute;top:-10px;left:10px;font-size:120px;line-height:1;color:{accent}08;font-family:Georgia,serif">"</div>
+  <p style="font-size:20px;font-weight:300;font-style:italic;color:rgba(255,255,255,0.75);line-height:1.6;position:relative;z-index:1">Quote text here</p>
+  <div style="margin-top:12px;font-size:9px;color:{accent}60;text-transform:uppercase;letter-spacing:0.15em">-- Attribution</div>
+</div>
+
+I) GIANT HERO STAT -- for one show-stopping number:
+<div style="text-align:center;padding:20px">
+  <div style="font-size:72px;font-weight:900;letter-spacing:-0.04em;background:linear-gradient(135deg,{accent},#ec4899);-webkit-background-clip:text;-webkit-text-fill-color:transparent;line-height:1">$4.2T</div>
+  <div style="font-size:10px;color:rgba(255,255,255,0.35);text-transform:uppercase;letter-spacing:0.2em;margin-top:8px">Global Market Size by 2030</div>
+  <div style="width:60px;height:2px;background:linear-gradient(90deg,{accent}80,transparent);margin:16px auto 0"></div>
+</div>
+
+J) ICON GRID -- emoji-anchored info blocks:
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+  <div style="text-align:center;padding:14px 8px;border-radius:10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04)"><div style="font-size:28px;margin-bottom:6px">&#128300;</div><div style="font-size:10px;font-weight:600;color:rgba(255,255,255,0.7)">Research</div><div style="font-size:8px;color:rgba(255,255,255,0.3);margin-top:3px">Description</div></div>
+</div>
+
+=== RULES ===
+1. Return ONLY one <div style="...">...</div>. No markdown, no explanation, no JSON.
+2. NO class=, NO <script>, NO <style> blocks, NO external URLs.
+3. ALL styles MUST be inline style="...".
+4. EVERY slide MUST have at least one visual element (chart, diagram, SVG, stat grid, flow, icon grid). Pure text slides are FORBIDDEN.
+5. Adapt the examples above -- change values, colors, sizes to match the actual content.
+6. SVG is encouraged for charts. Inline SVG with viewBox works perfectly.
+7. Mix patterns -- e.g. a hero stat + a bar chart below, or a flow diagram + stat grid.
+8. Use CSS grid and flexbox. Create breathing room with padding/gap.
+9. Keep the content faithful to the heading/body -- don't fabricate data, but DO visualize the existing data dramatically.
+
+K) STYLIZED MAP VIEW -- for ANY content involving locations, geography, regions, travel, or place-based stories:
+<div style="position:relative;width:100%;aspect-ratio:16/10;border-radius:12px;overflow:hidden;background:linear-gradient(135deg,#0d1117,#161b22)">
+  <svg viewBox="0 0 400 250" width="100%" height="100%" style="position:absolute;inset:0">
+    <!-- Grid lines for map feel -->
+    <defs><pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(255,255,255,0.03)" stroke-width="0.5"/></pattern></defs>
+    <rect width="400" height="250" fill="url(#grid)"/>
+    <!-- Stylized region shapes (adapt to actual location) -->
+    <path d="M100,80 Q150,40 200,70 T300,90 Q320,130 280,160 T150,140 Q90,130 100,80Z" fill="{accent}08" stroke="{accent}30" stroke-width="1"/>
+    <!-- Location pin -->
+    <g transform="translate(200,100)"><circle r="4" fill="{accent}" style="filter:drop-shadow(0 0 8px {accent}60)"/><circle r="12" fill="none" stroke="{accent}40" stroke-width="1" stroke-dasharray="3 3"><animateTransform attributeName="transform" type="scale" values="1;1.5;1" dur="2s" repeatCount="indefinite"/></circle></g>
+    <!-- Label -->
+    <text x="220" y="96" fill="rgba(255,255,255,0.7)" font-size="10" font-weight="600">Location Name</text>
+    <text x="220" y="110" fill="rgba(255,255,255,0.3)" font-size="7" letter-spacing="0.1em">COORDINATES / REGION</text>
+  </svg>
+  <!-- Overlay info card -->
+  <div style="position:absolute;bottom:12px;left:12px;padding:10px 14px;border-radius:8px;background:rgba(0,0,0,0.6);backdrop-filter:blur(8px);border:1px solid {accent}15">
+    <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.85)">Place Name</div>
+    <div style="font-size:8px;color:{accent}80;margin-top:2px">Region / Country</div>
+  </div>
+</div>
+Use this map pattern whenever content mentions specific locations, cities, countries, regions, trails, routes, or geographic areas. Adapt the SVG paths, pin positions, labels, and overlay cards to match the actual locations in the content. Multiple pins for multiple locations.
+
+{map_context}
+=== EDIT INSTRUCTION ===
+{f'The user wants you to EDIT the existing slide. Their request: {edit_instruction}' + (f'\n\nCurrent HTML:\n{existing_html}' if existing_html else '') if edit_instruction else 'No edit -- design from scratch.'}"""
+
+    try:
+        messages = [
+            {'role': 'system', 'content': 'You are an expert presentation designer. Return only HTML with inline styles. No explanations.'},
+            {'role': 'user', 'content': design_prompt}
+        ]
+        _t2 = _time.time()
+        result = agent.call_llm_sync(messages, max_tokens_override=4096)
+        _t3 = _time.time()
+        html_content = result.get('content', '').strip()
+        logger.info(f"[SLIDE_DESIGN] LLM returned {len(html_content)} chars in {_t3 - _t2:.1f}s (total {_t3 - _t0:.1f}s) for slide {slide_index + 1}")
+
+        # Clean up: strip markdown fences if agent wrapped them
+        if html_content.startswith('```'):
+            html_content = html_content.split('\n', 1)[-1] if '\n' in html_content else html_content[3:]
+            if html_content.endswith('```'):
+                html_content = html_content[:-3].strip()
+
+        # Ensure it starts with a tag
+        if html_content and not html_content.startswith('<'):
+            # Try to extract HTML from the response
+            import re
+            match = re.search(r'<div[\s\S]*</div>', html_content, re.IGNORECASE)
+            if match:
+                html_content = match.group(0)
+            else:
+                logger.warning(f"[SLIDE_DESIGN] Slide {slide_index + 1} returned non-HTML content: {html_content[:200]}")
+                return jsonify({'ok': False, 'error': 'Agent did not return valid HTML'}), 500
+
+        if not html_content:
+            logger.warning(f"[SLIDE_DESIGN] Slide {slide_index + 1} returned empty content")
+            return jsonify({'ok': False, 'error': 'Empty response from LLM'}), 500
+
+        return jsonify({'ok': True, 'html': html_content})
+
+    except Exception as e:
+        logger.error(f"[SLIDE_DESIGN] Error on slide {slide_index + 1}: {e}")
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 
 # === Serve Substrate Dashboard ===
@@ -12103,6 +12592,31 @@ def api_cost_reset():
         return jsonify({"status": "success", "message": "Session cost stats reset"})
     except Exception as e:
         logger.error(f"Error resetting cost stats: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/api/cost/log', methods=['GET'])
+def api_cost_log():
+    """Get the per-call token usage log (most recent N calls)."""
+    try:
+        from src.infra.cost_tracker import tracker as _cost_tracker
+        last_n = request.args.get('n', 100, type=int)
+        log = _cost_tracker.get_call_log(last_n=min(last_n, 500))
+        return jsonify({"status": "success", "log": log, "count": len(log)})
+    except Exception as e:
+        logger.error(f"Error getting cost log: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/api/cost/conversations', methods=['GET'])
+def api_cost_conversations():
+    """Get token usage grouped by conversation (per-query breakdown)."""
+    try:
+        from src.infra.cost_tracker import tracker as _cost_tracker
+        conversations = _cost_tracker.get_conversation_breakdown()
+        return jsonify({"status": "success", "conversations": conversations, "count": len(conversations)})
+    except Exception as e:
+        logger.error(f"Error getting conversation breakdown: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
 

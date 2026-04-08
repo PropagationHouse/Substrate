@@ -15,6 +15,30 @@ import {
 } from 'recharts';
 
 // ─── Types ────────────────────────────────────────────────────────
+interface CallRecord {
+  ts: number;
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  costUsd: number;
+  conversationId: string;
+  isEstimated: boolean;
+}
+
+interface ConversationBreakdown {
+  conversationId: string;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  costUsd: number;
+  callCount: number;
+  firstCall: number;
+  lastCall: number;
+  models: string[];
+  estimatedCalls: number;
+}
+
 interface AgentStats {
   ok: boolean;
   uptime?: {
@@ -43,6 +67,8 @@ interface AgentStats {
       firstSeen: number;
     };
   };
+  callLog?: CallRecord[];
+  conversations?: ConversationBreakdown[];
   eventBus?: {
     totalEmitted?: number;
     subscriberCount?: number;
@@ -238,69 +264,169 @@ function getTimelineColor(name: string, failed?: boolean): string {
   return TIMELINE_COLORS.default;
 }
 
-// Horizontal tool summary strip — replaces vertical bar chart
-function ToolSummaryStrip({ byTool }: { byTool: Record<string, number> }) {
-  const sorted = useMemo(() =>
+// ─── Per-Conversation Token Log ──────────────────────────────────
+function ConversationLog({ conversations, callLog }: { conversations: ConversationBreakdown[]; callLog?: CallRecord[] }) {
+  const [expanded, setExpanded] = useState<string | null>(null);
+
+  if (!conversations || conversations.length === 0) {
+    return <div className="text-[10px] text-white/25 py-3 text-center">No conversation data yet</div>;
+  }
+
+  const maxTokens = Math.max(1, ...conversations.map(c => c.totalTokens));
+
+  return (
+    <div className="mt-2 space-y-1">
+      <div className="text-[10px] text-white/25 mb-2">Per-Query Token Usage (this session)</div>
+      <div className="max-h-[280px] overflow-y-auto space-y-1 scrollbar-thin">
+        {conversations.map((conv) => {
+          const isExpanded = expanded === conv.conversationId;
+          const pct = Math.max(2, (conv.totalTokens / maxTokens) * 100);
+          const timeStr = new Date(conv.lastCall * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+          const hasEstimated = conv.estimatedCalls > 0;
+          const inputRatio = conv.totalTokens > 0 ? Math.round((conv.inputTokens / conv.totalTokens) * 100) : 0;
+
+          return (
+            <div key={conv.conversationId} className="flex flex-col">
+              <button
+                onClick={() => setExpanded(isExpanded ? null : conv.conversationId)}
+                className="flex items-center gap-2 text-[10px] w-full hover:bg-white/[0.03] rounded px-1 py-1 transition-colors cursor-pointer group"
+              >
+                <span className="text-white/20 font-mono w-14 shrink-0 text-left">{timeStr}</span>
+                <div className="flex-1 h-2 bg-background border border-border/60 overflow-hidden rounded-sm relative">
+                  {/* Input portion */}
+                  <div
+                    className="absolute inset-y-0 left-0 bg-[#818cf8] transition-all duration-500"
+                    style={{ width: `${pct * inputRatio / 100}%` }}
+                  />
+                  {/* Output portion */}
+                  <div
+                    className="absolute inset-y-0 bg-[#e879f9] transition-all duration-500"
+                    style={{ left: `${pct * inputRatio / 100}%`, width: `${pct * (100 - inputRatio) / 100}%` }}
+                  />
+                </div>
+                <span className="text-white/50 font-mono w-12 text-right shrink-0">{formatTokens(conv.totalTokens)}</span>
+                {hasEstimated && (
+                  <span className="text-[8px] text-amber-400/50 shrink-0" title="Some calls used estimated token counts">~</span>
+                )}
+                <span
+                  className={`text-[9px] transition-transform duration-150 ${isExpanded ? 'rotate-180' : ''} text-white/20 group-hover:text-white/40`}
+                >▼</span>
+              </button>
+
+              {isExpanded && (
+                <div className="pl-16 pr-1 pb-1.5 pt-0.5 flex flex-col gap-1 border-l-2 border-white/[0.06] ml-[7px]">
+                  <div className="flex gap-3 text-[10px] text-white/40 flex-wrap">
+                    <span>↑ <span className="text-[#818cf8]">{formatTokens(conv.inputTokens)}</span> in</span>
+                    <span>↓ <span className="text-[#e879f9]">{formatTokens(conv.outputTokens)}</span> out</span>
+                    <span>💬 <span className="text-white/60">{conv.callCount}</span> calls</span>
+                    {conv.costUsd > 0 && <span>$ <span className="text-white/60">{formatCost(conv.costUsd)}</span></span>}
+                  </div>
+                  <div className="flex gap-2 text-[9px] text-white/25 flex-wrap">
+                    {conv.models.map(m => (
+                      <span key={m} className="px-1.5 py-0.5 rounded bg-white/[0.04] text-white/35">{m}</span>
+                    ))}
+                    {hasEstimated && (
+                      <span className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400/50">
+                        {conv.estimatedCalls}/{conv.callCount} estimated
+                      </span>
+                    )}
+                  </div>
+                  {/* Individual calls for this conversation */}
+                  {callLog && callLog.filter(c => c.conversationId === conv.conversationId).length > 1 && (
+                    <div className="mt-1 space-y-0.5">
+                      {callLog
+                        .filter(c => c.conversationId === conv.conversationId)
+                        .map((call, i) => (
+                          <div key={i} className="flex items-center gap-2 text-[9px] text-white/25">
+                            <span className="font-mono w-14">
+                              {new Date(call.ts * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                            </span>
+                            <span className="text-[#818cf8]">↑{formatTokens(call.inputTokens)}</span>
+                            <span className="text-[#e879f9]">↓{formatTokens(call.outputTokens)}</span>
+                            <span className="text-white/20 truncate flex-1">{call.model}</span>
+                            {call.isEstimated && <span className="text-amber-400/40">~</span>}
+                          </div>
+                        ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// Donut pie chart for tool breakdown
+function ToolBreakdownPie({ byTool }: { byTool: Record<string, number> }) {
+  const pieData = useMemo(() =>
     Object.entries(byTool)
       .sort(([, a], [, b]) => b - a)
-      .slice(0, 20),
+      .slice(0, 12)
+      .map(([name, count], i) => ({
+        name,
+        value: count,
+        fill: getToolColor(name, i),
+      })),
     [byTool]
   );
-  const maxCount = sorted.length > 0 ? sorted[0][1] : 1;
-  const [hovered, setHovered] = useState<string | null>(null);
+  const total = pieData.reduce((s, d) => s + d.value, 0);
 
   return (
     <div className="mt-2">
       <div className="text-[10px] text-white/25 mb-2">Tool Breakdown</div>
       <div className="relative">
-        <div className="absolute left-0 top-0 bottom-0 w-4 z-10 pointer-events-none"
-          style={{ background: 'linear-gradient(to right, rgba(10,10,20,0.8), transparent)' }} />
-        <div className="absolute right-0 top-0 bottom-0 w-4 z-10 pointer-events-none"
-          style={{ background: 'linear-gradient(to left, rgba(10,10,20,0.8), transparent)' }} />
-        <div className="overflow-x-auto scrollbar-none px-2 py-1">
-          <div className="flex items-end gap-1.5 min-w-max" style={{ height: 64 }}>
-            {sorted.map(([name, count]) => {
-              const color = getTimelineColor(name);
-              const ratio = count / maxCount;
-              const barH = Math.max(8, ratio * 48);
-              const isHov = hovered === name;
-              return (
-                <div
-                  key={name}
-                  className="relative flex flex-col items-center"
-                  onMouseEnter={() => setHovered(name)}
-                  onMouseLeave={() => setHovered(null)}
-                  style={{ minWidth: 28 }}
-                >
-                  {/* Hover tooltip */}
-                  {isHov && (
-                    <div className="absolute bottom-full mb-1.5 z-20 px-2 py-1 rounded-lg whitespace-nowrap text-[10px] border border-white/10 shadow-xl pointer-events-none"
-                      style={{ background: 'rgba(15,15,30,0.95)', backdropFilter: 'blur(12px)' }}>
-                      <div className="font-medium text-white/80">{name}</div>
-                      <div className="text-white/40">{count} call{count !== 1 ? 's' : ''}</div>
-                    </div>
-                  )}
-                  {/* Bar */}
-                  <div
-                    className="rounded-t-md transition-all duration-300 cursor-pointer"
-                    style={{
-                      width: isHov ? 22 : 16,
-                      height: isHov ? barH + 6 : barH,
-                      backgroundColor: color,
-                      boxShadow: isHov
-                        ? `0 0 14px ${color}60, 0 0 4px ${color}40, inset 0 1px 0 rgba(255,255,255,0.15)`
-                        : `0 0 6px ${color}30`,
-                      transform: isHov ? 'translateY(-3px)' : 'none',
-                    }}
-                  />
-                  {/* Label */}
-                  <div className="text-[7px] text-white/25 mt-1 font-mono truncate text-center" style={{ maxWidth: 36 }}>
-                    {name.length > 6 ? name.slice(0, 5) + '…' : name}
-                  </div>
-                </div>
-              );
-            })}
+        {/* Ambient glow */}
+        <div className="absolute inset-0 rounded-xl opacity-30 blur-2xl pointer-events-none"
+          style={{ background: 'radial-gradient(ellipse at 50% 50%, rgba(249,115,22,0.15) 0%, rgba(232,121,249,0.08) 50%, transparent 80%)' }} />
+        <div className="relative">
+          <ResponsiveContainer width="100%" height={150}>
+            <PieChart>
+              <defs>
+                {pieData.map((d, i) => (
+                  <filter key={i} id={`tool-glow-${i}`}>
+                    <feGaussianBlur stdDeviation="2.5" result="blur" />
+                    <feFlood floodColor={d.fill} floodOpacity="0.5" />
+                    <feComposite in2="blur" operator="in" />
+                    <feMerge><feMergeNode /><feMergeNode in="SourceGraphic" /></feMerge>
+                  </filter>
+                ))}
+              </defs>
+              <Pie
+                data={pieData}
+                cx="50%"
+                cy="50%"
+                innerRadius={32}
+                outerRadius={55}
+                paddingAngle={2}
+                dataKey="value"
+                stroke="none"
+              >
+                {pieData.map((d, i) => (
+                  <Cell key={i} fill={d.fill} style={{ filter: `url(#tool-glow-${i})` }} />
+                ))}
+              </Pie>
+              <Tooltip content={<ChartTooltip />} />
+            </PieChart>
+          </ResponsiveContainer>
+          {/* Center label */}
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ top: 0, bottom: 0 }}>
+            <div className="text-center">
+              <div className="text-sm font-bold text-white/80">{total}</div>
+              <div className="text-[8px] text-white/30">calls</div>
+            </div>
           </div>
+        </div>
+        {/* Legend */}
+        <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1 px-1 justify-center">
+          {pieData.slice(0, 8).map((d) => (
+            <span key={d.name} className="flex items-center gap-1 text-[8px] text-white/35">
+              <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: d.fill, boxShadow: `0 0 4px ${d.fill}50` }} />
+              {d.name} ({d.value})
+            </span>
+          ))}
         </div>
       </div>
     </div>
@@ -345,8 +471,8 @@ function ToolTimeline({ events }: { events: ToolEvent[] }) {
 
         <div
           ref={scrollRef}
-          className="overflow-x-auto scrollbar-none py-2 px-3"
-          style={{ scrollBehavior: 'smooth' }}
+          className="overflow-x-auto scrollbar-none pt-8 pb-2 px-3"
+          style={{ scrollBehavior: 'smooth', overflowX: 'auto', overflowY: 'visible' }}
         >
           <div className="flex items-end gap-0.5 min-w-max relative">
             {/* Timeline rail */}
@@ -375,10 +501,11 @@ function ToolTimeline({ events }: { events: ToolEvent[] }) {
                         className="relative flex flex-col items-center"
                         onMouseEnter={() => setHoveredIdx(ev.idx)}
                         onMouseLeave={() => setHoveredIdx(null)}
+                        style={{ overflow: 'visible' }}
                       >
                         {/* Tooltip */}
                         {isHovered && (
-                          <div className="absolute bottom-full mb-2 z-20 px-2.5 py-1.5 rounded-lg whitespace-nowrap text-[10px] border border-white/10 shadow-xl pointer-events-none"
+                          <div className="absolute bottom-full mb-2 z-30 px-2.5 py-1.5 rounded-lg whitespace-nowrap text-[10px] border border-white/10 shadow-xl pointer-events-none"
                             style={{ background: 'rgba(12,12,28,0.96)', backdropFilter: 'blur(16px)' }}>
                             <div className="font-semibold text-white/90" style={{ color }}>{name}</div>
                             <div className="text-white/35 text-[9px] mt-0.5">
@@ -430,6 +557,109 @@ function ToolTimeline({ events }: { events: ToolEvent[] }) {
             {label}
           </span>
         ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Subagent Spawn Timeline (Horizontal) ───────────────────────
+function SubagentTimeline({ events }: { events: ToolEvent[] }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
+
+  const grouped = useMemo(() => {
+    const groups: { label: string; events: (ToolEvent & { idx: number })[] }[] = [];
+    let currentLabel = '';
+    events.forEach((ev, idx) => {
+      const d = new Date(typeof ev.ts === 'number' ? ev.ts * 1000 : ev.ts);
+      const mins = `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+      if (mins !== currentLabel) {
+        currentLabel = mins;
+        groups.push({ label: mins, events: [] });
+      }
+      groups[groups.length - 1].events.push({ ...ev, idx });
+    });
+    return groups;
+  }, [events]);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollLeft = scrollRef.current.scrollWidth;
+    }
+  }, [events.length]);
+
+  return (
+    <div className="mt-2">
+      <div className="text-[10px] text-white/25 mb-2">Spawn History</div>
+      <div className="relative">
+        <div className="absolute left-0 top-0 bottom-0 w-6 z-10 pointer-events-none"
+          style={{ background: 'linear-gradient(to right, rgba(10,10,20,0.9), transparent)' }} />
+        <div className="absolute right-0 top-0 bottom-0 w-6 z-10 pointer-events-none"
+          style={{ background: 'linear-gradient(to left, rgba(10,10,20,0.9), transparent)' }} />
+
+        <div
+          ref={scrollRef}
+          className="overflow-x-auto scrollbar-none py-2 px-3"
+          style={{ scrollBehavior: 'smooth' }}
+        >
+          <div className="flex items-end gap-0.5 min-w-max relative">
+            {/* Timeline rail */}
+            <div className="absolute bottom-[11px] left-0 right-0 h-px" style={{
+              background: 'linear-gradient(90deg, transparent, rgba(232,121,249,0.12) 10%, rgba(232,121,249,0.12) 90%, transparent)',
+            }} />
+
+            {grouped.map((group, gi) => (
+              <div key={gi} className="flex flex-col items-center" style={{ marginLeft: gi > 0 ? 6 : 0 }}>
+                <div className="text-[7px] text-white/20 mb-1 font-mono tracking-wide">{group.label}</div>
+                <div className="flex items-end gap-[3px]">
+                  {group.events.map((ev) => {
+                    const name = (ev.data?.name as string) || 'subagent';
+                    const status = (ev.data?.status as string) || '';
+                    const failed = status === 'failed' || ev.event === 'subagent_failed';
+                    const color = failed ? '#fb7185' : '#c084fc';
+                    const isHovered = hoveredIdx === ev.idx;
+                    const recency = 1 - (ev.idx / events.length);
+                    const size = 5 + recency * 7;
+
+                    return (
+                      <div
+                        key={ev.idx}
+                        className="relative flex flex-col items-center"
+                        onMouseEnter={() => setHoveredIdx(ev.idx)}
+                        onMouseLeave={() => setHoveredIdx(null)}
+                      >
+                        {isHovered && (
+                          <div className="absolute bottom-full mb-2 z-20 px-2.5 py-1.5 rounded-lg whitespace-nowrap text-[10px] border border-white/10 shadow-xl pointer-events-none"
+                            style={{ background: 'rgba(12,12,28,0.96)', backdropFilter: 'blur(16px)' }}>
+                            <div className="font-semibold text-white/90" style={{ color }}>{name}</div>
+                            <div className="text-white/35 text-[9px] mt-0.5">
+                              {new Date(typeof ev.ts === 'number' ? ev.ts * 1000 : ev.ts).toLocaleTimeString()}
+                              {failed && <span className="text-red-400 ml-1.5 font-medium">FAILED</span>}
+                            </div>
+                          </div>
+                        )}
+                        <div
+                          className="rounded-full cursor-pointer transition-all duration-200"
+                          style={{
+                            width: isHovered ? 14 : size,
+                            height: isHovered ? 14 : size,
+                            backgroundColor: color,
+                            boxShadow: isHovered
+                              ? `0 0 16px ${color}80, 0 0 6px ${color}60, inset 0 0 2px rgba(255,255,255,0.2)`
+                              : `0 0 5px ${color}35`,
+                            border: failed ? '1.5px solid rgba(251,113,133,0.6)' : '0.5px solid rgba(255,255,255,0.08)',
+                            transform: isHovered ? 'translateY(-3px) scale(1.1)' : 'none',
+                          }}
+                        />
+                        <div className="w-px h-1.5" style={{ background: `${color}25` }} />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -547,6 +777,18 @@ export function AgentStatsTab() {
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
+  // Read settings from localStorage (updated when settings panel saves)
+  const refreshInterval = useMemo(() => {
+    try { return parseInt(localStorage.getItem('substrate:stats-refresh') || '5000', 10); } catch { return 5000; }
+  }, [settingsOpen]); // re-read when settings panel toggles
+  const maxTimelineEvents = useMemo(() => {
+    try { return parseInt(localStorage.getItem('substrate:stats-maxEvents') || '60', 10); } catch { return 60; }
+  }, [settingsOpen]);
+  // @ts-expect-error — reserved for future compact layout toggle
+  const _compactMode = useMemo(() => {
+    try { return localStorage.getItem('substrate:stats-compact') === 'true'; } catch { return false; }
+  }, [settingsOpen]);
+
   const fetchStats = useCallback(async () => {
     try {
       const r = await fetch('/api/agent/stats');
@@ -564,9 +806,9 @@ export function AgentStatsTab() {
   useEffect(() => {
     fetchStats();
     if (!autoRefresh) return;
-    const iv = setInterval(fetchStats, 5000);
+    const iv = setInterval(fetchStats, refreshInterval);
     return () => clearInterval(iv);
-  }, [fetchStats, autoRefresh]);
+  }, [fetchStats, autoRefresh, refreshInterval]);
 
   // ─── Derived data ────────────────────────────────────────────
   const sessionCost = stats?.cost?.session;
@@ -574,7 +816,8 @@ export function AgentStatsTab() {
   const toolSummary = stats?.toolSummary;
   const subagents = stats?.subagentHistory;
 
-  const toolChartData = useMemo(() => {
+  // @ts-expect-error — reserved for future tool chart visualization
+  const _toolChartData = useMemo(() => {
     if (!toolSummary?.byTool) return [];
     return Object.entries(toolSummary.byTool)
       .sort(([, a], [, b]) => b - a)
@@ -820,7 +1063,7 @@ export function AgentStatsTab() {
           )}
         </div>
 
-        {/* Session cost hero — glowing cost display */}
+        {/* Session cost hero — glowing cost display with reset */}
         {sessionCost && (sessionCost.costUsd > 0 || sessionCost.callCount > 0) && (
           <div className="mt-3 relative overflow-hidden rounded-xl border border-indigo-400/10">
             <div className="absolute inset-0 opacity-50 pointer-events-none"
@@ -845,9 +1088,23 @@ export function AgentStatsTab() {
                   <div className="text-[10px] text-white/35">session cost · {sessionCost.callCount} calls</div>
                 </div>
               </div>
-              <div className="text-right">
-                <div className="text-sm font-semibold text-white/70">{formatTokens(sessionCost.totalTokens)}</div>
-                <div className="text-[10px] text-white/30">total tokens</div>
+              <div className="flex items-center gap-3">
+                <div className="text-right">
+                  <div className="text-sm font-semibold text-white/70">{formatTokens(sessionCost.totalTokens)}</div>
+                  <div className="text-[10px] text-white/30">total tokens</div>
+                </div>
+                <button
+                  onClick={async () => {
+                    try {
+                      const r = await fetch('/api/cost/reset', { method: 'POST' });
+                      if (r.ok) fetchStats();
+                    } catch { /* ignore */ }
+                  }}
+                  className="w-6 h-6 rounded-md flex items-center justify-center text-white/20 hover:text-red-400/70 hover:bg-red-500/[0.08] border border-transparent hover:border-red-400/15 transition-all"
+                  title="Reset session cost counters"
+                >
+                  <RefreshCw size={10} />
+                </button>
               </div>
             </div>
           </div>
@@ -859,9 +1116,17 @@ export function AgentStatsTab() {
             background: 'linear-gradient(135deg, rgba(255,255,255,0.02) 0%, rgba(129,140,248,0.03) 100%)',
           }}>
             <div className="text-[10px] text-white/25 mb-1.5">All-Time Cumulative</div>
-            <div className="grid grid-cols-4 gap-2 text-[10px]">
+            <div className="grid grid-cols-3 gap-2 text-[10px]">
               <div>
-                <div className="text-white/30">Tokens</div>
+                <div className="text-white/30">↑ Input</div>
+                <div className="text-[#818cf8]/80 font-medium">{formatTokens(cumulativeCost.inputTokens || 0)}</div>
+              </div>
+              <div>
+                <div className="text-white/30">↓ Output</div>
+                <div className="text-[#e879f9]/80 font-medium">{formatTokens(cumulativeCost.outputTokens || 0)}</div>
+              </div>
+              <div>
+                <div className="text-white/30">Total</div>
                 <div className="text-white/70 font-medium">{formatTokens(cumulativeCost.totalTokens)}</div>
               </div>
               <div>
@@ -873,7 +1138,7 @@ export function AgentStatsTab() {
                 <div className="text-white/70 font-medium">{cumulativeCost.callCount.toLocaleString()}</div>
               </div>
               <div>
-                <div className="text-white/30">First Seen</div>
+                <div className="text-white/30">Since</div>
                 <div className="text-white/70 font-medium">
                   {cumulativeCost.firstSeen ? new Date(cumulativeCost.firstSeen * 1000).toLocaleDateString() : '—'}
                 </div>
@@ -881,20 +1146,25 @@ export function AgentStatsTab() {
             </div>
           </div>
         )}
+
+        {/* Per-conversation breakdown */}
+        {(stats?.conversations?.length || 0) > 0 && (
+          <ConversationLog conversations={stats!.conversations!} callLog={stats?.callLog} />
+        )}
       </Section>
 
       {/* Tool Usage section */}
       <Section title="Tool Usage" icon={Wrench} color="#f97316" badge={toolSummary?.totalCalls}>
         {/* Horizontal tool summary strip */}
         {toolSummary?.byTool && Object.keys(toolSummary.byTool).length > 0 ? (
-          <ToolSummaryStrip byTool={toolSummary.byTool} />
+          <ToolBreakdownPie byTool={toolSummary.byTool} />
         ) : (
           <div className="text-[10px] text-white/25 py-4 text-center">No tool calls recorded</div>
         )}
 
         {/* Horizontal event timeline */}
         {(stats?.toolHistory?.length || 0) > 0 && (
-          <ToolTimeline events={stats!.toolHistory!.slice(0, 60)} />
+          <ToolTimeline events={stats!.toolHistory!.slice(0, maxTimelineEvents)} />
         )}
 
         {/* Quick stats row */}
@@ -960,19 +1230,9 @@ export function AgentStatsTab() {
           <div className="text-[10px] text-white/25 py-3 text-center mt-1">No subagent activity</div>
         )}
 
-        {/* Subagent spawn history */}
+        {/* Subagent spawn history — horizontal timeline */}
         {(subagents?.spawned?.length || 0) > 0 && (
-          <div className="mt-2">
-            <div className="text-[10px] text-white/25 mb-1">Spawn History</div>
-            <div className="max-h-[120px] overflow-y-auto space-y-0.5">
-              {subagents!.spawned.slice(0, 20).map((ev, i) => (
-                <div key={i} className="flex items-center gap-2 text-[10px] py-0.5 px-1 rounded hover:bg-white/[0.02]">
-                  <span className="text-white/20 font-mono w-[60px] shrink-0">{formatTime(ev.ts)}</span>
-                  <span className="text-purple-300/60 truncate">{(ev.data?.name as string) || 'subagent'}</span>
-                </div>
-              ))}
-            </div>
-          </div>
+          <SubagentTimeline events={subagents!.spawned.slice(0, 40) as ToolEvent[]} />
         )}
       </Section>
 
