@@ -6754,30 +6754,47 @@ class ChatAgent:
             except Exception as e:
                 err_str = str(e).lower()
                 
-                # Classify the error
+                # Classify the error — extract HTTP status if present
                 is_context_overflow = any(phrase in err_str for phrase in [
                     'context length', 'context_length', 'too long', 'max_tokens',
                     'maximum context', 'token limit', 'context window', 'prompt is too long',
                     'request too large', 'content too large', 'input too long'
                 ])
-                is_retryable = any(phrase in err_str for phrase in [
-                    '429', 'rate limit', 'rate_limit', 'overloaded', 'capacity',
-                    '500', '502', '503', 'server error', 'internal error',
-                    'timeout', 'timed out', 'connection', 'temporarily'
-                ])
-                is_auth_error = any(phrase in err_str for phrase in [
-                    '401', 'unauthorized', 'api key', 'api_key', 'forbidden', '403'
-                ])
+                # Extract leading HTTP status code from error string (e.g. "Gemini request failed: 429 ...")
+                import re as _re
+                _status_match = _re.search(r'\b(4\d{2}|5\d{2})\b', err_str[:80])
+                _http_status = int(_status_match.group(1)) if _status_match else 0
+                is_retryable = (
+                    _http_status in (429, 500, 502, 503, 529) or
+                    any(phrase in err_str for phrase in [
+                        'rate limit', 'rate_limit', 'overloaded', 'capacity',
+                        'timeout', 'timed out', 'connection', 'temporarily'
+                    ])
+                )
+                # 400 = bad request (schema/format issue) — never retryable
+                is_bad_request = _http_status == 400
+                is_auth_error = (
+                    _http_status in (401, 403) or
+                    any(phrase in err_str for phrase in [
+                        'unauthorized', 'api key', 'api_key', 'forbidden'
+                    ])
+                )
                 
                 # Context overflow — return immediately with special marker so main loop can compact
                 if is_context_overflow:
                     logger.warning(f"[TOOLS] Context overflow detected: {str(e)[:200]}")
                     return {"content": "", "tool_calls": [], "_error_type": "context_overflow"}
                 
-                # Auth/not-found errors — not retryable
-                if is_auth_error or ('404' in err_str and 'not found' in err_str):
-                    logger.error(f"[TOOLS] Non-retryable error: {e}")
-                    hint = "There's an authentication issue with the API key." if is_auth_error else "The requested API endpoint wasn't found."
+                # Auth/not-found/bad-request errors — not retryable
+                if is_auth_error or is_bad_request or _http_status == 404:
+                    logger.error(f"[TOOLS] Non-retryable error (HTTP {_http_status}): {str(e)[:300]}")
+                    if is_auth_error:
+                        hint = "There's an authentication issue with the API key. Please check your API key in Settings."
+                    elif is_bad_request:
+                        hint = "The API rejected this request (bad format). This is a bug — please report it."
+                        logger.error(f"[TOOLS] Bad request body sent to API. Full error: {str(e)[:1000]}")
+                    else:
+                        hint = "The requested API endpoint wasn't found. Check your model selection."
                     return {"content": hint, "tool_calls": []}
                 
                 # Retryable errors — backoff and retry
@@ -7040,12 +7057,20 @@ class ChatAgent:
         # Convert tools to Gemini format
         gemini_tools = []
         if tools:
+            def _sanitize_schema(obj):
+                """Recursively strip fields Gemini rejects (additionalProperties, $schema, default, etc.)."""
+                if isinstance(obj, dict):
+                    _REJECT = {'additionalProperties', '$schema', 'default', 'examples', 'title'}
+                    return {k: _sanitize_schema(v) for k, v in obj.items() if k not in _REJECT}
+                if isinstance(obj, list):
+                    return [_sanitize_schema(i) for i in obj]
+                return obj
+
             function_declarations = []
             for tool in tools:
                 func = tool.get('function', {})
                 params = func.get('parameters', {'type': 'object', 'properties': {}})
-                # Sanitize schema: Gemini rejects additionalProperties and other non-standard fields
-                params = {k: v for k, v in params.items() if k not in ('additionalProperties',)}
+                params = _sanitize_schema(params)
                 function_declarations.append({
                     'name': func.get('name'),
                     'description': func.get('description', ''),
@@ -8622,12 +8647,14 @@ class ChatAgent:
             clean_msg = "A tool call had a formatting issue — retrying."
         elif '429' in el or 'rate limit' in el:
             clean_msg = "Got rate-limited by the API. Give me a moment."
-        elif '401' in el or 'unauthorized' in el or 'missing api key' in el or 'missing' in el and 'key' in el:
+        elif '401' in el or 'unauthorized' in el or 'missing api key' in el or ('missing' in el and 'key' in el):
             clean_msg = "There's an API key issue — check your credentials in settings."
         elif 'timeout' in el:
             clean_msg = "The request timed out. Try again in a moment."
-        elif '500' in el or '503' in el or 'server error' in el:
+        elif any(f'failed: {code}' in el for code in ('500', '502', '503')) or 'server error' in el:
             clean_msg = "The API service is temporarily down. I'll retry shortly."
+        elif 'failed: 400' in el:
+            clean_msg = "The API rejected the request format. This may be a compatibility issue with your model."
         elif 'request failed' in el:
             clean_msg = "The API request didn't go through. Let me try again."
         else:
