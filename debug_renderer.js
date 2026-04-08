@@ -612,6 +612,146 @@ document.addEventListener('DOMContentLoaded', function() {
             overflow: auto !important;
         }
 
+        /* === Rich Message Card (structured research responses) === */
+        .rich-card {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .rich-card .rich-preamble {
+            font-size: 13px;
+            line-height: 1.65;
+            color: rgba(255,255,255,0.75);
+        }
+        .rich-card .rich-section-header {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 10px;
+            color: rgba(99,102,241,0.5);
+            margin-bottom: 2px;
+        }
+        .rich-card .rich-section-header button {
+            background: none;
+            border: none;
+            color: rgba(99,102,241,0.4);
+            cursor: pointer;
+            font-size: 10px;
+            padding: 0;
+            transition: color 0.2s;
+        }
+        .rich-card .rich-section-header button:hover {
+            color: rgba(99,102,241,0.7);
+        }
+        .rich-section {
+            border-left: 2px solid rgba(99,102,241,0.15);
+            padding-left: 12px;
+            padding-top: 2px;
+            padding-bottom: 2px;
+        }
+        .rich-section .rich-section-toggle {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            user-select: none;
+            width: 100%;
+            background: none;
+            border: none;
+            padding: 2px 0;
+            text-align: left;
+        }
+        .rich-section .rich-section-toggle:hover .rich-section-title {
+            color: rgba(255,255,255,0.85);
+        }
+        .rich-section .rich-section-chevron {
+            font-size: 8px;
+            color: rgba(99,102,241,0.35);
+            transition: transform 0.2s;
+            flex-shrink: 0;
+        }
+        .rich-section .rich-section-chevron.expanded {
+            transform: rotate(90deg);
+        }
+        .rich-section .rich-section-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: rgba(255,255,255,0.7);
+            transition: color 0.2s;
+        }
+        .rich-section .rich-section-body {
+            margin-top: 6px;
+            margin-left: 16px;
+            font-size: 12.5px;
+            line-height: 1.65;
+            color: rgba(255,255,255,0.6);
+        }
+        .rich-section .rich-section-body.collapsed {
+            display: none;
+        }
+        .rich-sources {
+            padding-top: 6px;
+            border-top: 1px solid rgba(255,255,255,0.05);
+        }
+        .rich-sources .rich-sources-label {
+            font-size: 9px;
+            color: rgba(255,255,255,0.25);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+        .rich-sources .rich-source-pills {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+        }
+        .rich-source-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            border-radius: 5px;
+            font-size: 10px;
+            background: rgba(0,180,220,0.06);
+            border: 1px solid rgba(0,180,220,0.12);
+            color: rgba(100,200,240,0.6);
+            text-decoration: none;
+            transition: all 0.2s;
+            max-width: 160px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .rich-source-pill:hover {
+            color: rgba(100,200,240,0.9);
+            background: rgba(0,180,220,0.12);
+            border-color: rgba(0,180,220,0.25);
+        }
+        .rich-stats {
+            display: flex;
+            gap: 12px;
+            font-size: 9px;
+            color: rgba(255,255,255,0.18);
+        }
+        .rich-copy-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 8px;
+            border-radius: 5px;
+            font-size: 10px;
+            color: rgba(255,255,255,0.25);
+            background: none;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .rich-copy-btn:hover {
+            color: rgba(255,255,255,0.6);
+            background: rgba(255,255,255,0.06);
+        }
+
         /* === Highlight.js overrides for dark theme === */
         pre code.hljs {
             background: transparent !important;
@@ -783,6 +923,155 @@ document.addEventListener('DOMContentLoaded', function() {
     // Pending post-render tasks (mermaid, chart, katex) collected during formatText
     let _pendingRenders = [];
     
+    // === Rich Message Card Renderer ===
+    // Mirrors dashboard's RichMessageCard: parses structured responses into
+    // collapsible sections, source URL pills, stats footer, copy button.
+    // Returns HTML string if the message is "rich enough", or null to fall back to formatText.
+    function renderRichMessage(rawText) {
+        if (!rawText || rawText.length < 200) return null;
+
+        // Extract source URLs
+        var sourceUrls = [];
+        var seenUrls = {};
+        // Markdown links [label](url)
+        var mdLinkRe = /\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g;
+        var m;
+        while ((m = mdLinkRe.exec(rawText)) !== null) {
+            if (!seenUrls[m[2]]) { seenUrls[m[2]] = true; sourceUrls.push({ url: m[2], label: m[1].slice(0, 40) }); }
+        }
+        // Bare URLs
+        var bareRe = /(?<!\()https?:\/\/[^\s)<>\]]+/g;
+        while ((m = bareRe.exec(rawText)) !== null) {
+            var url = m[0].replace(/[.,;:!?]+$/, '');
+            if (!seenUrls[url]) {
+                seenUrls[url] = true;
+                try { var host = new URL(url).hostname.replace(/^www\./, ''); sourceUrls.push({ url: url, label: host }); }
+                catch(e) { sourceUrls.push({ url: url, label: url.slice(0, 35) }); }
+            }
+        }
+
+        // Count code blocks and list items
+        var codeBlockCount = Math.floor((rawText.match(/```/g) || []).length / 2);
+        var listItemCount = (rawText.match(/^[-*+] |^\d+\. /gm) || []).length;
+
+        // Extract code blocks first to avoid misidentifying headings inside them
+        var codeBlockStore = [];
+        var textForParsing = rawText.replace(/```[\w#+]*?\n[\s\S]*?```/g, function(match) {
+            var idx = codeBlockStore.length;
+            codeBlockStore.push(match);
+            return '\x00CODEBLOCK' + idx + '\x00';
+        });
+
+        // Split into sections by headings
+        var lines = textForParsing.split('\n');
+        var sections = [];
+        var preambleLines = [];
+        var currentHeading = '';
+        var currentLevel = 2;
+        var currentBody = [];
+        var foundFirstHeading = false;
+
+        for (var i = 0; i < lines.length; i++) {
+            var line = lines[i];
+            var headingMatch = line.match(/^(#{1,3})\s+(.+)/);
+            if (headingMatch) {
+                if (foundFirstHeading && (currentHeading || currentBody.length)) {
+                    sections.push({ heading: currentHeading || 'Overview', body: currentBody.join('\n').trim(), level: currentLevel });
+                }
+                foundFirstHeading = true;
+                currentLevel = headingMatch[1].length;
+                currentHeading = headingMatch[2].trim();
+                currentBody = [];
+            } else if (!foundFirstHeading) {
+                preambleLines.push(line);
+            } else {
+                currentBody.push(line);
+            }
+        }
+        if (foundFirstHeading && (currentHeading || currentBody.length)) {
+            sections.push({ heading: currentHeading || 'Overview', body: currentBody.join('\n').trim(), level: currentLevel });
+        }
+        var preamble = preambleLines.join('\n').trim();
+
+        // Restore code blocks in section bodies and preamble
+        function restoreCodeBlocks(text) {
+            return text.replace(/\x00CODEBLOCK(\d+)\x00/g, function(_, idx) { return codeBlockStore[parseInt(idx)]; });
+        }
+        preamble = restoreCodeBlocks(preamble);
+        sections.forEach(function(s) { s.body = restoreCodeBlocks(s.body); });
+
+        // Determine if "rich enough" for card rendering
+        var isRich =
+            sections.length >= 2 ||
+            (sections.length >= 1 && sourceUrls.length > 0) ||
+            (sections.length >= 1 && codeBlockCount >= 2) ||
+            (sections.length >= 1 && listItemCount >= 5) ||
+            rawText.length > 800;
+
+        if (!isRich) return null;
+
+        // Build the rich card HTML
+        var html = '<div class="rich-card">';
+
+        // Preamble
+        if (preamble) {
+            html += '<div class="rich-preamble">' + formatText(preamble) + '</div>';
+        }
+
+        // Section count header + collapse toggle
+        if (sections.length > 1) {
+            html += '<div class="rich-section-header">';
+            html += '<span>\u25A6 ' + sections.length + ' sections</span>';
+            html += '<button onclick="(function(btn){var card=btn.closest(\'.rich-card\');var bodies=card.querySelectorAll(\'.rich-section-body\');var chevrons=card.querySelectorAll(\'.rich-section-chevron\');var anyVisible=false;bodies.forEach(function(b){if(!b.classList.contains(\'collapsed\'))anyVisible=true;});bodies.forEach(function(b){if(anyVisible)b.classList.add(\'collapsed\');else b.classList.remove(\'collapsed\');});chevrons.forEach(function(c){if(anyVisible)c.classList.remove(\'expanded\');else c.classList.add(\'expanded\');});btn.textContent=anyVisible?\'\u25B8 Expand all\':\'\u25BE Collapse all\';})(this)">\u25BE Collapse all</button>';
+            html += '</div>';
+        }
+
+        // Sections
+        if (sections.length > 0) {
+            sections.forEach(function(section) {
+                html += '<div class="rich-section">';
+                html += '<button class="rich-section-toggle" onclick="var body=this.nextElementSibling;var chevron=this.querySelector(\'.rich-section-chevron\');body.classList.toggle(\'collapsed\');chevron.classList.toggle(\'expanded\');">';
+                html += '<span class="rich-section-chevron expanded">\u25B6</span>';
+                html += '<span class="rich-section-title">' + section.heading.replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</span>';
+                html += '</button>';
+                html += '<div class="rich-section-body">' + formatText(section.body) + '</div>';
+                html += '</div>';
+            });
+        }
+
+        // Source URLs
+        if (sourceUrls.length > 0) {
+            html += '<div class="rich-sources">';
+            html += '<div class="rich-sources-label">\uD83D\uDCD6 Sources</div>';
+            html += '<div class="rich-source-pills">';
+            var maxSources = Math.min(sourceUrls.length, 8);
+            for (var j = 0; j < maxSources; j++) {
+                var src = sourceUrls[j];
+                var escapedUrl = src.url.replace(/"/g, '&quot;');
+                var escapedLabel = src.label.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                html += '<a class="rich-source-pill" href="' + escapedUrl + '" target="_blank" rel="noopener noreferrer">\u2197 ' + escapedLabel + '</a>';
+            }
+            if (sourceUrls.length > 8) {
+                html += '<span style="font-size:9px;color:rgba(255,255,255,0.2);">+' + (sourceUrls.length - 8) + ' more</span>';
+            }
+            html += '</div></div>';
+        }
+
+        // Stats footer
+        if (codeBlockCount > 0 || listItemCount > 3) {
+            html += '<div class="rich-stats">';
+            if (codeBlockCount > 0) html += '<span># ' + Math.round(codeBlockCount) + ' code block' + (Math.round(codeBlockCount) !== 1 ? 's' : '') + '</span>';
+            if (listItemCount > 3) html += '<span>\u2261 ' + listItemCount + ' items</span>';
+            html += '</div>';
+        }
+
+        // Copy button
+        html += '<div><button class="rich-copy-btn" onclick="var bubble=this.closest(\'.message-bubble\');var raw=bubble?bubble.dataset.rawText:\'\';if(!raw)raw=bubble?bubble.textContent:\'\';navigator.clipboard.writeText(raw.trim()).then(function(){event.target.textContent=\'\u2713 Copied\';setTimeout(function(){event.target.textContent=\'\u2398 Copy\'},1200)}).catch(function(){});">\u2398 Copy</button></div>';
+
+        html += '</div>';
+        return html;
+    }
+
     // Semantic markdown → HTML renderer with rich block support
     function formatText(text) {
         if (!text) return '';
@@ -1771,9 +2060,17 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // If we were already streaming this message
             if (streamingElement && streamBuffer) {
-                // Replace with final content
-                streamingElement.innerHTML = formatText(messageContent);
+                // Try rich card rendering first, fall back to formatText
+                var richHtml = renderRichMessage(messageContent);
+                if (richHtml) {
+                    streamingElement.innerHTML = richHtml;
+                } else {
+                    streamingElement.innerHTML = formatText(messageContent);
+                }
                 postRenderRichBlocks();
+                
+                // Store rawText for copy button
+                streamingElement.dataset.rawText = messageContent;
                 
                 // Add copy button to the completed streamed message
                 if (streamingMessageDiv) {
@@ -1801,8 +2098,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Add copy button
                 addCopyButtonToMessage(messageDiv);
                 
-                // Simulate streaming for the full message
-                streamText(bubble, messageContent);
+                // Store rawText for copy button
+                bubble.dataset.rawText = messageContent;
+                
+                // Try rich card rendering for structured responses
+                var richHtml = renderRichMessage(messageContent);
+                if (richHtml) {
+                    bubble.innerHTML = richHtml;
+                    postRenderRichBlocks();
+                } else {
+                    // Simulate streaming for the full message
+                    streamText(bubble, messageContent);
+                }
                 
                 // Scroll to bottom
                 _scrollToBottom();
