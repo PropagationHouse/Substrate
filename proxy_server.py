@@ -11070,7 +11070,8 @@ Accent: {accent}
 {"THIS IS THE OPENING SLIDE -- make it CINEMATIC and DRAMATIC. Use oversized hero typography (48-72px), decorative SVG geometry (dashed circles, crosshairs, grid lines at very low opacity), a bold gradient stat or pull-quote, and generous whitespace. This slide sets the visual tone for the entire deck." if slide_index == 0 else "THIS IS THE FINAL SLIDE -- make it a strong closer with a key takeaway stat, memorable quote, or bold call-to-action visual." if slide_index == total_slides - 1 else ""}
 
 === DESIGN SYSTEM ===
-Canvas: dark bg (#0a0a12), ~580px wide, 16:10. You own the full card interior.
+Canvas: dark bg (#0a0a12), ~580px wide × ~360px tall (16:10). You own the full card interior.
+CRITICAL: ALL content MUST fit within ~360px height. Do NOT exceed this. If content is dense, use smaller fonts, tighter gaps, and 2-column grids to compress. Scrolling is NOT available — anything beyond 360px is clipped and invisible.
 Colors: text rgba(255,255,255,0.88), secondary rgba(255,255,255,0.50), muted rgba(255,255,255,0.22), accent {accent} at 04-cc opacity.
 Fonts: system stack. Hero: 48-72px/900/-0.04em. Title: 20-28px/700. Body: 11-13px/300/1.8. Micro: 8-9px/uppercase/0.2em spacing.
 
@@ -11146,6 +11147,8 @@ J) ICON GRID -- emoji-anchored info blocks:
 7. Mix patterns -- e.g. a hero stat + a bar chart below, or a flow diagram + stat grid.
 8. Use CSS grid and flexbox. Create breathing room with padding/gap.
 9. Keep the content faithful to the heading/body -- don't fabricate data, but DO visualize the existing data dramatically.
+10. Your root <div> MUST have: style="width:100%;max-height:360px;overflow:hidden;box-sizing:border-box" — this is non-negotiable.
+11. Use compact spacing (gap:6-8px, padding:10-16px) to stay within the height budget. Prefer 2-column grids over vertical stacking.
 
 K) STYLIZED MAP VIEW -- for ANY content involving locations, geography, regions, travel, or place-based stories:
 <div style="position:relative;width:100%;aspect-ratio:16/10;border-radius:12px;overflow:hidden;background:linear-gradient(135deg,#0d1117,#161b22)">
@@ -11204,6 +11207,12 @@ Use this map pattern whenever content mentions specific locations, cities, count
         if not html_content:
             logger.warning(f"[SLIDE_DESIGN] Slide {slide_index + 1} returned empty content")
             return jsonify({'ok': False, 'error': 'Empty response from LLM'}), 500
+
+        # Enforce containment: inject max-height + overflow:hidden on root div
+        if html_content.startswith('<div') and 'max-height' not in html_content[:200]:
+            html_content = html_content.replace(
+                '<div style="', '<div style="max-height:360px;overflow:hidden;box-sizing:border-box;', 1
+            ) if '<div style="' in html_content[:50] else html_content
 
         return jsonify({'ok': True, 'html': html_content})
 

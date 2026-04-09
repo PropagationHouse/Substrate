@@ -395,9 +395,9 @@ Original research context:
 
 Follow-up question: {{QUESTION}}`,
 
-  slideDesigner: `You are an elite visual storyteller -- your slides are legendary. Think Stripe's annual letters, Apple keynotes, Spotify Wrapped, or a Bloomberg Businessweek data spread. Your mission: make every slide so visually striking that the viewer pauses.
+  slideDesigner: `You are an elite research analyst and storytelling expert. Your job: distill research into a structured slide deck outline with punchy headings and rich body text.
 
-Each slide's "html" field is your canvas. You write the HTML + inline CSS that renders inside a dark card (bg ~#0a0a12, ~600px wide, 16:10 aspect). The outer shell is handled -- you own the interior.
+You do NOT generate HTML or visual design -- a separate design engine handles that. Focus 100% on content structure, narrative arc, and data extraction.
 
 Return as JSON:
 {
@@ -406,8 +406,7 @@ Return as JSON:
   "sections": [
     {
       "heading": "Punchy insight heading, max 8 words",
-      "body": "plain text fallback for search/copy",
-      "html": "<div style=\\"...\\">SLIDE CONTENT</div>"
+      "body": "Rich body text with data markers (see below). 2-4 sentences max."
     }
   ],
   "sources": [/* preserve real source URLs from research */],
@@ -415,83 +414,25 @@ Return as JSON:
   "followUpQuestions": ["question?", "question?"]
 }
 
-===========================================
-DESIGN SYSTEM
-===========================================
+=== DATA MARKERS (use these in the body field -- the design engine converts them to visuals) ===
+* [STAT: value | description] -- for hero statistics
+* [COMPARE: A = val | B = val | C = val] -- for comparisons / bar charts
+* [TIMELINE: 2023 = event | 2024 = event | 2025 = event] -- for chronological data
+* [FLOW: Step1 -> Step2 -> Step3] -- for processes
+* > "quote text" -- Attribution -- for cinematic quotes
+* **Bold lead-ins** for key points
 
-COLORS:
-- Primary text: rgba(255,255,255,0.88)
-- Secondary: rgba(255,255,255,0.50)
-- Muted: rgba(255,255,255,0.22)
-- Accent palette (vary per slide, NEVER use the same accent on consecutive slides):
-  #818cf8 (indigo), #22d3ee (cyan), #f59e0b (amber), #fb7185 (rose), #34d399 (emerald), #a78bfa (violet), #f472b6 (pink), #38bdf8 (sky)
-- Glows: accent at 8-15% opacity as background or box-shadow
+=== CONTENT RULES ===
+1. Lead with INSIGHT not topic. BAD: "Market Size" GOOD: "A $4.2T Market Nobody Saw Coming"
+2. ONE idea per slide. Maximum 3 bullet points.
+3. Use real data from the research. Concrete numbers > vague claims.
+4. Narrative arc: hook -> context -> evidence -> insight -> implications.
+5. Use data markers liberally -- every slide should have at least one [STAT], [COMPARE], [TIMELINE], [FLOW], or quote.
+6. The "body" text is what the design engine will visualize, so pack it with data and structure.
 
-TYPOGRAPHY -- THIS IS KEY. Vary aggressively:
-- Hero numbers: 56-72px, font-weight 900, letter-spacing -0.04em
-- Section titles: 22-28px, font-weight 700-800, letter-spacing -0.02em
-- Callout text: 16-20px, font-weight 600
-- Body: 11-13px, font-weight 300-400, line-height 1.8
-- Micro labels: 8-9px, uppercase, letter-spacing 0.15-0.25em, font-weight 700
-- Pull quotes: 18-24px, italic, font-weight 300, line-height 1.6
+TARGET: {{COUNT}} slides exactly. Do NOT return fewer.
 
-LAYOUT TECHNIQUES (use CSS grid and flexbox):
-- Asymmetric grids: 1fr 2fr, 2fr 1fr, 1fr 1fr 1fr
-- Offset elements: negative margins, overlapping cards
-- Vertical rhythm: alternate tight/loose spacing
-- Full-width accent bars, dividers, and borders
-
-===========================================
-VISUAL PATTERNS -- use at least 5 different ones across your deck
-===========================================
-
-1. GIANT STAT -- Number at 56-72px with gradient (background: linear-gradient(135deg, accent, accent_light); -webkit-background-clip: text; -webkit-text-fill-color: transparent), tiny label below, radial glow behind
-
-2. CINEMATIC QUOTE -- Oversized quote mark at 120px+ as watermark (position absolute, opacity 0.06), quote text at 20-24px italic centered, attribution with flanking horizontal rules
-
-3. DATA GRID -- 2x2 or 3x2 grid of stat cards. Each card: big number (28-36px) + label (9px uppercase). Cards have subtle borders (1px solid rgba(255,255,255,0.06)) and vary accent per card
-
-4. FLOW DIAGRAM -- Arrow symbols connecting labeled boxes/pills in a visual flow. Use rounded boxes with borders and subtle backgrounds. Show process/transformation.
-
-5. BAR/PROGRESS VISUALIZATION -- Horizontal bars with inline labels showing comparative data. Use div width percentages to create visual bar charts. Label + bar + value on each row.
-
-6. ICON GRID -- 2x2 or 3x1 grid using large emoji/unicode symbols at 28-36px as visual anchors, with bold label + description below each
-
-7. LANDSCAPE/MAP -- Conceptual map using positioned elements. Central concept with radiating connected nodes. Use border-radius: 50% circles connected by lines (thin divs or borders)
-
-8. SPLIT COMPARISON -- Left/right split with distinct background tints. Left side accent-tinted (accent at 4% bg), right side neutral. "VS" badge centered between them
-
-9. NUMBERED LIST -- Large gradient numbers (01, 02, 03) at 28-36px aligned left, with title + description to the right of each. Numbers create strong vertical rhythm.
-
-10. HIGHLIGHT CALLOUT -- Full-width box with accent left border (3-4px), accent-tinted background (3-5%), larger text (14-16px) for a key insight. Stand out from surrounding content.
-
-11. TIMELINE -- Vertical track with gradient line, dots that grow for recent events, cards alternating left/right or stacked with date badges
-
-12. SCORECARD -- Table-like layout with header row and data rows. Alternating subtle bg tints. Clean borders. Good for comparing multiple items across dimensions.
-
-===========================================
-DESIGN RULES -- NON-NEGOTIABLE
-===========================================
-
-1. NEVER repeat the same visual pattern on consecutive slides.
-2. Every slide must have at least ONE element that's dramatically larger or different in scale from the rest (a huge number, an oversized quote mark, a big icon, a full-width bar).
-3. ONE idea per slide. Maximum 3 bullet points. If you need more, split into slides.
-4. Lead with INSIGHT not topic: headings are conclusions. BAD: "Market Size" GOOD: "A $4.2T Market Nobody Saw Coming"
-5. Use real data from the research. Concrete numbers > vague claims.
-6. Narrative arc across the deck: hook -> context -> evidence -> insight -> implications.
-7. Create breathing room. Don't fill every pixel. Strategic whitespace is premium.
-8. At least 2 slides should contain a visual element (diagram, bar chart, icon grid, flow, map) -- NOT just text and stats.
-
-TECHNICAL RULES:
-- Single root <div> per html field. ALL styling inline (style="...").
-- NO <script>, <link>, <style> tags. NO class names. NO external resources.
-- Unicode symbols can be used in the OUTPUT HTML for visual interest (the agent HTML renderer supports them).
-- Emoji can be used in OUTPUT HTML as decorative icons.
-- "body" field = plain text version. "heading" field = structured metadata.
-
-TARGET: {{COUNT}} slides. Mix at least 5 different visual patterns.
-
-IMPORTANT: Return ONLY the JSON object, no markdown fences.
+IMPORTANT: Return ONLY the JSON object, no markdown fences. Do NOT include an "html" field.
 
 Source research:
 {{RESEARCH}}`,
@@ -2507,7 +2448,8 @@ function AgentHtmlSlide({ html, onEdit }: { html: string; onEdit?: (newHtml: str
       )}
       <div
         ref={containerRef}
-        className="flex-1 overflow-y-auto glass-scroll flex flex-col"
+        className="flex-1 overflow-hidden flex flex-col"
+        style={{ maxHeight: 380 }}
         dangerouslySetInnerHTML={{ __html: sanitized }}
       />
     </div>

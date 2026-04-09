@@ -1967,11 +1967,31 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
+    // Pipeline detection: suppress research pipeline messages from desktop chat
+    let _isPipelineResponse = false;
+    function _isPipelineUserMsg(text) {
+        return text && (text.indexOf('[RESEARCH_PIPELINE]') !== -1 ||
+            (text.indexOf('Return ONLY the JSON object') !== -1 && text.indexOf('"sections"') !== -1));
+    }
+    function _isPipelineJSON(text) {
+        if (!text || text.length < 20) return false;
+        var trimmed = text.trim();
+        // Starts with { and contains "sections" — likely slide/research JSON
+        return (trimmed.charAt(0) === '{' && trimmed.indexOf('"sections"') !== -1 && trimmed.indexOf('"title"') !== -1);
+    }
+
     // Add a user message bubble to the chat
     let showUserMessages = true;
     function addUserMessage(text) {
         const output = document.getElementById('output');
         if (!output || !text) return;
+        
+        // Filter out research pipeline messages
+        if (_isPipelineUserMsg(text)) {
+            console.log('[PIPELINE] Suppressed pipeline user message from desktop chat');
+            _isPipelineResponse = true;
+            return;
+        }
         
         // Nuclear filter: block any text that is only punctuation/brackets
         if (text.replace(/[^a-zA-Z0-9]/g, '').length < 2) {
@@ -2013,6 +2033,18 @@ document.addEventListener('DOMContentLoaded', function() {
         if (data.status === 'streaming') {
             // Add to buffer
             streamBuffer += data.result || '';
+            
+            // Suppress pipeline JSON responses after enough chars to detect
+            if (_isPipelineResponse || (streamBuffer.length > 30 && streamBuffer.length < 200 && _isPipelineJSON(streamBuffer))) {
+                _isPipelineResponse = true;
+                // Remove any already-created streaming element
+                if (streamingMessageDiv && streamingMessageDiv.parentNode) {
+                    streamingMessageDiv.parentNode.removeChild(streamingMessageDiv);
+                }
+                streamingElement = null;
+                streamingMessageDiv = null;
+                return;
+            }
             
             // Create message container if this is the first chunk
             if (!streamingElement) {
@@ -2057,6 +2089,16 @@ document.addEventListener('DOMContentLoaded', function() {
         if (data.status === 'done' || data.status === 'success') {
             // Use either the streamed buffer or direct result
             const messageContent = data.result || streamBuffer || '';
+            
+            // Suppress pipeline JSON responses
+            if (_isPipelineResponse || _isPipelineJSON(messageContent)) {
+                console.log('[PIPELINE] Suppressed pipeline JSON response from desktop chat (' + messageContent.length + ' chars)');
+                _isPipelineResponse = false;
+                streamingElement = null;
+                streamingMessageDiv = null;
+                streamBuffer = '';
+                return;
+            }
             
             // If we were already streaming this message
             if (streamingElement && streamBuffer) {
