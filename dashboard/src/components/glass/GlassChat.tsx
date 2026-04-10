@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, lazy, Suspense, type KeyboardEvent, type ReactNode } from 'react';
-import { Send, Bot, User, Loader2, Sparkles, Copy, Check, ChevronRight, Wrench, Mic } from 'lucide-react';
+import { Send, Bot, User, Loader2, Sparkles, Copy, Check, ChevronRight, Wrench, Mic, X, Paperclip } from 'lucide-react';
 import type { ChatMsg } from '@/features/chat/types';
 import { MarkdownRenderer } from '@/features/markdown/MarkdownRenderer';
 import { RichMessageCard } from './RichMessageCard';
@@ -127,7 +127,7 @@ interface GlassChatProps {
   streamingText: string;
   streamingRawText?: string;
   processingStage: string | null;
-  onSend: (text: string, images?: string[]) => void;
+  onSend: (text: string, images?: any[]) => void;
   agentName: string;
 }
 
@@ -141,8 +141,62 @@ export function GlassChat({
   agentName,
 }: GlassChatProps) {
   const [input, setInput] = useState('');
+  const [stagedImages, setStagedImages] = useState<any[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const processFiles = useCallback((files: FileList | File[]) => {
+    Array.from(files).forEach(file => {
+      if (!file.type.startsWith('image/')) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const preview = e.target?.result as string;
+        setStagedImages(prev => [...prev, {
+          id: Math.random().toString(36).substring(2),
+          name: file.name,
+          preview,
+          type: file.type,
+          size: file.size
+        }]);
+      };
+      reader.readAsDataURL(file);
+    });
+  }, []);
+
+  const handlePaste = useCallback((e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    const files: File[] = [];
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.startsWith('image/')) {
+        const file = items[i].getAsFile();
+        if (file) files.push(file);
+      }
+    }
+    if (files.length > 0) processFiles(files);
+  }, [processFiles]);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files) processFiles(e.dataTransfer.files);
+  }, [processFiles]);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  }, []);
+
+  const removeStagedImage = useCallback((id: string) => {
+    setStagedImages(prev => prev.filter(img => img.id !== id));
+  }, []);
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -154,13 +208,14 @@ export function GlassChat({
 
   const handleSend = useCallback(() => {
     const text = input.trim();
-    if (!text || isStreaming) return;
-    onSend(text);
+    if ((!text && stagedImages.length === 0) || isStreaming) return;
+    onSend(text, stagedImages);
     setInput('');
+    setStagedImages([]);
     if (inputRef.current) {
       inputRef.current.style.height = 'auto';
     }
-  }, [input, isStreaming, onSend]);
+  }, [input, stagedImages, isStreaming, onSend]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -367,19 +422,59 @@ export function GlassChat({
         <div ref={messagesEndRef} />
       </div>
 
+      {/* Staged Images Preview */}
+      {stagedImages.length > 0 && (
+        <div className="px-4 pb-2 flex gap-2 flex-wrap">
+          {stagedImages.map(img => (
+            <div key={img.id} className="relative group">
+              <img src={img.preview} alt="staged" className="w-14 h-14 rounded-lg object-cover border border-white/10 shadow-md" />
+              <button
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); removeStagedImage(img.id); }}
+                type="button"
+                className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-red-500/90 text-white flex items-center justify-center hover:bg-red-500 transition-colors shadow-lg z-10"
+              >
+                <X size={10} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Input bar */}
       <div className="px-3 pb-3 pt-2">
-        <div className="
-          flex items-end gap-2 px-3 py-2
-          bg-white/[0.04] border border-white/[0.08] rounded-xl
-          focus-within:border-indigo-400/30 focus-within:bg-white/[0.06]
-          transition-all duration-200
-        ">
+        <div 
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          className={`
+            flex items-end gap-2 px-3 py-2
+            bg-white/[0.04] border rounded-xl
+            focus-within:border-indigo-400/30 focus-within:bg-white/[0.06]
+            transition-all duration-200
+            ${isDragging ? 'border-indigo-400/50 bg-indigo-500/5 ring-2 ring-indigo-500/20' : 'border-white/[0.08]'}
+          `}
+        >
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={e => { if (e.target.files) { processFiles(e.target.files); e.target.value = ''; } }}
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-white/20 hover:text-white/50 hover:bg-white/[0.05] transition-all"
+            title="Attach image"
+          >
+            <Paperclip size={14} />
+          </button>
           <textarea
             ref={inputRef}
             value={input}
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
             placeholder={`Message ${agentName}…`}
             rows={1}
             className="
@@ -389,10 +484,10 @@ export function GlassChat({
           />
           <button
             onClick={handleSend}
-            disabled={!input.trim() || isStreaming}
+            disabled={(!input.trim() && stagedImages.length === 0) || isStreaming}
             className={`
               w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-all duration-200
-              ${input.trim() && !isStreaming
+              ${(input.trim() || stagedImages.length > 0) && !isStreaming
                 ? 'bg-indigo-500/25 border border-indigo-400/30 text-indigo-300 hover:bg-indigo-500/35 cursor-pointer'
                 : 'bg-white/[0.03] border border-white/[0.05] text-white/20 cursor-not-allowed'
               }

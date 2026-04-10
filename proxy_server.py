@@ -146,7 +146,7 @@ sock = Sock(app)
 _AUTH_EXEMPT_PREFIXES = (
     '/ui', '/dashboard', '/static/', '/sw.js', '/manifest.json', '/certs/',
     '/audio/', '/uploads/', '/api/auth/login', '/api/auth/setup',
-    '/api/auth/login-otp', '/api/auth/electron-login', '/api/auth/status', '/api/test',
+    '/api/auth/login-otp', '/api/auth/electron-login', '/api/auth/status', '/api/test', '/api/debug/',
     '/api/substrate', '/api/circuits', '/api/prime',
     '/api/commands',
     '/api/models', '/api/discover-models',
@@ -1373,6 +1373,20 @@ class MessageBuffer:
             logger.debug("[SHOULD_SPEAK] system/command/config message")
             return False
             
+        # Don't speak research pipeline responses (JSON with sections/title)
+        if '"sections"' in content and '"title"' in content and content.strip().startswith('{'):
+            logger.debug("[SHOULD_SPEAK] pipeline JSON response, not speaking")
+            return False
+        # Don't speak if the user prompt was a pipeline request
+        if "messages" in message:
+            msgs = message.get("messages", [])
+            for m in (msgs if isinstance(msgs, list) else []):
+                if isinstance(m, dict) and m.get("role") == "user":
+                    user_text = m.get("content", "")
+                    if isinstance(user_text, str) and "[RESEARCH_PIPELINE]" in user_text:
+                        logger.debug("[SHOULD_SPEAK] pipeline user prompt detected, not speaking")
+                        return False
+            
         # Handle chat messages (with messages array)
         if "messages" in message and message.get("status") == "done":
             logger.debug("[SHOULD_SPEAK] Returning True - chat message with done status")
@@ -2571,7 +2585,7 @@ class ChatAgent:
                     content = result.get('message', {}).get('content', '')
                     return {'content': content}
                 else:
-                    logger.error(f"[LLM_SYNC] Ollama error: {response.status_code}")
+                    logger.error(f"[LLM_SYNC] Ollama error: {response.status_code} {response.text[:300]}")
                     return {'content': ''}
                     
             elif provider == 'xai':
@@ -2594,7 +2608,7 @@ class ChatAgent:
                     content = result.get('choices', [{}])[0].get('message', {}).get('content', '')
                     return {'content': content}
                 else:
-                    logger.error(f"[LLM_SYNC] xAI error: {response.status_code}")
+                    logger.error(f"[LLM_SYNC] xAI error: {response.status_code} {response.text[:300]}")
                     return {'content': ''}
                     
             elif provider == 'google':
@@ -2621,7 +2635,7 @@ class ChatAgent:
                     content = result.get('candidates', [{}])[0].get('content', {}).get('parts', [{}])[0].get('text', '')
                     return {'content': content}
                 else:
-                    logger.error(f"[LLM_SYNC] Google error: {response.status_code}")
+                    logger.error(f"[LLM_SYNC] Google error: {response.status_code} {response.text[:300]}")
                     return {'content': ''}
                     
             elif provider == 'openai':
@@ -2643,7 +2657,7 @@ class ChatAgent:
                     content = result.get('choices', [{}])[0].get('message', {}).get('content', '')
                     return {'content': content}
                 else:
-                    logger.error(f"[LLM_SYNC] OpenAI error: {response.status_code}")
+                    logger.error(f"[LLM_SYNC] OpenAI error: {response.status_code} {response.text[:300]}")
                     return {'content': ''}
 
             elif provider == 'minimax':
@@ -10773,13 +10787,20 @@ def _get_google_maps_key():
         # Try dedicated maps key first
         key = _resolve_remote_key(agent.config, provider='google_maps')
         if key:
+            logger.info(f"[MAP] Using dedicated google_maps key: {key[:12]}...")
             return key
         # Fall back to the regular Google API key (same key works for Maps + Gemini)
         key = _resolve_remote_key(agent.config, provider='google')
         if key:
+            logger.info(f"[MAP] Using google (Gemini) key as fallback: {key[:12]}...")
             return key
     # Fallback: try env directly
-    return os.environ.get('GOOGLE_MAPS_API_KEY', '').strip() or os.environ.get('GOOGLE_API_KEY', '').strip() or None
+    env_key = os.environ.get('GOOGLE_MAPS_API_KEY', '').strip() or os.environ.get('GOOGLE_API_KEY', '').strip() or None
+    if env_key:
+        logger.info(f"[MAP] Using env key: {env_key[:12]}...")
+    else:
+        logger.warning("[MAP] No Google Maps API key found in config or environment!")
+    return env_key
 
 
 def _extract_locations_via_llm(heading, body):
@@ -10790,48 +10811,17 @@ def _extract_locations_via_llm(heading, body):
         return []
     
     combined = f"{heading}. {body}"
-    combined_lower = combined.lower()
     
-    # Strong signals: words that almost always mean geographic content
-    strong_signals = [
-        'located in', 'located near', 'based in', 'headquartered in',
-        'middle east', 'southeast asia', 'latin america', 'sub-saharan',
-        'dirt bike', 'dirt biking', 'riding spot', 'riding trail',
-        'travel to', 'traveling to', 'fly to', 'flight to',
-        'breaking news in', 'crisis in', 'conflict in', 'war in',
-        'earthquake', 'hurricane', 'tornado', 'wildfire',
-        'coordinates', 'latitude', 'longitude', 'GPS',
-    ]
-    # Geographic proper nouns: continents, well-known regions
-    geo_nouns = [
-        'africa', 'antarctica', 'asia', 'europe', 'australia',
-        'pacific', 'atlantic', 'arctic', 'mediterranean', 'caribbean',
-        'sahara', 'himalayas', 'amazon', 'siberia', 'patagonia',
-        'california', 'texas', 'florida', 'new york', 'colorado',
-        'tokyo', 'london', 'paris', 'berlin', 'sydney', 'dubai',
-        'moscow', 'beijing', 'mumbai', 'istanbul', 'cairo',
-    ]
-    # Moderate signals: need at least 2 to trigger
-    moderate_signals = [
-        'city', 'country', 'town', 'village', 'island', 'mountain',
-        'trail', 'canyon', 'valley', 'peninsula', 'coast', 'border',
-        'province', 'district', 'territory', 'gulf', 'bay',
-    ]
-    
-    has_strong = any(sig in combined_lower for sig in strong_signals)
-    has_geo_noun = any(sig in combined_lower for sig in geo_nouns)
-    moderate_count = sum(1 for sig in moderate_signals if sig in combined_lower)
-    
-    if not has_strong and not has_geo_noun and moderate_count < 2:
-        return []
-    
+    # Let the LLM decide if locations exist -- no keyword pre-filter
+    logger.info(f"[MAP] Extracting locations from: '{heading[:80]}'")
     try:
         extract_msgs = [
-            {'role': 'system', 'content': 'Extract geographic locations from the text. Return ONLY a JSON array of objects with "name" (display name) and "query" (geocoding query). If no real geographic locations exist, return []. No explanation.'},
-            {'role': 'user', 'content': f'Extract locations from:\n{combined[:1500]}'}
+            {'role': 'system', 'content': 'Extract SPECIFIC geographic locations (trails, parks, landmarks, facilities, neighborhoods) from the text. Prefer specific places over general cities. Return ONLY a JSON array of objects with "name" (display name) and "query" (specific geocoding query — include state/country for precision). If no real geographic locations exist, return []. No explanation. Example: [{"name":"Walker Valley ORV","query":"Walker Valley ORV Trail System, Skagit County, WA"}]'},
+            {'role': 'user', 'content': f'Extract specific locations from:\n{combined[:1500]}'}
         ]
         result = agent.call_llm_sync(extract_msgs, max_tokens_override=256)
         raw = result.get('content', '').strip()
+        logger.info(f"[MAP] LLM location response: {raw[:200]}")
         # Parse JSON array from response
         if raw.startswith('```'):
             raw = raw.split('\n', 1)[-1] if '\n' in raw else raw[3:]
@@ -10844,9 +10834,12 @@ def _extract_locations_via_llm(heading, body):
             import json
             locations = json.loads(raw[start:end+1])
             if isinstance(locations, list):
-                return [loc for loc in locations[:3] if isinstance(loc, dict) and loc.get('query')]
+                filtered = [loc for loc in locations[:3] if isinstance(loc, dict) and loc.get('query')]
+                logger.info(f"[MAP] Extracted {len(filtered)} locations: {[l.get('name','?') for l in filtered]}")
+                return filtered
+        logger.info(f"[MAP] No JSON array found in LLM response")
     except Exception as e:
-        logger.debug(f"[MAP] Location extraction failed: {e}")
+        logger.warning(f"[MAP] Location extraction failed: {e}")
     return []
 
 
@@ -10876,25 +10869,27 @@ def _build_static_map_url(locations_with_coords, api_key, width=580, height=320,
     if not locations_with_coords or not api_key:
         return None
     
-    # Center on first location, or auto-fit
+    import math
     base = 'https://maps.googleapis.com/maps/api/staticmap'
     
-    # Dark map style matching our slide aesthetic
+    # Dark map style matching our slide aesthetic — slightly brighter labels for readability
     style_params = [
-        'style=element:geometry|color:0x0a0a12',
-        'style=element:labels.text.stroke|color:0x0a0a12',
-        'style=element:labels.text.fill|color:0x746855',
-        'style=feature:administrative.locality|element:labels.text.fill|color:0xd59563',
-        'style=feature:poi|element:labels.text.fill|color:0xd59563',
-        'style=feature:poi.park|element:geometry|color:0x121a12',
-        'style=feature:poi.park|element:labels.text.fill|color:0x447530',
-        'style=feature:road|element:geometry|color:0x15151f',
-        'style=feature:road|element:geometry.stroke|color:0x1a1a2e',
-        'style=feature:road.highway|element:geometry|color:0x1a1a2e',
-        'style=feature:road.highway|element:geometry.stroke|color:0x22223a',
-        'style=feature:transit|element:geometry|color:0x15151f',
-        'style=feature:water|element:geometry|color:0x0e1626',
-        'style=feature:water|element:labels.text.fill|color:0x515c6d',
+        'style=element:geometry|color:0x0f0f1a',
+        'style=element:labels.text.stroke|color:0x0f0f1a',
+        'style=element:labels.text.fill|color:0x8a8a9a',
+        'style=feature:administrative.locality|element:labels.text.fill|color:0xc9a96e',
+        'style=feature:administrative.country|element:geometry.stroke|color:0x3a3a5a',
+        'style=feature:poi|element:labels.text.fill|color:0x9a8a6e',
+        'style=feature:poi.park|element:geometry|color:0x162016',
+        'style=feature:poi.park|element:labels.text.fill|color:0x5a8a40',
+        'style=feature:road|element:geometry|color:0x1a1a2e',
+        'style=feature:road|element:geometry.stroke|color:0x252540',
+        'style=feature:road.highway|element:geometry|color:0x252540',
+        'style=feature:road.highway|element:geometry.stroke|color:0x303050',
+        'style=feature:transit|element:geometry|color:0x1a1a2e',
+        'style=feature:water|element:geometry|color:0x0e1830',
+        'style=feature:water|element:labels.text.fill|color:0x5a6a8a',
+        'style=feature:landscape.natural|element:geometry|color:0x121218',
     ]
     
     # Clean accent for marker color (remove # prefix)
@@ -10906,67 +10901,117 @@ def _build_static_map_url(locations_with_coords, api_key, width=580, height=320,
         label = chr(65 + i)  # A, B, C, ...
         marker_params.append(f'markers=color:0x{marker_color}|label:{label}|{lat},{lng}')
     
-    params = f'size={width}x{height}&scale=2&maptype=roadmap&key={api_key}'
+    # Use hybrid maptype for better terrain/satellite visibility on dark theme
+    params = f'size={width}x{height}&scale=2&maptype=hybrid&key={api_key}'
     
     if len(locations_with_coords) == 1:
         lat, lng, _ = locations_with_coords[0]
-        params += f'&center={lat},{lng}&zoom=10'
-    # else: let Google auto-fit all markers
+        # Zoom 13 = neighborhood/trail level detail (good for specific locations)
+        params += f'&center={lat},{lng}&zoom=13'
+    elif len(locations_with_coords) >= 2:
+        # Calculate center and smart zoom based on marker spread
+        lats = [loc[0] for loc in locations_with_coords]
+        lngs = [loc[1] for loc in locations_with_coords]
+        center_lat = sum(lats) / len(lats)
+        center_lng = sum(lngs) / len(lngs)
+        # Calculate the span
+        lat_span = max(lats) - min(lats)
+        lng_span = max(lngs) - min(lngs)
+        max_span = max(lat_span, lng_span)
+        # Calculate zoom: larger span = lower zoom
+        if max_span > 40:
+            zoom = 3  # Continental
+        elif max_span > 15:
+            zoom = 5  # Country
+        elif max_span > 5:
+            zoom = 7  # Regional
+        elif max_span > 1:
+            zoom = 9  # Metro area
+        elif max_span > 0.1:
+            zoom = 11  # City
+        else:
+            zoom = 13  # Neighborhood
+        params += f'&center={center_lat},{center_lng}&zoom={zoom}'
     
     url = f'{base}?{params}&{"&".join(style_params)}&{"&".join(marker_params)}'
+    logger.info(f"[MAP] Static map URL built: {len(locations_with_coords)} markers, maptype=hybrid")
     return url
 
 
 def _generate_map_context_inner(heading, body, accent='#818cf8'):
-    """Full pipeline: extract locations -> geocode -> build map URL.
+    """Extract locations from body text via LLM, geocode them, build a static map URL.
     Returns a string to inject into the design prompt, or empty string.
     """
     api_key = _get_google_maps_key()
     if not api_key:
+        logger.warning("[MAP] No API key — skipping map context")
         return ''
     
-    locations = _extract_locations_via_llm(heading, body)
-    if not locations:
-        return ''
+    logger.info(f"[MAP] Starting map pipeline for: '{heading[:80]}'")
     
-    logger.info(f"[MAP] Extracted {len(locations)} locations: {[l.get('name') for l in locations]}")
-    
+    # Use LLM to extract specific place names from heading + body
+    # (Don't geocode the heading directly — abstract headings like
+    #  'Scarcity of Local Legal Trails' resolve to wrong locations)
     geocoded = []
-    for loc in locations:
-        result = _geocode_location(loc['query'], api_key)
-        if result:
-            geocoded.append(result)
-            logger.info(f"[MAP] Geocoded '{loc['name']}' -> {result[0]:.4f},{result[1]:.4f} ({result[2]})")
+    try:
+        llm_locations = _extract_locations_via_llm(heading, body)
+        for loc in llm_locations:
+            if len(geocoded) >= 3:
+                break
+            lr = _geocode_location(loc['query'], api_key)
+            if lr:
+                is_dup = any(abs(lr[0] - g[0]) < 0.01 and abs(lr[1] - g[1]) < 0.01 for g in geocoded)
+                if not is_dup:
+                    geocoded.append(lr)
+                    logger.info(f"[MAP] Location '{loc['name']}' geocoded: {lr[0]:.4f},{lr[1]:.4f} ({lr[2]})")
+    except Exception as e:
+        logger.debug(f"[MAP] LLM extraction failed: {e}")
     
     if not geocoded:
+        logger.info(f"[MAP] No locations geocoded for: '{heading[:60]}'")
         return ''
+    
+    logger.info(f"[MAP] {len(geocoded)} location(s) geocoded successfully")
     
     accent_hex = accent.lstrip('#')[:6]
     map_url = _build_static_map_url(geocoded, api_key, accent=accent_hex)
     if not map_url:
+        logger.warning("[MAP] Failed to build static map URL")
         return ''
     
-    # Build context string for the LLM
+    logger.info(f"[MAP] Map URL built successfully ({len(map_url)} chars)")
+    
     location_list = '\n'.join(
         f'  {chr(65+i)}) {name} ({lat:.4f}, {lng:.4f})'
         for i, (lat, lng, name) in enumerate(geocoded)
     )
     
+    # Build a Google Maps link for the primary location
+    primary_lat, primary_lng = geocoded[0][0], geocoded[0][1]
+    gmaps_link = f'https://www.google.com/maps/@{primary_lat},{primary_lng},14z'
+    if len(geocoded) > 1:
+        # Link to directions between first two points
+        gmaps_link = f'https://www.google.com/maps/dir/{geocoded[0][0]},{geocoded[0][1]}/{geocoded[1][0]},{geocoded[1][1]}'
+    
     return f"""
 === REAL MAP DATA AVAILABLE ===
-The following REAL map image URL is ready to embed. You MUST include it in the slide as an <img> tag.
-Map image URL (dark-styled, with location pins):
+A real Google Maps image is available for this slide. Include it as ONE element alongside your other content.
+Map image URL (this is the ONLY valid image URL for the map — do NOT use any other image URLs for map/satellite views):
 {map_url}
+
+Google Maps link (for clickable map):
+{gmaps_link}
 
 Locations on the map:
 {location_list}
 
-INSTRUCTIONS FOR MAP EMBEDDING:
-1. Include the map using: <img src="{map_url}" style="width:100%;border-radius:12px;margin:12px 0" alt="Map" />
-2. Add a semi-transparent overlay with location labels styled to match the slide accent color.
-3. The map should be a PROMINENT visual element, not an afterthought. Give it at least 40% of slide area.
-4. Add location name labels near or below the map with coordinates in small muted text.
-5. You can layer info cards on top of the map using position:absolute for a polished look.
+MAP EMBEDDING RULES:
+1. Wrap the map in a link: <a href="{gmaps_link}" target="_blank" style="display:block;text-decoration:none"><img src="{map_url}" style="width:100%;max-height:160px;object-fit:cover;border-radius:10px" alt="Map" /></a>
+2. The map is a SUPPLEMENT — it should take roughly 25-30% of the slide, NOT dominate it.
+3. You MUST still include substantive content: statistics, key facts, bullet points, data grids, or charts.
+4. Place the map in context — above or beside data, not as the only visual.
+5. The slide should be informative even if the map image fails to load.
+6. Do NOT use any other image URLs or fabricate satellite/terrain images. ONLY the URL above is valid.
 """
 
 
@@ -10986,6 +11031,62 @@ def _generate_map_context(heading, body, accent='#818cf8'):
         logger.warning("[MAP] Map context generation timed out (15s) -- skipping")
         return ''
     return result[0]
+
+
+@app.route('/api/debug/map-test', methods=['GET', 'POST'])
+def api_debug_map_test():
+    """Diagnostic: test the full map pipeline for a given heading/body."""
+    if request.method == 'GET':
+        heading = request.args.get('heading', 'Walker Valley ORV: The Regional Gold Standard')
+        body = request.args.get('body', 'Premier technical terrain in the North Cascades, managed by Washington DNR. Located 45 min south of Bellingham, Washington.')
+    else:
+        d = request.get_json(silent=True) or {}
+        heading = d.get('heading', '')
+        body = d.get('body', '')
+    
+    steps = {}
+    
+    # Step 1: Check API key
+    api_key = _get_google_maps_key()
+    steps['1_api_key'] = f'{api_key[:15]}...' if api_key else 'NOT FOUND'
+    
+    if not api_key:
+        return jsonify({'ok': False, 'steps': steps, 'error': 'No Google Maps API key found'})
+    
+    # Step 2: Extract locations via LLM
+    locations = _extract_locations_via_llm(heading, body)
+    steps['2_locations'] = locations if locations else 'EMPTY (LLM returned no locations)'
+    
+    if not locations:
+        return jsonify({'ok': False, 'steps': steps, 'error': 'No locations extracted by LLM'})
+    
+    # Step 3: Geocode
+    geocoded = []
+    for loc in locations:
+        result = _geocode_location(loc['query'], api_key)
+        if result:
+            geocoded.append({'name': loc['name'], 'lat': result[0], 'lng': result[1], 'address': result[2]})
+    steps['3_geocoded'] = geocoded if geocoded else 'EMPTY (geocoding failed)'
+    
+    if not geocoded:
+        return jsonify({'ok': False, 'steps': steps, 'error': 'Geocoding failed for all locations'})
+    
+    # Step 4: Build map URL
+    coords = [(g['lat'], g['lng'], g['name']) for g in geocoded]
+    map_url = _build_static_map_url(coords, api_key, accent='818cf8')
+    steps['4_map_url'] = map_url if map_url else 'EMPTY (URL build failed)'
+    
+    # Step 5: Full context
+    map_context = _generate_map_context(heading, body, '#818cf8')
+    steps['5_map_context_length'] = len(map_context) if map_context else 0
+    steps['5_map_context_has_url'] = 'maps.googleapis.com/maps/api/staticmap' in map_context if map_context else False
+    
+    return jsonify({
+        'ok': True,
+        'steps': steps,
+        'map_context_preview': map_context[:500] if map_context else 'EMPTY',
+        'test_img_html': f'<img src="{map_url}" style="width:580px;border-radius:12px" />' if map_url else 'N/A'
+    })
 
 
 @app.route('/api/local/slide-design', methods=['POST'])
@@ -11025,18 +11126,19 @@ def api_local_slide_design():
     _t0 = _time.time()
     logger.info(f"[SLIDE_DESIGN] Starting slide {slide_index + 1}/{total_slides}: '{heading[:60]}'")
 
-    # Generate real map context if locations are detected (skip during bulk design passes)
+    # Generate real map context via LLM location extraction + Google Maps API
     map_context = ''
     if not skip_map:
+        logger.info(f"[SLIDE_DESIGN] Slide {slide_index + 1}: attempting map context for '{heading[:60]}'")
         map_context = _generate_map_context(heading, body, accent)
         _t1 = _time.time()
         if map_context:
-            logger.info(f"[SLIDE_DESIGN] Map context generated in {_t1 - _t0:.1f}s")
+            logger.info(f"[SLIDE_DESIGN] Slide {slide_index + 1}: map context generated ({_t1 - _t0:.1f}s, {len(map_context)} chars)")
         else:
-            logger.debug(f"[SLIDE_DESIGN] No map context ({_t1 - _t0:.1f}s)")
+            logger.info(f"[SLIDE_DESIGN] Slide {slide_index + 1}: no map locations found ({_t1 - _t0:.1f}s)")
     else:
         _t1 = _time.time()
-        logger.debug(f"[SLIDE_DESIGN] Map context skipped (bulk mode)")
+        logger.debug(f"[SLIDE_DESIGN] Map context skipped (skipMap=true)")
 
     # Pre-compute edit block outside f-string (backslashes not allowed in f-string expressions in Python <3.12)
     if edit_instruction:
@@ -11052,6 +11154,7 @@ Design ONE slide as a single <div> with ALL styles inline. Return ONLY that HTML
 Heading: {heading}
 Body: {body}
 
+{map_context}
 === DATA CONVENTIONS IN THE BODY -- parse and visualize these: ===
 The body may contain special markers. Convert each into the appropriate visual:
 * [STAT: value | description] -> Render as a hero stat: large gradient number + small label below
@@ -11139,7 +11242,7 @@ J) ICON GRID -- emoji-anchored info blocks:
 
 === RULES ===
 1. Return ONLY one <div style="...">...</div>. No markdown, no explanation, no JSON.
-2. NO class=, NO <script>, NO <style> blocks, NO external URLs.
+2. NO class=, NO <script>, NO <style> blocks. The ONLY exception: if a "=== REAL MAP DATA AVAILABLE ===" section was provided above, you MUST embed that <img src> URL — this is a pre-authorized external image.
 3. ALL styles MUST be inline style="...".
 4. EVERY slide MUST have at least one visual element (chart, diagram, SVG, stat grid, flow, icon grid). Pure text slides are FORBIDDEN.
 5. Adapt the examples above -- change values, colors, sizes to match the actual content.
@@ -11147,73 +11250,133 @@ J) ICON GRID -- emoji-anchored info blocks:
 7. Mix patterns -- e.g. a hero stat + a bar chart below, or a flow diagram + stat grid.
 8. Use CSS grid and flexbox. Create breathing room with padding/gap.
 9. Keep the content faithful to the heading/body -- don't fabricate data, but DO visualize the existing data dramatically.
-10. Your root <div> MUST have: style="width:100%;max-height:360px;overflow:hidden;box-sizing:border-box" — this is non-negotiable.
-11. Use compact spacing (gap:6-8px, padding:10-16px) to stay within the height budget. Prefer 2-column grids over vertical stacking.
+10. Your root <div> MUST have: style="width:100%;box-sizing:border-box" — the card will scroll if needed, so prioritize showing ALL data over cramming.
+11. Use clean spacing (gap:8-12px, padding:12-20px). Prefer 2-column grids for dense data but use vertical stacking when content needs room to breathe.
 
-K) STYLIZED MAP VIEW -- for ANY content involving locations, geography, regions, travel, or place-based stories:
-<div style="position:relative;width:100%;aspect-ratio:16/10;border-radius:12px;overflow:hidden;background:linear-gradient(135deg,#0d1117,#161b22)">
-  <svg viewBox="0 0 400 250" width="100%" height="100%" style="position:absolute;inset:0">
-    <!-- Grid lines for map feel -->
-    <defs><pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(255,255,255,0.03)" stroke-width="0.5"/></pattern></defs>
-    <rect width="400" height="250" fill="url(#grid)"/>
-    <!-- Stylized region shapes (adapt to actual location) -->
-    <path d="M100,80 Q150,40 200,70 T300,90 Q320,130 280,160 T150,140 Q90,130 100,80Z" fill="{accent}08" stroke="{accent}30" stroke-width="1"/>
-    <!-- Location pin -->
-    <g transform="translate(200,100)"><circle r="4" fill="{accent}" style="filter:drop-shadow(0 0 8px {accent}60)"/><circle r="12" fill="none" stroke="{accent}40" stroke-width="1" stroke-dasharray="3 3"><animateTransform attributeName="transform" type="scale" values="1;1.5;1" dur="2s" repeatCount="indefinite"/></circle></g>
-    <!-- Label -->
-    <text x="220" y="96" fill="rgba(255,255,255,0.7)" font-size="10" font-weight="600">Location Name</text>
-    <text x="220" y="110" fill="rgba(255,255,255,0.3)" font-size="7" letter-spacing="0.1em">COORDINATES / REGION</text>
-  </svg>
-  <!-- Overlay info card -->
-  <div style="position:absolute;bottom:12px;left:12px;padding:10px 14px;border-radius:8px;background:rgba(0,0,0,0.6);backdrop-filter:blur(8px);border:1px solid {accent}15">
-    <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.85)">Place Name</div>
-    <div style="font-size:8px;color:{accent}80;margin-top:2px">Region / Country</div>
+K) REAL MAP SLIDE -- when a "=== REAL MAP DATA AVAILABLE ===" section with an <img> URL was provided above, use THIS pattern:
+<div style="width:100%;box-sizing:border-box;padding:16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+  <div style="font-size:8px;color:{accent}80;text-transform:uppercase;letter-spacing:0.15em;margin-bottom:4px">Location Intelligence</div>
+  <div style="font-size:20px;font-weight:800;color:rgba(255,255,255,0.9);margin-bottom:8px">Heading Here</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+    <div>
+      <a href="GOOGLE_MAPS_LINK_HERE" target="_blank" style="display:block;text-decoration:none;border-radius:10px;overflow:hidden;max-height:140px">
+        <img src="PASTE_THE_REAL_MAP_URL_HERE" style="width:100%;border-radius:10px;display:block" alt="Map — click to open in Google Maps" />
+      </a>
+      <div style="font-size:7px;color:rgba(255,255,255,0.3);margin-top:4px;text-align:center">Click map to open in Google Maps</div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <div style="padding:10px;border-radius:8px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06)"><div style="font-size:9px;font-weight:700;color:{accent}">Key Fact</div><div style="font-size:8px;color:rgba(255,255,255,0.5)">Detail</div></div>
+      <div style="padding:10px;border-radius:8px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06)"><div style="font-size:9px;font-weight:700;color:{accent}">Key Fact</div><div style="font-size:8px;color:rgba(255,255,255,0.5)">Detail</div></div>
+    </div>
   </div>
 </div>
-Use this map pattern whenever content mentions specific locations, cities, countries, regions, trails, routes, or geographic areas. Adapt the SVG paths, pin positions, labels, and overlay cards to match the actual locations in the content. Multiple pins for multiple locations.
+CRITICAL MAP RULES:
+- Replace PASTE_THE_REAL_MAP_URL_HERE with the EXACT maps.googleapis.com URL from the "=== REAL MAP DATA ===" section.
+- Replace GOOGLE_MAPS_LINK_HERE with the google.com/maps link from the map data section.
+- The map should be ~25-30% of the slide. The rest MUST have stats, facts, or data grids.
+- Do NOT fabricate or hallucinate ANY image URLs. The ONLY valid <img src> for maps is the maps.googleapis.com URL provided above.
+- Do NOT use placeholder images, stock photos, or generated satellite/terrain/landscape images. If no map URL was provided, use SVG graphics instead.
 
-{map_context}
 === EDIT INSTRUCTION ===
 {_edit_block}"""
+
+    import re as _re
+
+    def _clean_html(raw):
+        """Strip markdown fences and extract <div> HTML from LLM output."""
+        c = _re.sub(r'^```(?:html|HTML)?\s*\n?', '', raw)
+        c = _re.sub(r'\n?```\s*$', '', c).strip()
+        if c and not c.lstrip().startswith('<'):
+            match = _re.search(r'(<div[\s\S]*</div>)\s*$', c, _re.IGNORECASE)
+            if match:
+                c = match.group(1)
+            else:
+                return ''
+        return c
 
     try:
         messages = [
             {'role': 'system', 'content': 'You are an expert presentation designer. Return only HTML with inline styles. No explanations.'},
             {'role': 'user', 'content': design_prompt}
         ]
-        _t2 = _time.time()
-        result = agent.call_llm_sync(messages, max_tokens_override=4096)
-        _t3 = _time.time()
-        html_content = result.get('content', '').strip()
-        logger.info(f"[SLIDE_DESIGN] LLM returned {len(html_content)} chars in {_t3 - _t2:.1f}s (total {_t3 - _t0:.1f}s) for slide {slide_index + 1}")
 
-        # Clean up: strip markdown fences if agent wrapped them
-        if html_content.startswith('```'):
-            html_content = html_content.split('\n', 1)[-1] if '\n' in html_content else html_content[3:]
-            if html_content.endswith('```'):
-                html_content = html_content[:-3].strip()
+        # Retry up to 3 times at the backend level if LLM returns empty/invalid
+        html_content = ''
+        _MAX_BACKEND_RETRIES = 3
+        for _attempt in range(1, _MAX_BACKEND_RETRIES + 1):
+            _t2 = _time.time()
+            result = agent.call_llm_sync(messages, max_tokens_override=4096)
+            _t3 = _time.time()
+            raw = result.get('content', '').strip()
+            logger.info(f"[SLIDE_DESIGN] Slide {slide_index + 1} attempt {_attempt}: LLM returned {len(raw)} chars in {_t3 - _t2:.1f}s")
 
-        # Ensure it starts with a tag
-        if html_content and not html_content.startswith('<'):
-            # Try to extract HTML from the response
-            import re
-            match = re.search(r'<div[\s\S]*</div>', html_content, re.IGNORECASE)
-            if match:
-                html_content = match.group(0)
+            if not raw:
+                logger.warning(f"[SLIDE_DESIGN] Slide {slide_index + 1} attempt {_attempt}: empty LLM result. Full result keys: {list(result.keys())}")
+                if _attempt < _MAX_BACKEND_RETRIES:
+                    _time.sleep(1.5 * _attempt)
+                continue
+
+            html_content = _clean_html(raw)
+            if html_content:
+                break
             else:
-                logger.warning(f"[SLIDE_DESIGN] Slide {slide_index + 1} returned non-HTML content: {html_content[:200]}")
-                return jsonify({'ok': False, 'error': 'Agent did not return valid HTML'}), 500
+                logger.warning(f"[SLIDE_DESIGN] Slide {slide_index + 1} attempt {_attempt}: non-HTML content: {raw[:200]}")
+                if _attempt < _MAX_BACKEND_RETRIES:
+                    _time.sleep(1.5 * _attempt)
 
         if not html_content:
-            logger.warning(f"[SLIDE_DESIGN] Slide {slide_index + 1} returned empty content")
-            return jsonify({'ok': False, 'error': 'Empty response from LLM'}), 500
+            logger.warning(f"[SLIDE_DESIGN] Slide {slide_index + 1} FAILED after {_MAX_BACKEND_RETRIES} attempts")
+            return jsonify({'ok': False, 'error': f'Empty/invalid response from LLM after {_MAX_BACKEND_RETRIES} attempts'}), 500
 
-        # Enforce containment: inject max-height + overflow:hidden on root div
-        if html_content.startswith('<div') and 'max-height' not in html_content[:200]:
-            html_content = html_content.replace(
-                '<div style="', '<div style="max-height:360px;overflow:hidden;box-sizing:border-box;', 1
-            ) if '<div style="' in html_content[:50] else html_content
+        # ── Post-process: fix map images (replace fakes, inject if missing, wrap in links) ──
+        if map_context and 'maps.googleapis.com/maps/api/staticmap' in map_context:
+            _real_map_match = _re.search(r'(https://maps\.googleapis\.com/maps/api/staticmap[^\s"<>]+)', map_context)
+            _gmaps_link_match = _re.search(r'(https://www\.google\.com/maps/[^\s"<>]+)', map_context)
+            _real_map_url = _real_map_match.group(1) if _real_map_match else None
+            _gmaps_link = _gmaps_link_match.group(1) if _gmaps_link_match else None
 
+            if _real_map_url:
+                # Step 1: Replace hallucinated/fake image URLs with the real map URL
+                _all_imgs = _re.findall(r'<img\s[^>]*src="([^"]+)"[^>]*>', html_content)
+                _fake_count = 0
+                for _img_src in _all_imgs:
+                    if 'maps.googleapis.com' not in _img_src and _img_src.startswith('http'):
+                        html_content = html_content.replace(_img_src, _real_map_url, 1)
+                        _fake_count += 1
+                if _fake_count:
+                    logger.info(f"[SLIDE_DESIGN] Slide {slide_index + 1}: replaced {_fake_count} fake/hallucinated img URL(s) with real map")
+
+                # Step 2: If LLM included NO images at all, inject a compact map
+                if '<img ' not in html_content:
+                    logger.info(f"[SLIDE_DESIGN] Slide {slide_index + 1}: no images in HTML — injecting compact map")
+                    _link_open = f'<a href="{_gmaps_link}" target="_blank" style="display:block;text-decoration:none">' if _gmaps_link else ''
+                    _link_close = '</a>' if _gmaps_link else ''
+                    _map_block = (
+                        f'<div style="border-radius:10px;overflow:hidden;margin:8px 0;max-height:150px">'
+                        f'{_link_open}<img src="{_real_map_url}" style="width:100%;display:block;border-radius:10px" alt="Map" />{_link_close}'
+                        f'</div>'
+                    )
+                    _insert_pos = html_content.find('>', html_content.find('<div')) + 1
+                    if _insert_pos > 0:
+                        html_content = html_content[:_insert_pos] + _map_block + html_content[_insert_pos:]
+
+                # Step 3: Ensure real map img is wrapped in a clickable Google Maps link
+                if _gmaps_link and 'maps.googleapis.com/maps/api/staticmap' in html_content:
+                    _img_pattern = r'(<img\s[^>]*src="https://maps\.googleapis\.com/maps/api/staticmap[^"]*"[^>]*/?>)'
+                    _img_match = _re.search(_img_pattern, html_content)
+                    if _img_match:
+                        _before_img = html_content[:_img_match.start()]
+                        # Only wrap if not already inside an <a> tag
+                        if not _re.search(r'<a\s[^>]*>\s*$', _before_img[-200:]):
+                            _orig_img = _img_match.group(0)
+                            _linked_img = f'<a href="{_gmaps_link}" target="_blank" style="display:block;text-decoration:none" title="Open in Google Maps">{_orig_img}</a>'
+                            html_content = html_content[:_img_match.start()] + _linked_img + html_content[_img_match.end():]
+                            logger.info(f"[SLIDE_DESIGN] Slide {slide_index + 1}: wrapped map img in Google Maps link")
+
+                logger.info(f"[SLIDE_DESIGN] Slide {slide_index + 1}: map post-processing done")
+
+        _total = _time.time() - _t0
+        logger.info(f"[SLIDE_DESIGN] Slide {slide_index + 1} SUCCESS: {len(html_content)} chars, total {_total:.1f}s")
         return jsonify({'ok': True, 'html': html_content})
 
     except Exception as e:

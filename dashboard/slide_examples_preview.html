@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Slide Design Examples — Visual Vocabulary</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #111; color: #fff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 40px; }
+  h1 { font-size: 28px; margin-bottom: 8px; }
+  .subtitle { color: rgba(255,255,255,0.4); font-size: 13px; margin-bottom: 40px; }
+  .example-grid { display: flex; flex-direction: column; gap: 48px; max-width: 700px; margin: 0 auto; }
+  .example-block { }
+  .example-label { font-size: 14px; font-weight: 700; color: #818cf8; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 6px; }
+  .example-desc { font-size: 12px; color: rgba(255,255,255,0.4); margin-bottom: 12px; }
+  .card { background: #0a0a12; border-radius: 16px; border: 1px solid rgba(255,255,255,0.06); padding: 24px; width: 580px; min-height: 200px; overflow: hidden; }
+  .card-new { border: 2px solid #34d399; box-shadow: 0 0 30px rgba(52,211,153,0.15); }
+  .new-badge { display: inline-block; background: #34d399; color: #0a0a12; font-size: 10px; font-weight: 800; padding: 3px 8px; border-radius: 4px; margin-left: 8px; vertical-align: middle; }
+  .issue-badge { display: inline-block; background: #f59e0b; color: #0a0a12; font-size: 10px; font-weight: 800; padding: 3px 8px; border-radius: 4px; margin-left: 8px; vertical-align: middle; }
+</style>
+</head>
+<body>
+<h1>Slide Design Prompt — Visual Vocabulary Examples</h1>
+<p class="subtitle">These are the example templates the LLM sees in the design prompt. Each one teaches a pattern.</p>
+
+<div class="example-grid">
+
+<!-- A) SVG BAR CHART -->
+<div class="example-block">
+  <div class="example-label">A) SVG Bar Chart</div>
+  <div class="example-desc">For comparative numbers, percentages, rankings</div>
+  <div class="card">
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <div style="display:flex;align-items:center;gap:10px"><span style="font-size:9px;color:rgba(255,255,255,0.4);width:60px;text-align:right">United States</span><div style="height:22px;border-radius:6px;background:linear-gradient(90deg,#818cf8cc,#818cf840);width:85%"></div><span style="font-size:11px;font-weight:700;color:#818cf8">85%</span></div>
+      <div style="display:flex;align-items:center;gap:10px"><span style="font-size:9px;color:rgba(255,255,255,0.4);width:60px;text-align:right">China</span><div style="height:22px;border-radius:6px;background:linear-gradient(90deg,#22d3eecc,#22d3ee40);width:72%"></div><span style="font-size:11px;font-weight:700;color:#22d3ee">72%</span></div>
+      <div style="display:flex;align-items:center;gap:10px"><span style="font-size:9px;color:rgba(255,255,255,0.4);width:60px;text-align:right">EU</span><div style="height:22px;border-radius:6px;background:linear-gradient(90deg,#f59e0bcc,#f59e0b40);width:58%"></div><span style="font-size:11px;font-weight:700;color:#f59e0b">58%</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- B) SVG DONUT/PIE -->
+<div class="example-block">
+  <div class="example-label">B) SVG Donut/Pie</div>
+  <div class="example-desc">For proportions, market share, completion</div>
+  <div class="card">
+    <div style="display:flex;align-items:center;gap:24px;justify-content:center">
+      <svg viewBox="0 0 120 120" width="120" height="120"><circle cx="60" cy="60" r="50" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="10"/><circle cx="60" cy="60" r="50" fill="none" stroke="#818cf8" stroke-width="10" stroke-dasharray="220 94" stroke-linecap="round" transform="rotate(-90 60 60)"/><text x="60" y="65" text-anchor="middle" fill="white" font-size="22" font-weight="800">70%</text></svg>
+      <div><div style="font-size:14px;font-weight:700;color:rgba(255,255,255,0.8)">Market Adoption</div><div style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:4px">Enterprise segment Q4 2025</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- C) FLOW DIAGRAM -->
+<div class="example-block">
+  <div class="example-label">C) Flow Diagram</div>
+  <div class="example-desc">For processes, pipelines, step-by-step</div>
+  <div class="card">
+    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:center">
+      <div style="padding:8px 14px;border-radius:10px;background:#818cf812;border:1px solid #818cf820;font-size:10px;color:#818cf8cc">Research</div>
+      <span style="font-size:16px;color:#818cf840">&#8594;</span>
+      <div style="padding:8px 14px;border-radius:10px;background:#818cf812;border:1px solid #818cf820;font-size:10px;color:#818cf8cc">Analysis</div>
+      <span style="font-size:16px;color:#818cf840">&#8594;</span>
+      <div style="padding:8px 14px;border-radius:10px;background:#818cf812;border:1px solid #818cf820;font-size:10px;color:#818cf8cc">Design</div>
+      <span style="font-size:16px;color:#818cf840">&#8594;</span>
+      <div style="padding:8px 14px;border-radius:10px;background:#818cf818;border:1px solid #818cf830;font-size:10px;font-weight:700;color:#818cf8">Deploy</div>
+    </div>
+  </div>
+</div>
+
+<!-- D) RADIAL CONCEPT MAP -->
+<div class="example-block">
+  <div class="example-label">D) Radial Concept Map</div>
+  <div class="example-desc">For relationships, ecosystems, connected concepts</div>
+  <div class="card">
+    <div style="position:relative;width:280px;height:200px;margin:0 auto">
+      <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);padding:12px 20px;border-radius:50%;background:#818cf818;border:2px solid #818cf840;font-size:12px;font-weight:800;color:white">AI Core</div>
+      <div style="position:absolute;top:10px;left:20px;padding:6px 12px;border-radius:8px;background:rgba(255,255,255,0.04);border:1px solid #818cf815;font-size:9px;color:rgba(255,255,255,0.5)">NLP</div>
+      <div style="position:absolute;top:10px;right:20px;padding:6px 12px;border-radius:8px;background:rgba(255,255,255,0.04);border:1px solid #818cf815;font-size:9px;color:rgba(255,255,255,0.5)">Vision</div>
+      <div style="position:absolute;bottom:10px;left:40px;padding:6px 12px;border-radius:8px;background:rgba(255,255,255,0.04);border:1px solid #818cf815;font-size:9px;color:rgba(255,255,255,0.5)">Robotics</div>
+      <div style="position:absolute;bottom:10px;right:40px;padding:6px 12px;border-radius:8px;background:rgba(255,255,255,0.04);border:1px solid #818cf815;font-size:9px;color:rgba(255,255,255,0.5)">Speech</div>
+    </div>
+  </div>
+</div>
+
+<!-- E) STAT GRID -->
+<div class="example-block">
+  <div class="example-label">E) Stat Grid</div>
+  <div class="example-desc">For multiple data points, KPIs, metrics</div>
+  <div class="card">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div style="padding:16px;border-radius:12px;background:#818cf806;border:1px solid #818cf80c"><div style="font-size:32px;font-weight:900;letter-spacing:-0.04em;background:linear-gradient(135deg,#818cf8,#818cf880);-webkit-background-clip:text;-webkit-text-fill-color:transparent">42M</div><div style="font-size:8px;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:0.15em;margin-top:4px">Active Users</div></div>
+      <div style="padding:16px;border-radius:12px;background:#22d3ee06;border:1px solid #22d3ee0c"><div style="font-size:32px;font-weight:900;letter-spacing:-0.04em;background:linear-gradient(135deg,#22d3ee,#22d3ee80);-webkit-background-clip:text;-webkit-text-fill-color:transparent">$8.2B</div><div style="font-size:8px;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:0.15em;margin-top:4px">Revenue YTD</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- F) TIMELINE -->
+<div class="example-block">
+  <div class="example-label">F) Timeline</div>
+  <div class="example-desc">For chronological data, milestones, history</div>
+  <div class="card">
+    <div style="display:flex;flex-direction:column;gap:0;padding-left:20px;border-left:2px solid #818cf820">
+      <div style="position:relative;padding:10px 0 10px 20px"><div style="position:absolute;left:-7px;top:14px;width:12px;height:12px;border-radius:50%;background:#818cf8;box-shadow:0 0 12px #818cf860"></div><div style="font-size:8px;color:#818cf880;text-transform:uppercase;letter-spacing:0.1em">2024</div><div style="font-size:12px;color:rgba(255,255,255,0.8);font-weight:600;margin-top:2px">Foundation model released</div></div>
+      <div style="position:relative;padding:10px 0 10px 20px"><div style="position:absolute;left:-7px;top:14px;width:12px;height:12px;border-radius:50%;background:#22d3ee;box-shadow:0 0 12px #22d3ee60"></div><div style="font-size:8px;color:#22d3ee80;text-transform:uppercase;letter-spacing:0.1em">2025</div><div style="font-size:12px;color:rgba(255,255,255,0.8);font-weight:600;margin-top:2px">Enterprise adoption surge</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- G) COMPARISON TABLE -->
+<div class="example-block">
+  <div class="example-label">G) Comparison Table</div>
+  <div class="example-desc">For A vs B, side-by-side analysis</div>
+  <div class="card" style="padding:0;overflow:hidden">
+    <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:0;border-radius:12px;overflow:hidden">
+      <div style="padding:20px;background:#818cf806;text-align:center"><div style="font-size:18px;font-weight:800;color:#818cf8">Option A</div><div style="font-size:10px;color:rgba(255,255,255,0.4);margin-top:6px">Cloud-based</div></div>
+      <div style="padding:20px;display:flex;align-items:center;background:rgba(255,255,255,0.02)"><span style="font-size:10px;font-weight:800;color:rgba(255,255,255,0.2);padding:4px 8px;border-radius:6px;background:rgba(255,255,255,0.04)">VS</span></div>
+      <div style="padding:20px;background:rgba(236,72,153,0.06);text-align:center"><div style="font-size:18px;font-weight:800;color:#ec4899">Option B</div><div style="font-size:10px;color:rgba(255,255,255,0.4);margin-top:6px">On-premise</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- H) CINEMATIC QUOTE -->
+<div class="example-block">
+  <div class="example-label">H) Cinematic Quote</div>
+  <div class="example-desc">For testimonials, key quotes, pull-quotes</div>
+  <div class="card">
+    <div style="position:relative;padding:30px 20px">
+      <div style="position:absolute;top:-10px;left:10px;font-size:120px;line-height:1;color:#818cf808;font-family:Georgia,serif">&ldquo;</div>
+      <p style="font-size:20px;font-weight:300;font-style:italic;color:rgba(255,255,255,0.75);line-height:1.6;position:relative;z-index:1">The future belongs to those who prepare for it today.</p>
+      <div style="margin-top:12px;font-size:9px;color:#818cf860;text-transform:uppercase;letter-spacing:0.15em">&mdash; Malcolm X</div>
+    </div>
+  </div>
+</div>
+
+<!-- I) GIANT HERO STAT -->
+<div class="example-block">
+  <div class="example-label">I) Giant Hero Stat</div>
+  <div class="example-desc">For one show-stopping number</div>
+  <div class="card">
+    <div style="text-align:center;padding:20px">
+      <div style="font-size:72px;font-weight:900;letter-spacing:-0.04em;background:linear-gradient(135deg,#818cf8,#ec4899);-webkit-background-clip:text;-webkit-text-fill-color:transparent;line-height:1">$4.2T</div>
+      <div style="font-size:10px;color:rgba(255,255,255,0.35);text-transform:uppercase;letter-spacing:0.2em;margin-top:8px">Global Market Size by 2030</div>
+      <div style="width:60px;height:2px;background:linear-gradient(90deg,#818cf880,transparent);margin:16px auto 0"></div>
+    </div>
+  </div>
+</div>
+
+<!-- J) ICON GRID -->
+<div class="example-block">
+  <div class="example-label">J) Icon Grid</div>
+  <div class="example-desc">For emoji-anchored info blocks, feature lists</div>
+  <div class="card">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+      <div style="text-align:center;padding:14px 8px;border-radius:10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04)"><div style="font-size:28px;margin-bottom:6px">&#128300;</div><div style="font-size:10px;font-weight:600;color:rgba(255,255,255,0.7)">Research</div><div style="font-size:8px;color:rgba(255,255,255,0.3);margin-top:3px">Deep analysis</div></div>
+      <div style="text-align:center;padding:14px 8px;border-radius:10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04)"><div style="font-size:28px;margin-bottom:6px">&#128640;</div><div style="font-size:10px;font-weight:600;color:rgba(255,255,255,0.7)">Deploy</div><div style="font-size:8px;color:rgba(255,255,255,0.3);margin-top:3px">Ship fast</div></div>
+      <div style="text-align:center;padding:14px 8px;border-radius:10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04)"><div style="font-size:28px;margin-bottom:6px">&#128200;</div><div style="font-size:10px;font-weight:600;color:rgba(255,255,255,0.7)">Measure</div><div style="font-size:8px;color:rgba(255,255,255,0.3);margin-top:3px">Track KPIs</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- K) OLD MAP VIEW (SVG only) -->
+<div class="example-block">
+  <div class="example-label">K) Current "Map" — SVG Only <span class="issue-badge">⚠ PROBLEM</span></div>
+  <div class="example-desc">No example uses a real map &lt;img&gt;. The LLM only knows how to draw fake SVG shapes. This is what it produces every time.</div>
+  <div class="card">
+    <div style="position:relative;width:100%;aspect-ratio:16/10;border-radius:12px;overflow:hidden;background:linear-gradient(135deg,#0d1117,#161b22)">
+      <svg viewBox="0 0 400 250" width="100%" height="100%" style="position:absolute;inset:0">
+        <defs><pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(255,255,255,0.03)" stroke-width="0.5"/></pattern></defs>
+        <rect width="400" height="250" fill="url(#grid)"/>
+        <path d="M100,80 Q150,40 200,70 T300,90 Q320,130 280,160 T150,140 Q90,130 100,80Z" fill="#818cf808" stroke="#818cf830" stroke-width="1"/>
+        <g transform="translate(200,100)"><circle r="4" fill="#818cf8" style="filter:drop-shadow(0 0 8px #818cf860)"/><circle r="12" fill="none" stroke="#818cf840" stroke-width="1" stroke-dasharray="3 3"></circle></g>
+        <text x="220" y="96" fill="rgba(255,255,255,0.7)" font-size="10" font-weight="600">Beirut</text>
+        <text x="220" y="110" fill="rgba(255,255,255,0.3)" font-size="7" letter-spacing="0.1em">33.89°N, 35.50°E</text>
+      </svg>
+      <div style="position:absolute;bottom:12px;left:12px;padding:10px 14px;border-radius:8px;background:rgba(0,0,0,0.6);backdrop-filter:blur(8px);border:1px solid #818cf815">
+        <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.85)">Lebanon</div>
+        <div style="font-size:8px;color:#818cf880;margin-top:2px">Middle East</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- K-NEW) REAL MAP IMAGE EXAMPLE -->
+<div class="example-block">
+  <div class="example-label">K) Proposed: Real Map Image <span class="new-badge">✓ NEW</span></div>
+  <div class="example-desc">Uses a real Google Static Maps &lt;img&gt; with dark styling, accent pins, and overlaid info cards. This is what the LLM should produce when map data is available.</div>
+  <div class="card card-new">
+    <div style="width:100%;box-sizing:border-box;padding:16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
+      <!-- Header -->
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">
+        <div>
+          <div style="font-size:8px;color:#34d39980;text-transform:uppercase;letter-spacing:0.15em;margin-bottom:4px">Geopolitical Flashpoint</div>
+          <div style="font-size:22px;font-weight:800;color:rgba(255,255,255,0.9);line-height:1.1">The April 8 Lebanon Blitz</div>
+        </div>
+        <div style="padding:4px 10px;border-radius:6px;background:#fb718512;border:1px solid #fb718530;font-size:9px;font-weight:700;color:#fb7185">CRITICAL</div>
+      </div>
+      <!-- Real Map Image -->
+      <div style="position:relative;border-radius:12px;overflow:hidden;margin-bottom:14px">
+        <img src="https://maps.googleapis.com/maps/api/staticmap?size=580x320&scale=2&maptype=roadmap&key=AIzaSyA1DYSsaBklpyPn21riG1It8rQ35BNoPBw&style=element:geometry|color:0x0a0a12&style=element:labels.text.stroke|color:0x0a0a12&style=element:labels.text.fill|color:0x746855&style=feature:administrative.locality|element:labels.text.fill|color:0xd59563&style=feature:road|element:geometry|color:0x15151f&style=feature:water|element:geometry|color:0x0e1626&markers=color:0x34d399|label:A|33.8938,35.5018&markers=color:0x34d399|label:B|33.2721,35.2033" style="width:100%;border-radius:12px;display:block" alt="Map of Lebanon showing Beirut and Litani River" />
+        <!-- Overlay labels -->
+        <div style="position:absolute;top:10px;left:10px;padding:6px 10px;border-radius:6px;background:rgba(0,0,0,0.7);backdrop-filter:blur(8px);border:1px solid #34d39920">
+          <div style="font-size:10px;font-weight:700;color:#34d399">A</div>
+          <div style="font-size:9px;color:rgba(255,255,255,0.7)">Beirut</div>
+          <div style="font-size:7px;color:rgba(255,255,255,0.3)">33.89°N, 35.50°E</div>
+        </div>
+        <div style="position:absolute;bottom:10px;right:10px;padding:6px 10px;border-radius:6px;background:rgba(0,0,0,0.7);backdrop-filter:blur(8px);border:1px solid #34d39920">
+          <div style="font-size:10px;font-weight:700;color:#34d399">B</div>
+          <div style="font-size:9px;color:rgba(255,255,255,0.7)">Litani River</div>
+          <div style="font-size:7px;color:rgba(255,255,255,0.3)">33.27°N, 35.20°E</div>
+        </div>
+      </div>
+      <!-- Stats row -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+        <div style="padding:10px;border-radius:8px;background:#fb718508;border:1px solid #fb71850c;text-align:center"><div style="font-size:22px;font-weight:900;color:#fb7185">254</div><div style="font-size:7px;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:0.1em;margin-top:2px">Fatalities</div></div>
+        <div style="padding:10px;border-radius:8px;background:#34d39908;border:1px solid #34d3990c;text-align:center"><div style="font-size:22px;font-weight:900;color:#34d399">100+</div><div style="font-size:7px;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:0.1em;margin-top:2px">Airstrikes</div></div>
+        <div style="padding:10px;border-radius:8px;background:#f59e0b08;border:1px solid #f59e0b0c;text-align:center"><div style="font-size:22px;font-weight:900;color:#f59e0b">1M+</div><div style="font-size:7px;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:0.1em;margin-top:2px">Displaced</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div>
+
+<div style="height:100px"></div>
+</body>
+</html>

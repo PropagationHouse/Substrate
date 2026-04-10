@@ -8,8 +8,8 @@ variables:
 import subprocess
 import os
 
-# Use the robust script we just created
-script_path = os.path.join(os.getcwd(), "workspace", "temp", "x_post_robust.py")
+# Use the script
+script_path = os.path.join(os.getcwd(), "workspace", "temp", "x_post.py")
 content = """{{content}}"""
 
 try:

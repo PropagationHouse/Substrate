@@ -610,7 +610,7 @@ export default function App({ onLogout }: AppProps) {
   const streamingText = useMemo(() => stream?.html || '', [stream]);
   const streamingRawText = useMemo(() => stream?.rawText || '', [stream]);
 
-  const onChatSend = useCallback((text: string) => { handleSend(text); }, [handleSend]);
+  const onChatSend = useCallback((text: string, images?: any[]) => { handleSend(text, images); }, [handleSend]);
   const toggleChat = useCallback(() => { setChatOpen(prev => !prev); }, []);
 
   // Placeholder tasks
@@ -940,6 +940,7 @@ export default function App({ onLogout }: AppProps) {
               chatMessages={messages}
               isAgentGenerating={isGenerating}
               streamingText={streamingText}
+              streamingRawText={streamingRawText}
             />
           </FloatingWindow>
         </div>

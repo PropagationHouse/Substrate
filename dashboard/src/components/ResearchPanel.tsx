@@ -148,6 +148,7 @@ interface ResearchPanelProps {
   chatMessages: ChatMsg[];
   isAgentGenerating: boolean;
   streamingText: string;
+  streamingRawText?: string;
 }
 
 // ─── Constants ──────────────────────────────────────────────────────────────
@@ -465,6 +466,8 @@ IMPORTANT: Return ONLY the JSON object for the single updated slide, no markdown
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
+// Geo detection moved to backend -- LLM extracts locations directly (no keyword pre-filter)
+
 function genId(): string {
   return 't-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 }
@@ -703,6 +706,7 @@ export function ResearchPanel({
   chatMessages,
   isAgentGenerating,
   streamingText,
+  streamingRawText,
 }: ResearchPanelProps) {
   const [topics, setTopics] = useState<Topic[]>([]);
   const [feedItems, setFeedItems] = useState<FeedItem[]>([]);
@@ -763,6 +767,10 @@ export function ResearchPanel({
   // Keep feedItems accessible via ref for async callbacks (redesign, design pass)
   const feedItemsRef = useRef(feedItems);
   feedItemsRef.current = feedItems;
+  // Capture streaming raw text so we can use it as a fallback when chatMessages hasn't updated yet
+  const lastStreamingTextRef = useRef('');
+  const rawStream = streamingRawText || streamingText;
+  if (rawStream) lastStreamingTextRef.current = rawStream;
 
   const consumePending = useCallback((pending: PendingRequest) => {
     const msgs = chatMessagesRef.current;
@@ -771,19 +779,30 @@ export function ResearchPanel({
     const candidates = fromSlice.length > 0 ? fromSlice : fromTail;
     const lastAssistant = [...candidates].reverse().find(m => m.role === 'assistant');
 
+    // Fallback: if assistant message isn't in chatMessages yet, use the captured streaming text
+    let rawText = lastAssistant?.rawText || '';
+    if (!rawText && lastStreamingTextRef.current) {
+      // Extract raw text from streaming HTML (strip tags)
+      const streamRaw = lastStreamingTextRef.current.replace(/<[^>]*>/g, '').trim();
+      if (streamRaw.length > 20) {
+        console.log(`[ResearchPanel] consumePending: using streamingText fallback (${streamRaw.length} chars)`);
+        rawText = streamRaw;
+      }
+    }
+
     console.log('[ResearchPanel] consumePending:', pending.query,
       '| msgs:', msgs.length, '| msgCount:', pending.msgCount,
       '| fromSlice:', fromSlice.length, '| candidates:', candidates.length,
-      '| lastAssistant:', lastAssistant ? `role=${lastAssistant.role} rawText=${lastAssistant.rawText?.slice(0, 80)}...` : 'NONE');
+      '| lastAssistant:', lastAssistant ? `role=${lastAssistant.role} rawText=${rawText?.slice(0, 80)}...` : 'NONE (streamFallback=' + (rawText.length > 0) + ')');
 
-    if (!lastAssistant?.rawText) return false;
+    if (!rawText) return false;
 
     try {
       // Handle per-slide edit -- update just one section in an existing item
       const editTarget = slideEditTargetRef.current;
       if (editTarget) {
         slideEditTargetRef.current = null;
-        const parsed = parseAgentJSON(lastAssistant.rawText);
+        const parsed = parseAgentJSON(rawText);
         if (parsed && parsed.heading) {
           setFeedItems(prev => {
             const updated = prev.map(fi => {
@@ -807,7 +826,7 @@ export function ResearchPanel({
       }
 
       // Normal case -- parse as full feed item
-      const item = parseResponseToFeedItem(lastAssistant.rawText, pending.query, pending.type, {
+      const item = parseResponseToFeedItem(rawText, pending.query, pending.type, {
         parentId: pending.parentId, outputFormat: pending.outputFormat, ...pending.extras,
       });
       setFeedItems(prev => {
@@ -818,8 +837,12 @@ export function ResearchPanel({
       });
       setSelectedItemId(item.id);
       setSlideIndex(0);
+      // Clear streaming fallback after successful consumption
+      lastStreamingTextRef.current = '';
+      console.log(`[ResearchPanel] Parsed item: id=${item.id}, title="${item.title}", sections=${item.sections?.length ?? 0}, hasHtml=${item.sections?.some(s => s.html) ?? false}, sectionHeadings=${item.sections?.map(s => s.heading).join(' | ')}`);
       // Auto-trigger design pass for any item with sections that lack html
       if (item.sections?.length && !item.sections.some(s => s.html)) {
+        console.log(`[ResearchPanel] Queuing design pass for ${item.sections.length} sections, itemId=${item.id}`);
         pendingDesignPassRef.current = item.id;
       }
       return true;
@@ -966,7 +989,8 @@ export function ResearchPanel({
 
   // ─── Generate output from research ─────────────────────────────
   const generateOutput = useCallback((item: FeedItem, format: OutputFormat, count: number) => {
-    const template = prompts[format];
+    // Use the slideDesigner prompt for slides -- it has data markers, narrative arc, and strict count enforcement
+    const template = format === 'slides' ? prompts.slideDesigner : prompts[format];
     const prompt = buildPrompt(template, { RESEARCH: feedItemToContext(item), TOPIC: item.title, COUNT: String(count), WORD_COUNT: format === 'article' ? '1500' : '800' });
     const typeMap: Record<OutputFormat, FeedItemType> = { article: 'article', linkedin: 'social', x: 'social', instagram: 'social', slides: 'slide' };
     const label = format === 'article' ? 'Article' : format === 'slides' ? `${count}-Slide Deck` : `${count} ${format.charAt(0).toUpperCase() + format.slice(1)} Posts`;
@@ -1034,7 +1058,11 @@ export function ResearchPanel({
   const runDesignPass = useCallback(async (itemId: string) => {
     // Find the item in current state via ref (avoids broken setFeedItems side-effect read)
     const item = feedItemsRef.current.find(i => i.id === itemId);
-    if (!item?.sections?.length) return;
+    console.log(`[DesignPass] runDesignPass called for itemId=${itemId}, found=${!!item}, sections=${item?.sections?.length ?? 0}, allItemIds=${feedItemsRef.current.map(i => i.id).join(',')}`);
+    if (!item?.sections?.length) {
+      console.warn(`[DesignPass] SKIPPED -- no item or no sections for itemId=${itemId}`);
+      return;
+    }
 
     // Abort any in-progress design pass
     designAbortRef.current?.abort();
@@ -1046,11 +1074,12 @@ export function ResearchPanel({
     setDesigningItemId(itemId);
     setDesignProgress({ done: 0, total: sections.length });
 
-    console.log(`[DesignPass] Starting design pass for ${sections.length} slides, itemId=${itemId}`);
-    for (let i = 0; i < sections.length; i++) {
-      if (abort.signal.aborted) { console.log(`[DesignPass] Aborted before slide ${i + 1}`); break; }
+    // Helper: design a single slide (backend retries internally up to 3x)
+    const designOneSlide = async (i: number): Promise<boolean> => {
       const section = sections[i];
       const accent = SLIDE_ACCENT_COLORS[i % SLIDE_ACCENT_COLORS.length].glow;
+      // Always allow map context -- backend LLM decides if locations exist (15s timeout guard)
+      if (abort.signal.aborted) return false;
       try {
         console.log(`[DesignPass] Requesting slide ${i + 1}/${sections.length}: "${section.heading}"`);
         const resp = await fetch('/api/local/slide-design', {
@@ -1065,36 +1094,95 @@ export function ResearchPanel({
             deckTitle: item!.title,
             deckOutline,
             accentColor: accent,
-            skipMap: true,
+            skipMap: false,
           }),
         });
-        if (abort.signal.aborted) { console.log(`[DesignPass] Aborted after fetch for slide ${i + 1}`); break; }
+        if (abort.signal.aborted) return false;
+        if (!resp.ok) {
+          const errorText = await resp.text().catch(() => '');
+          console.warn(`[DesignPass] Slide ${i + 1} HTTP ${resp.status}: ${errorText.slice(0, 200)}`);
+          return false;
+        }
         const data = await resp.json();
-        console.log(`[DesignPass] Slide ${i + 1} response:`, { ok: data.ok, hasHtml: !!data.html, htmlLen: data.html?.length, error: data.error });
+        console.log(`[DesignPass] Slide ${i + 1}:`, { ok: data.ok, htmlLen: data.html?.length, error: data.error });
         if (data.ok && data.html) {
-          // Update this section's html in place
           setFeedItems(prev => {
+            const targetItem = prev.find(fi => fi.id === itemId);
+            if (!targetItem) {
+              console.error(`[DesignPass] CRITICAL: item ${itemId} NOT FOUND in feedItems! itemIds: ${prev.map(fi => fi.id).join(',')}`);
+              return prev;
+            }
             const updated = prev.map(fi => {
               if (fi.id !== itemId || !fi.sections) return fi;
               const newSections = [...fi.sections];
-              if (newSections[i]) {
-                newSections[i] = { ...newSections[i], html: data.html };
-              }
+              if (newSections[i]) newSections[i] = { ...newSections[i], html: data.html };
               return { ...fi, sections: newSections };
             });
-            // Persist without blocking the loop
             fetch('/api/local/research-feed', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: updated }) }).catch(() => {});
             return updated;
           });
+          return true;
         }
+        return false;
       } catch (e) {
-        if ((e as Error).name === 'AbortError') { console.log(`[DesignPass] AbortError on slide ${i + 1}`); break; }
-        console.warn(`[DesignPass] Slide ${i + 1} failed:`, e);
+        if ((e as Error).name === 'AbortError') return false;
+        console.warn(`[DesignPass] Slide ${i + 1} error:`, e);
+        return false;
       }
-      setDesignProgress({ done: i + 1, total: sections.length });
+    };
+
+    // Only design slides that don't already have HTML (skip already-designed)
+    const needsDesign = sections.map((s, i) => ({ index: i, hasHtml: !!s.html }));
+    const toDesign = needsDesign.filter(s => !s.hasHtml).map(s => s.index);
+    const alreadyDone = needsDesign.filter(s => s.hasHtml).length;
+    console.log(`[DesignPass] Starting design pass for ${sections.length} slides, itemId=${itemId}. ${alreadyDone} already designed, ${toDesign.length} to design.`);
+    
+    if (toDesign.length === 0) {
+      console.log(`[DesignPass] All ${sections.length} slides already have HTML — nothing to do.`);
+      setDesigningItemId(null);
+      setDesignProgress({ done: 0, total: 0 });
+      designAbortRef.current = null;
+      return;
+    }
+    
+    const failed: number[] = [];
+    for (let di = 0; di < toDesign.length; di++) {
+      const i = toDesign[di];
+      if (abort.signal.aborted) { console.log(`[DesignPass] Aborted before slide ${i + 1}`); break; }
+      const ok = await designOneSlide(i);
+      if (!ok && !abort.signal.aborted) failed.push(i);
+      setDesignProgress({ done: alreadyDone + di + 1, total: sections.length });
+      // Small inter-slide delay to avoid rate limiting
+      if (di < toDesign.length - 1 && !abort.signal.aborted) {
+        await new Promise(r => setTimeout(r, 500));
+      }
     }
 
-    console.log(`[DesignPass] Design pass complete for itemId=${itemId}`);
+    // Retry pass for any slides that failed all attempts
+    if (failed.length > 0 && !abort.signal.aborted) {
+      console.log(`[DesignPass] Retry pass for ${failed.length} failed slides: [${failed.map(i => i + 1).join(', ')}]`);
+      // Longer cooldown before retry pass
+      await new Promise(r => setTimeout(r, 3000));
+      for (const i of failed) {
+        if (abort.signal.aborted) break;
+        const ok = await designOneSlide(i);
+        console.log(`[DesignPass] Retry pass slide ${i + 1}: ${ok ? 'SUCCESS' : 'FAILED'}`);
+        if (i !== failed[failed.length - 1] && !abort.signal.aborted) {
+          await new Promise(r => setTimeout(r, 1000));
+        }
+      }
+    }
+
+    // Definitive diagnostic: check which slides actually have HTML in state
+    const finalItem = feedItemsRef.current.find(fi => fi.id === itemId);
+    if (finalItem?.sections) {
+      const slideStatus = finalItem.sections.map((s, idx) => `${idx + 1}:${s.html ? 'OK(' + s.html.length + ')' : 'MISSING'}`);
+      const designed = finalItem.sections.filter(s => s.html).length;
+      console.log(`[DesignPass] FINAL STATUS for itemId=${itemId}: ${designed}/${finalItem.sections.length} designed. ${slideStatus.join(' | ')}`);
+      if (failed.length > 0) console.warn(`[DesignPass] Failed slide indices (0-based): [${failed.join(', ')}]`);
+    } else {
+      console.error(`[DesignPass] CRITICAL: item ${itemId} not found in feedItemsRef at end of pass!`);
+    }
     setDesigningItemId(null);
     setDesignProgress({ done: 0, total: 0 });
     designAbortRef.current = null;
@@ -2271,6 +2359,9 @@ function sanitizeSlideHtml(html: string): string {
   clean = clean.replace(/\s+on\w+\s*=\s*\S+/gi, '');
   // Remove javascript: urls
   clean = clean.replace(/href\s*=\s*["']javascript:[^"']*["']/gi, 'href="#"');
+  // Strip hard max-height + overflow:hidden from root div so content isn't clipped
+  clean = clean.replace(/max-height\s*:\s*\d+px\s*;?/gi, '');
+  clean = clean.replace(/overflow\s*:\s*hidden\s*;?/gi, '');
   return clean;
 }
 
@@ -2429,7 +2520,62 @@ function AgentHtmlSlide({ html, onEdit }: { html: string; onEdit?: (newHtml: str
     );
   }
 
-  // ── View mode (default) ──
+  // ── View mode (default) — scale-to-fit so entire agent output is visible ──
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const innerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const inner = innerRef.current;
+    const wrapper = wrapperRef.current;
+    if (!inner || !wrapper) return;
+
+    let applied = false;
+
+    const measure = () => {
+      const wW = wrapper.clientWidth;
+      const wH = wrapper.clientHeight;
+      if (wW === 0 || wH === 0) return;
+
+      // Measure natural height using an invisible offscreen clone (no visual flash)
+      const clone = inner.cloneNode(true) as HTMLDivElement;
+      clone.style.cssText = `position:absolute;left:-9999px;top:0;width:${wW}px;transform:none;visibility:hidden;pointer-events:none`;
+      wrapper.appendChild(clone);
+      const naturalH = clone.scrollHeight;
+      wrapper.removeChild(clone);
+
+      if (naturalH > 0 && naturalH > wH) {
+        const s = Math.max((wH - 4) / naturalH, 0.35);
+        inner.style.transform = `scale(${s})`;
+        inner.style.transformOrigin = 'top center';
+        inner.style.width = `${wW / s}px`;
+        inner.style.marginLeft = `${-(wW / s - wW) / 2}px`;
+      } else {
+        inner.style.transform = 'none';
+        inner.style.width = `${wW}px`;
+        inner.style.marginLeft = '0';
+      }
+      applied = true;
+    };
+
+    // Initial measure on next frame so DOM is settled
+    const raf = requestAnimationFrame(measure);
+
+    // Re-measure only on genuine wrapper resizes
+    let resizeTid: ReturnType<typeof setTimeout> | null = null;
+    let lastW = 0;
+    let lastH = 0;
+    const ro = new ResizeObserver((entries) => {
+      const r = entries[0]?.contentRect;
+      if (!r) return;
+      if (applied && Math.abs(r.width - lastW) < 2 && Math.abs(r.height - lastH) < 2) return;
+      lastW = r.width; lastH = r.height;
+      if (resizeTid) clearTimeout(resizeTid);
+      resizeTid = setTimeout(measure, 100);
+    });
+    ro.observe(wrapper);
+    return () => { cancelAnimationFrame(raf); if (resizeTid) clearTimeout(resizeTid); ro.disconnect(); };
+  }, [sanitized]);
+
   return (
     <div className="relative flex-1 flex flex-col group/html">
       {onEdit && (
@@ -2446,12 +2592,13 @@ function AgentHtmlSlide({ html, onEdit }: { html: string; onEdit?: (newHtml: str
           </button>
         </div>
       )}
-      <div
-        ref={containerRef}
-        className="flex-1 overflow-hidden flex flex-col"
-        style={{ maxHeight: 380 }}
-        dangerouslySetInnerHTML={{ __html: sanitized }}
-      />
+      {/* Wrapper takes the available flex space; inner scales to fit */}
+      <div ref={wrapperRef} className="flex-1 overflow-hidden">
+        <div
+          ref={innerRef}
+          dangerouslySetInnerHTML={{ __html: sanitized }}
+        />
+      </div>
     </div>
   );
 }
