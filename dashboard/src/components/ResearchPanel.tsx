@@ -396,7 +396,7 @@ Original research context:
 
 Follow-up question: {{QUESTION}}`,
 
-  slideDesigner: `You are an elite research analyst and storytelling expert. Your job: distill research into a structured slide deck outline with punchy headings and rich body text.
+  slideDesigner: `You are an elite research analyst and storytelling expert. Your job: distill research into a structured slide deck outline with punchy headings and data-dense body text.
 
 You do NOT generate HTML or visual design -- a separate design engine handles that. Focus 100% on content structure, narrative arc, and data extraction.
 
@@ -407,7 +407,7 @@ Return as JSON:
   "sections": [
     {
       "heading": "Punchy insight heading, max 8 words",
-      "body": "Rich body text with data markers (see below). 2-4 sentences max."
+      "body": "Data-rich body text with 2+ data markers (see below). 3-6 sentences."
     }
   ],
   "sources": [/* preserve real source URLs from research */],
@@ -415,23 +415,30 @@ Return as JSON:
   "followUpQuestions": ["question?", "question?"]
 }
 
-=== DATA MARKERS (use these in the body field -- the design engine converts them to visuals) ===
-* [STAT: value | description] -- for hero statistics
-* [COMPARE: A = val | B = val | C = val] -- for comparisons / bar charts
-* [TIMELINE: 2023 = event | 2024 = event | 2025 = event] -- for chronological data
-* [FLOW: Step1 -> Step2 -> Step3] -- for processes
-* > "quote text" -- Attribution -- for cinematic quotes
-* **Bold lead-ins** for key points
+=== DATA MARKERS (the design engine converts these to rich visuals -- use 2+ per section) ===
+* [STAT: value | description] -- hero statistics (e.g. [STAT: 73% | of enterprises adopted AI in 2025])
+* [COMPARE: A = val | B = val | C = val] -- comparisons / bar charts
+* [TIMELINE: 2023 = event | 2024 = event | 2025 = event] -- chronological data
+* [FLOW: Step1 -> Step2 -> Step3] -- processes and pipelines
+* > "quote text" -- Attribution -- cinematic quotes
+* **Bold lead-ins** for key bullet points
+
+=== HEADING EXAMPLES (lead with INSIGHT not topic) ===
+BAD: "Market Overview" -> GOOD: "A $4.2T Market Nobody Saw Coming"
+BAD: "Key Players" -> GOOD: "Three Companies Own 81% of the Market"
+BAD: "Safety Tips" -> GOOD: "The 5-Minute Check That Saves Lives"
+BAD: "History" -> GOOD: "From Garage Project to Global Standard"
 
 === CONTENT RULES ===
-1. Lead with INSIGHT not topic. BAD: "Market Size" GOOD: "A $4.2T Market Nobody Saw Coming"
-2. ONE idea per slide. Maximum 3 bullet points.
-3. Use real data from the research. Concrete numbers > vague claims.
-4. Narrative arc: hook -> context -> evidence -> insight -> implications.
-5. Use data markers liberally -- every slide should have at least one [STAT], [COMPARE], [TIMELINE], [FLOW], or quote.
-6. The "body" text is what the design engine will visualize, so pack it with data and structure.
+1. HEADINGS: Lead with insight, surprise, or a concrete number. Max 8 words. Each heading should make the reader curious.
+2. BODY DENSITY: Each section body MUST have 3-6 rich sentences AND at least 2 data markers ([STAT], [COMPARE], [TIMELINE], [FLOW], or quote). More data = better slides.
+3. ONE core idea per slide, but pack supporting evidence around it. 2-3 bullet points max.
+4. NARRATIVE ARC across the deck: hook -> context -> evidence -> insight -> implications -> takeaway.
+5. Use REAL DATA from the research. Concrete numbers, percentages, dollar amounts, rankings. Vague descriptions are useless.
+6. VARY the data markers across slides. Don't use [STAT] on every slide -- mix in [COMPARE], [TIMELINE], [FLOW], and quotes.
+7. If the topic involves a GEOGRAPHIC PLACE, include location-specific details: distances, coordinates, neighborhood names, trail names, route details, local landmarks.
 
-TARGET: {{COUNT}} slides exactly. Do NOT return fewer.
+YOU MUST RETURN EXACTLY {{COUNT}} sections. Returning fewer is unacceptable.
 
 IMPORTANT: Return ONLY the JSON object, no markdown fences. Do NOT include an "html" field.
 
@@ -722,6 +729,8 @@ export function ResearchPanel({
   const [newTopic, setNewTopic] = useState('');
   const [newUrl, setNewUrl] = useState('');
   const [researchQuery, setResearchQuery] = useState('');
+  const [researchMode, setResearchMode] = useState<'quick' | 'deep'>('quick');
+  const [deepResearchLoading, setDeepResearchLoading] = useState(false);
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
   const [slideIndex, setSlideIndex] = useState(0);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
@@ -732,6 +741,8 @@ export function ResearchPanel({
   // Track pending research requests
   const pendingRef = useRef<PendingRequest | null>(null);
   const prevGeneratingRef = useRef(false);
+  // Track the last consumed assistant msgId to prevent re-consuming the same response
+  const lastConsumedMsgIdRef = useRef<string | null>(null);
   // Track per-slide edit targets for the Slide Designer
   const slideEditTargetRef = useRef<{ itemId: string; sectionIndex: number } | null>(null);
   // Design pass: track which item is being designed + progress
@@ -774,15 +785,31 @@ export function ResearchPanel({
 
   const consumePending = useCallback((pending: PendingRequest) => {
     const msgs = chatMessagesRef.current;
-    const fromSlice = msgs.slice(pending.msgCount);
-    const fromTail = msgs.slice(-10);
-    const candidates = fromSlice.length > 0 ? fromSlice : fromTail;
-    const lastAssistant = [...candidates].reverse().find(m => m.role === 'assistant');
+    // Find our [RESEARCH_PIPELINE] user message by scanning for it.
+    // chatMessages is windowed (~50 items), so index-based slicing doesn't work.
+    // Search backwards for the last user message containing [RESEARCH_PIPELINE].
+    let userMsgIdx = -1;
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      if (msgs[i].role === 'user' && msgs[i].rawText?.includes('[RESEARCH_PIPELINE]')) {
+        userMsgIdx = i;
+        break;
+      }
+    }
 
-    // Fallback: if assistant message isn't in chatMessages yet, use the captured streaming text
+    // Look for assistant messages AFTER our user message
+    let lastAssistant: typeof msgs[0] | undefined;
+    if (userMsgIdx >= 0) {
+      const afterUser = msgs.slice(userMsgIdx + 1);
+      lastAssistant = [...afterUser].reverse().find(m => m.role === 'assistant');
+    } else {
+      // User message not in window — just take the very last assistant message
+      // This handles the case where the window has scrolled past our user message
+      lastAssistant = [...msgs].reverse().find(m => m.role === 'assistant');
+    }
+
+    // Streaming text fallback
     let rawText = lastAssistant?.rawText || '';
     if (!rawText && lastStreamingTextRef.current) {
-      // Extract raw text from streaming HTML (strip tags)
       const streamRaw = lastStreamingTextRef.current.replace(/<[^>]*>/g, '').trim();
       if (streamRaw.length > 20) {
         console.log(`[ResearchPanel] consumePending: using streamingText fallback (${streamRaw.length} chars)`);
@@ -790,12 +817,21 @@ export function ResearchPanel({
       }
     }
 
+    // Guard: if we found an assistant message but it was already consumed for a previous
+    // request, skip it. We track this via lastConsumedMsgIdRef.
+    if (lastAssistant && lastAssistant.msgId && lastAssistant.msgId === lastConsumedMsgIdRef.current) {
+      console.log('[ResearchPanel] consumePending: skipping already-consumed msgId:', lastAssistant.msgId);
+      rawText = '';
+    }
+
     console.log('[ResearchPanel] consumePending:', pending.query,
-      '| msgs:', msgs.length, '| msgCount:', pending.msgCount,
-      '| fromSlice:', fromSlice.length, '| candidates:', candidates.length,
-      '| lastAssistant:', lastAssistant ? `role=${lastAssistant.role} rawText=${rawText?.slice(0, 80)}...` : 'NONE (streamFallback=' + (rawText.length > 0) + ')');
+      '| msgs:', msgs.length, '| userMsgIdx:', userMsgIdx,
+      '| lastAssistant:', lastAssistant ? `msgId=${lastAssistant.msgId} rawText=${rawText?.slice(0, 80)}...` : 'NONE (streamFallback=' + (rawText.length > 0) + ')');
 
     if (!rawText) return false;
+
+    // Track this message as consumed so we don't re-use it for a future request
+    if (lastAssistant?.msgId) lastConsumedMsgIdRef.current = lastAssistant.msgId;
 
     try {
       // Handle per-slide edit -- update just one section in an existing item
@@ -860,19 +896,22 @@ export function ResearchPanel({
     const wasGenerating = prevGeneratingRef.current;
     prevGeneratingRef.current = isAgentGenerating;
     if (wasGenerating && !isAgentGenerating) {
-      console.log('[ResearchPanel] isAgentGenerating went false. pendingRef:', pendingRef.current?.query || 'null', '| msgs:', chatMessages.length);
+      console.log('[ResearchPanel] isAgentGenerating went false. pendingRef:', pendingRef.current?.query || 'null',
+        '| msgs:', chatMessages.length,
+        '| streamRef:', lastStreamingTextRef.current.length, 'chars',
+        '| rawStream:', (streamingRawText || streamingText || '').length, 'chars');
     }
     if (wasGenerating && !isAgentGenerating && pendingRef.current) {
       const pending = pendingRef.current;
       pendingRef.current = null;
       if (consumePending(pending)) {
-        // Success -- kick off design pass if queued
+        console.log('[ResearchPanel] ✓ consumePending succeeded on isAgentGenerating transition');
         setTimeout(() => {
           const queuedId = pendingDesignPassRef.current;
           if (queuedId) { pendingDesignPassRef.current = null; runDesignPassRef.current(queuedId); }
         }, 300);
       } else {
-        // Message not yet in chatMessages -- park it for the message-change watcher
+        console.log('[ResearchPanel] ✗ consumePending failed on transition, parking to unconsumedPendingRef');
         unconsumedPendingRef.current = pending;
       }
     }
@@ -884,7 +923,9 @@ export function ResearchPanel({
   useEffect(() => {
     const pending = unconsumedPendingRef.current;
     if (!pending) return;
+    console.log('[ResearchPanel] Secondary watcher retrying consumePending for:', pending.query, '| msgs:', chatMessages.length, '| streamRef:', lastStreamingTextRef.current.length);
     if (consumePending(pending)) {
+      console.log('[ResearchPanel] ✓ Secondary watcher consumed pending');
       unconsumedPendingRef.current = null;
       setTimeout(() => {
         const queuedId = pendingDesignPassRef.current;
@@ -949,7 +990,7 @@ export function ResearchPanel({
       console.warn('[ResearchPanel] sendPipelineRequest blocked -- agent still generating for:', pendingRef.current.query);
       return;
     }
-    console.log('[ResearchPanel] sendPipelineRequest:', opts.query, 'msgCount:', chatMessages.length);
+    console.log('[ResearchPanel] sendPipelineRequest:', opts.query, 'msgs:', chatMessages.length);
     pendingRef.current = { query: opts.query, type: opts.type, msgCount: chatMessages.length, parentId: opts.parentId, outputFormat: opts.outputFormat, extras: opts.extras };
     setFeedItems(prev => [{ id: genId(), type: opts.type, title: opts.query, summary: '', topics: [], timestamp: Date.now(), pending: true, parentId: opts.parentId, outputFormat: opts.outputFormat }, ...prev]);
     setView('research'); setSlideIndex(0);
@@ -959,9 +1000,88 @@ export function ResearchPanel({
   // ─── Research ───────────────────────────────────────────────────
   const doResearch = useCallback((query: string) => {
     if (!query.trim()) return;
+    if (researchMode === 'deep') {
+      doDeepResearch(query.trim());
+      return;
+    }
     sendPipelineRequest({ prompt: buildPrompt(prompts.research, { QUERY: query.trim() }), query: query.trim(), type: 'research' });
     setResearchQuery('');
-  }, [prompts.research, sendPipelineRequest]);
+  }, [prompts.research, sendPipelineRequest, researchMode]);
+
+  const doDeepResearch = useCallback(async (query: string, context?: string, parentId?: string) => {
+    if (!query.trim() || deepResearchLoading) return;
+    setDeepResearchLoading(true);
+    setResearchQuery('');
+    setView('research');
+    setSlideIndex(0);
+
+    // Add a pending placeholder
+    const pendingId = genId();
+    setFeedItems(prev => [{ id: pendingId, type: 'research', title: query.trim(), summary: '', topics: [], timestamp: Date.now(), pending: true, parentId }, ...prev]);
+
+    try {
+      const resp = await fetch('/api/local/deep-research', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: query.trim(), context: context || '' }),
+      });
+      const data = await resp.json();
+
+      if (data.ok && data.result) {
+        const r = data.result;
+        const sections: SlideSection[] = (r.sections || []).map((s: any) => ({
+          heading: String(s.heading || ''),
+          body: String(s.body || ''),
+        }));
+        const sources = (r.sources || []).filter((s: any) => s.url && s.url.startsWith('http')).map((s: any) => ({
+          url: String(s.url),
+          label: String(s.label || new URL(String(s.url)).hostname.replace('www.', '')),
+        }));
+        const followUpQuestions = Array.isArray(r.followUpQuestions) ? r.followUpQuestions.slice(0, 5) : undefined;
+
+        const item: FeedItem & { followUpQuestions?: string[] } = {
+          id: pendingId,
+          type: 'research',
+          title: String(r.title || query),
+          summary: String(r.summary || ''),
+          content: sections.map(s => `## ${s.heading}\n${s.body}`).join('\n\n'),
+          sections,
+          sourceUrls: sources.length > 0 ? sources : undefined,
+          sourceUrl: sources[0]?.url,
+          sourceName: sources[0]?.label,
+          topics: Array.isArray(r.keyTopics) ? r.keyTopics.slice(0, 5) : [query.toLowerCase()],
+          timestamp: Date.now(),
+          parentId,
+          followUpQuestions,
+        };
+
+        setFeedItems(prev => {
+          const updated = prev.map(i => i.id === pendingId ? item : i);
+          fetch('/api/local/research-feed', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: updated }) }).catch(() => {});
+          return updated;
+        });
+        setSelectedItemId(pendingId);
+
+        // Auto-trigger design pass
+        if (sections.length > 0) {
+          pendingDesignPassRef.current = pendingId;
+          setTimeout(() => {
+            const queuedId = pendingDesignPassRef.current;
+            if (queuedId) { pendingDesignPassRef.current = null; runDesignPassRef.current(queuedId); }
+          }, 300);
+        }
+      } else {
+        // Remove pending placeholder on error
+        setFeedItems(prev => prev.filter(i => i.id !== pendingId));
+        console.error('[DeepResearch] Error:', data.error || 'Unknown error');
+      }
+    } catch (e) {
+      setFeedItems(prev => prev.filter(i => i.id !== pendingId));
+      console.error('[DeepResearch] Fetch failed:', e);
+    } finally {
+      setDeepResearchLoading(false);
+    }
+  }, [deepResearchLoading, setView]);
 
   const requestBrief = useCallback(() => {
     // Check if a brief for today already exists
@@ -1074,14 +1194,57 @@ export function ResearchPanel({
     setDesigningItemId(itemId);
     setDesignProgress({ done: 0, total: sections.length });
 
-    // Helper: design a single slide (backend retries internally up to 3x)
+    // Only design slides that don't already have HTML (skip already-designed)
+    const needsDesign = sections.map((s, i) => ({ index: i, hasHtml: !!s.html }));
+    const toDesign = needsDesign.filter(s => !s.hasHtml).map(s => s.index);
+    const alreadyDone = needsDesign.filter(s => s.hasHtml).length;
+    console.log(`[DesignPass] Starting design pass for ${sections.length} slides, itemId=${itemId}. ${alreadyDone} already designed, ${toDesign.length} to design.`);
+    
+    if (toDesign.length === 0) {
+      console.log(`[DesignPass] All ${sections.length} slides already have HTML — nothing to do.`);
+      setDesigningItemId(null);
+      setDesignProgress({ done: 0, total: 0 });
+      designAbortRef.current = null;
+      return;
+    }
+
+    // ── Step 1: Batch pre-compute UNIQUE map locations for all slides at once ──
+    let batchMaps: Array<{ mapContext: string; coords: number[][] }> = [];
+    try {
+      console.log(`[DesignPass] Calling batch-map-locations for ${sections.length} slides...`);
+      const batchResp = await fetch('/api/local/batch-map-locations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: abort.signal,
+        body: JSON.stringify({
+          slides: sections.map(s => ({ heading: s.heading, body: s.body })),
+          researchQuery: item!.title,
+          accentColor: SLIDE_ACCENT_COLORS[0].glow,
+        }),
+      });
+      if (batchResp.ok) {
+        const batchData = await batchResp.json();
+        if (batchData.ok && batchData.maps) {
+          batchMaps = batchData.maps;
+          const mapsCount = batchMaps.filter((m: { mapContext: string }) => m.mapContext).length;
+          console.log(`[DesignPass] Batch maps: ${mapsCount}/${sections.length} slides have unique maps`);
+        }
+      }
+    } catch (e) {
+      if ((e as Error).name === 'AbortError') { setDesigningItemId(null); return; }
+      console.warn('[DesignPass] Batch map failed, will fall back to per-slide:', e);
+    }
+
+    // ── Step 2: Design all slides in PARALLEL with pre-assigned map data ──
+    let completedCount = alreadyDone;
+
     const designOneSlide = async (i: number): Promise<boolean> => {
       const section = sections[i];
       const accent = SLIDE_ACCENT_COLORS[i % SLIDE_ACCENT_COLORS.length].glow;
-      // Always allow map context -- backend LLM decides if locations exist (15s timeout guard)
+      const precomputedMap = batchMaps[i]?.mapContext || '';
       if (abort.signal.aborted) return false;
       try {
-        console.log(`[DesignPass] Requesting slide ${i + 1}/${sections.length}: "${section.heading}"`);
+        console.log(`[DesignPass] Requesting slide ${i + 1}/${sections.length}: "${section.heading}"${precomputedMap ? ' (with precomputed map)' : ''}`);
         const resp = await fetch('/api/local/slide-design', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1094,7 +1257,9 @@ export function ResearchPanel({
             deckTitle: item!.title,
             deckOutline,
             accentColor: accent,
-            skipMap: false,
+            skipMap: !!precomputedMap,
+            researchQuery: item!.title,
+            precomputedMapContext: precomputedMap,
           }),
         });
         if (abort.signal.aborted) return false;
@@ -1121,6 +1286,8 @@ export function ResearchPanel({
             fetch('/api/local/research-feed', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: updated }) }).catch(() => {});
             return updated;
           });
+          completedCount++;
+          setDesignProgress({ done: completedCount, total: sections.length });
           return true;
         }
         return false;
@@ -1131,45 +1298,26 @@ export function ResearchPanel({
       }
     };
 
-    // Only design slides that don't already have HTML (skip already-designed)
-    const needsDesign = sections.map((s, i) => ({ index: i, hasHtml: !!s.html }));
-    const toDesign = needsDesign.filter(s => !s.hasHtml).map(s => s.index);
-    const alreadyDone = needsDesign.filter(s => s.hasHtml).length;
-    console.log(`[DesignPass] Starting design pass for ${sections.length} slides, itemId=${itemId}. ${alreadyDone} already designed, ${toDesign.length} to design.`);
-    
-    if (toDesign.length === 0) {
-      console.log(`[DesignPass] All ${sections.length} slides already have HTML — nothing to do.`);
-      setDesigningItemId(null);
-      setDesignProgress({ done: 0, total: 0 });
-      designAbortRef.current = null;
-      return;
-    }
-    
+    // Fire all slide designs in parallel (max 3 concurrent to avoid overwhelming backend)
+    const MAX_CONCURRENT = 3;
     const failed: number[] = [];
-    for (let di = 0; di < toDesign.length; di++) {
-      const i = toDesign[di];
-      if (abort.signal.aborted) { console.log(`[DesignPass] Aborted before slide ${i + 1}`); break; }
-      const ok = await designOneSlide(i);
-      if (!ok && !abort.signal.aborted) failed.push(i);
-      setDesignProgress({ done: alreadyDone + di + 1, total: sections.length });
-      // Small inter-slide delay to avoid rate limiting
-      if (di < toDesign.length - 1 && !abort.signal.aborted) {
-        await new Promise(r => setTimeout(r, 500));
-      }
+    for (let batch = 0; batch < toDesign.length; batch += MAX_CONCURRENT) {
+      if (abort.signal.aborted) break;
+      const chunk = toDesign.slice(batch, batch + MAX_CONCURRENT);
+      const results = await Promise.all(chunk.map(i => designOneSlide(i)));
+      results.forEach((ok, idx) => {
+        if (!ok && !abort.signal.aborted) failed.push(chunk[idx]);
+      });
     }
 
-    // Retry pass for any slides that failed all attempts
+    // Retry pass for any slides that failed
     if (failed.length > 0 && !abort.signal.aborted) {
       console.log(`[DesignPass] Retry pass for ${failed.length} failed slides: [${failed.map(i => i + 1).join(', ')}]`);
-      // Longer cooldown before retry pass
       await new Promise(r => setTimeout(r, 3000));
       for (const i of failed) {
         if (abort.signal.aborted) break;
         const ok = await designOneSlide(i);
-        console.log(`[DesignPass] Retry pass slide ${i + 1}: ${ok ? 'SUCCESS' : 'FAILED'}`);
-        if (i !== failed[failed.length - 1] && !abort.signal.aborted) {
-          await new Promise(r => setTimeout(r, 1000));
-        }
+        console.log(`[DesignPass] Retry slide ${i + 1}: ${ok ? 'SUCCESS' : 'FAILED'}`);
       }
     }
 
@@ -1246,7 +1394,10 @@ export function ResearchPanel({
   }, []);
 
   // ─── Other actions ──────────────────────────────────────────────
-  const digDeeper = useCallback((item: FeedItem) => { doResearch(`Dig deeper into: ${item.title}. Expand on key findings and find additional sources.`); }, [doResearch]);
+  const digDeeper = useCallback((item: FeedItem) => {
+    const context = feedItemToContext(item);
+    doDeepResearch(`Dig deeper into: ${item.title}. Expand on key findings, find additional sources, and explore angles not covered.`, context, item.id);
+  }, [doDeepResearch]);
   const exportSlide = useCallback(async (el: HTMLElement | null, transparent = false) => {
     if (!el) return;
     try {
@@ -1538,15 +1689,34 @@ export function ResearchPanel({
                   <ChevronLeft size={14} />
                 </button>
               )}
-              <div className="flex-1 flex items-center gap-1.5 bg-white/[0.04] border border-white/[0.06] rounded-xl px-3 py-2 focus-within:border-indigo-400/25 transition-all">
+              <div className={`flex-1 flex items-center gap-1.5 bg-white/[0.04] border rounded-xl px-3 py-2 transition-all ${
+                researchMode === 'deep' ? 'border-violet-400/20 focus-within:border-violet-400/35' : 'border-white/[0.06] focus-within:border-indigo-400/25'
+              }`}>
                 <Search size={12} className="text-white/25 shrink-0" />
                 <input value={researchQuery} onChange={e => setResearchQuery(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') doResearch(researchQuery); }}
-                  placeholder="Research anything..." className="flex-1 bg-transparent text-[12px] text-white/80 placeholder:text-white/20 outline-none" disabled={isPending} />
+                  placeholder={researchMode === 'deep' ? 'Deep research (Gemini + Google Search)...' : 'Research anything...'}
+                  className="flex-1 bg-transparent text-[12px] text-white/80 placeholder:text-white/20 outline-none" disabled={isPending || deepResearchLoading} />
               </div>
-              <button onClick={() => doResearch(researchQuery)} disabled={!researchQuery.trim() || isPending}
-                className="px-4 py-2 rounded-xl bg-indigo-500/15 border border-indigo-400/15 text-indigo-300/80 text-[11px] font-medium hover:bg-indigo-500/25 transition-all disabled:opacity-30">
-                {isPending ? <Loader2 size={12} className="animate-spin" /> : <ArrowRight size={12} />}
+              {/* Quick / Deep mode toggle */}
+              <button
+                onClick={() => setResearchMode(m => m === 'quick' ? 'deep' : 'quick')}
+                className={`px-2.5 py-2 rounded-xl border text-[10px] font-semibold transition-all shrink-0 ${
+                  researchMode === 'deep'
+                    ? 'bg-violet-500/20 border-violet-400/25 text-violet-300'
+                    : 'bg-white/[0.03] border-white/[0.06] text-white/40 hover:text-white/60 hover:bg-white/[0.06]'
+                }`}
+                title={researchMode === 'deep' ? 'Deep Research: Gemini with Google Search grounding (slower, more thorough)' : 'Quick Research: Agent pipeline (faster)'}
+              >
+                {researchMode === 'deep' ? '◉ Deep' : '○ Quick'}
+              </button>
+              <button onClick={() => doResearch(researchQuery)} disabled={!researchQuery.trim() || isPending || deepResearchLoading}
+                className={`px-4 py-2 rounded-xl border text-[11px] font-medium transition-all disabled:opacity-30 ${
+                  researchMode === 'deep'
+                    ? 'bg-violet-500/15 border-violet-400/15 text-violet-300/80 hover:bg-violet-500/25'
+                    : 'bg-indigo-500/15 border-indigo-400/15 text-indigo-300/80 hover:bg-indigo-500/25'
+                }`}>
+                {(isPending || deepResearchLoading) ? <Loader2 size={12} className="animate-spin" /> : <ArrowRight size={12} />}
               </button>
             </div>
             {!selectedItemId && contextualSuggestions.length > 0 && (
@@ -1607,6 +1777,9 @@ export function ResearchPanel({
                       const slideCount = sectionCount + 2; // title + sections + sources/actions
                       const accentIdx = completed.indexOf(item) % SLIDE_ACCENT_COLORS.length;
                       const accent = SLIDE_ACCENT_COLORS[accentIdx];
+                      const designedCount = item.sections?.filter(s => s.html)?.length ?? 0;
+                      const isFullyDesigned = sectionCount > 0 && designedCount === sectionCount;
+                      const isPartialDesigned = designedCount > 0 && designedCount < sectionCount;
                       return (
                         <div key={item.id} onClick={() => { setSelectedItemId(item.id); setSlideIndex(0); }}
                           className={`group relative text-left rounded-xl border ${accent.border} bg-gradient-to-br ${accent.bg} to-white/[0.01] p-3.5 hover:border-white/20 hover:scale-[1.02] transition-all duration-200 overflow-hidden cursor-pointer`}>
@@ -1618,10 +1791,18 @@ export function ResearchPanel({
                             className="absolute top-2 right-2 w-5 h-5 rounded-md flex items-center justify-center text-white/0 group-hover:text-white/25 hover:!text-red-400/70 hover:!bg-red-500/10 transition-all z-10" title="Delete">
                             <Trash2 size={9} />
                           </button>
-                          {/* Type badge */}
+                          {/* Type badge + design status */}
                           <div className="flex items-center gap-1.5 mb-2">
                             <span className={`w-5 h-5 rounded-md flex items-center justify-center border ${typeBg[item.type]}`}>{typeIcons[item.type]}</span>
                             <span className="text-[8px] text-white/25 uppercase tracking-wider font-semibold">{item.type}</span>
+                            {isFullyDesigned && (
+                              <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[7px] font-bold uppercase tracking-wider bg-emerald-500/10 border border-emerald-500/15 text-emerald-400/60">
+                                <Check size={7} /> Designed
+                              </span>
+                            )}
+                            {isPartialDesigned && (
+                              <span className="text-[7px] font-bold uppercase tracking-wider text-amber-400/40">{designedCount}/{sectionCount}</span>
+                            )}
                             {item.saved && <Bookmark size={8} className="text-amber-400/60 ml-auto" />}
                           </div>
                           {/* Title */}
@@ -1649,7 +1830,16 @@ export function ResearchPanel({
 
           {/* ── Level 2: Slide carousel for selected item ── */}
           {selectedItemId && (
-            <div className="flex-1 overflow-hidden flex flex-col">
+            <div className="flex-1 overflow-hidden flex flex-col"
+              tabIndex={0}
+              onKeyDown={e => {
+                if (e.key === 'ArrowLeft' && slideIndex > 0) { e.preventDefault(); setSlideIndex(slideIndex - 1); }
+                if (e.key === 'ArrowRight' && slideIndex < presentationSlides.length - 1) { e.preventDefault(); setSlideIndex(slideIndex + 1); }
+                if (e.key === 'Home') { e.preventDefault(); setSlideIndex(0); }
+                if (e.key === 'End') { e.preventDefault(); setSlideIndex(presentationSlides.length - 1); }
+              }}
+              style={{ outline: 'none' }}
+            >
               {presentationSlides.length > 0 ? (
                 <>
                   {/* Carousel nav */}
@@ -1665,31 +1855,73 @@ export function ResearchPanel({
                     <button onClick={() => setSlideIndex(Math.min(presentationSlides.length - 1, slideIndex + 1))} disabled={slideIndex >= presentationSlides.length - 1}
                       className="w-7 h-7 rounded-lg flex items-center justify-center text-white/30 hover:text-white/60 hover:bg-white/[0.06] transition-all disabled:opacity-20"><ChevronRight size={14} /></button>
                   </div>
-                  {/* Slide progress dots */}
-                  <div className="flex items-center justify-center gap-1 py-1.5 shrink-0">
-                    {presentationSlides.map((_, i) => (
-                      <button key={i} onClick={() => setSlideIndex(i)}
-                        className={`rounded-full transition-all ${i === slideIndex ? 'w-4 h-1.5 bg-indigo-400/60' : 'w-1.5 h-1.5 bg-white/15 hover:bg-white/30'}`} />
-                    ))}
+                  {/* Thumbnail strip */}
+                  <div className="flex items-center gap-1.5 px-3 py-2 overflow-x-auto shrink-0 border-b border-white/[0.02]" style={{ scrollbarWidth: 'none' }}>
+                    {presentationSlides.map((s, i) => {
+                      const thumbAccent = SLIDE_ACCENT_COLORS[(s.sectionIndex ?? i) % SLIDE_ACCENT_COLORS.length];
+                      const isActive = i === slideIndex;
+                      const isSection = s.kind === 'section';
+                      const hasHtml = isSection && s.sectionIndex != null && s.feedItem.sections?.[s.sectionIndex]?.html;
+                      return (
+                        <button key={i} onClick={() => setSlideIndex(i)}
+                          className={`shrink-0 rounded-lg transition-all duration-200 flex flex-col items-center justify-center gap-0.5 ${isActive ? 'ring-1 scale-105' : 'opacity-50 hover:opacity-80'}`}
+                          style={{
+                            width: 52, height: 36,
+                            background: isActive ? `linear-gradient(135deg, ${thumbAccent.glow}15, ${thumbAccent.glow}05)` : 'rgba(255,255,255,0.02)',
+                            border: `1px solid ${isActive ? thumbAccent.glow + '40' : 'rgba(255,255,255,0.04)'}`,
+                            boxShadow: isActive ? `0 0 0 1px ${thumbAccent.glow}50` : undefined,
+                          }}>
+                          <span className="text-[6px] font-bold uppercase tracking-wider truncate max-w-[46px] px-0.5"
+                            style={{ color: isActive ? `${thumbAccent.glow}cc` : 'rgba(255,255,255,0.25)' }}>
+                            {s.kind === 'title' ? 'Title' : s.kind === 'sources' ? 'Src' : s.kind === 'actions' ? 'More' : `${(s.sectionIndex ?? 0) + 1}`}
+                          </span>
+                          {isSection && (
+                            <div className="w-4 h-[2px] rounded-full" style={{
+                              background: hasHtml ? `${thumbAccent.glow}60` : 'rgba(255,255,255,0.08)',
+                            }} />
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
-                  {/* Active slide */}
+                  {/* Active slide with fade transition */}
                   <div className="flex-1 overflow-y-auto p-4" ref={slideRef}>
-                    {presentationSlides[slideIndex] && (
-                      <SlideCard slide={presentationSlides[slideIndex]}
-                        onExport={(el, transparent) => exportSlide(el || slideRef.current?.firstElementChild as HTMLElement || slideRef.current, transparent)}
-                        onDigDeeper={() => digDeeper(presentationSlides[slideIndex].feedItem)}
-                        onSave={() => toggleSaved(presentationSlides[slideIndex].feedItem.id)}
-                        onCopy={() => copyContent(presentationSlides[slideIndex].feedItem)}
-                        onFollowUp={(q: string) => askFollowUp(presentationSlides[slideIndex].feedItem, q)}
-                        onGenerate={(f: OutputFormat, c: number) => generateOutput(presentationSlides[slideIndex].feedItem, f, c)}
-                        onEditItem={(patch: Partial<FeedItem>) => editFeedItem(presentationSlides[slideIndex].feedItem.id, patch)}
-                        onDesignSlides={() => runDesignPass(presentationSlides[slideIndex].feedItem.id)}
-                        onEditSlide={(si: number, req: string) => editSlide(presentationSlides[slideIndex].feedItem, si, req)}
-                        onRedesignSlide={(si: number) => redesignSingleSlide(presentationSlides[slideIndex].feedItem.id, si)}
-                        isDesigning={designingItemId === presentationSlides[slideIndex].feedItem.id}
-                        designProgress={designProgress}
-                        isPending={isPending} />
-                    )}
+                    {presentationSlides[slideIndex] && (() => {
+                      const currentSlide = presentationSlides[slideIndex];
+                      const isCurrentDesigning = designingItemId === currentSlide.feedItem.id;
+                      const isSection = currentSlide.kind === 'section' && currentSlide.sectionIndex != null;
+                      const sectionHasHtml = isSection && currentSlide.feedItem.sections?.[currentSlide.sectionIndex!]?.html;
+                      const sectionHasContent = isSection && currentSlide.feedItem.sections?.[currentSlide.sectionIndex!]?.body;
+                      const showDesignOverlay = isCurrentDesigning && isSection && !sectionHasHtml;
+
+                      return (
+                        <div key={slideIndex} className="animate-[fadeIn_200ms_ease-out] relative">
+                          {/* Always show the SlideCard — it renders the default layout or designed HTML */}
+                          <SlideCard slide={currentSlide}
+                            onExport={(el, transparent) => exportSlide(el || slideRef.current?.firstElementChild as HTMLElement || slideRef.current, transparent)}
+                            onDigDeeper={() => digDeeper(currentSlide.feedItem)}
+                            onSave={() => toggleSaved(currentSlide.feedItem.id)}
+                            onCopy={() => copyContent(currentSlide.feedItem)}
+                            onFollowUp={(q: string) => askFollowUp(currentSlide.feedItem, q)}
+                            onGenerate={(f: OutputFormat, c: number) => generateOutput(currentSlide.feedItem, f, c)}
+                            onEditItem={(patch: Partial<FeedItem>) => editFeedItem(currentSlide.feedItem.id, patch)}
+                            onDesignSlides={() => runDesignPass(currentSlide.feedItem.id)}
+                            onEditSlide={(si: number, req: string) => editSlide(currentSlide.feedItem, si, req)}
+                            onRedesignSlide={(si: number) => redesignSingleSlide(currentSlide.feedItem.id, si)}
+                            isDesigning={isCurrentDesigning}
+                            designProgress={designProgress}
+                            isPending={isPending} />
+                          {/* Designing overlay — shown on top of existing content while design is in progress */}
+                          {showDesignOverlay && sectionHasContent && (
+                            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-2 px-3 py-1.5 rounded-full border border-indigo-400/15 z-10"
+                              style={{ background: 'rgba(10,10,18,0.85)', backdropFilter: 'blur(8px)' }}>
+                              <Loader2 size={10} className="text-indigo-400/60 animate-spin" />
+                              <span className="text-[9px] text-indigo-300/50 font-medium">Designing slide {(currentSlide.sectionIndex ?? 0) + 1}...</span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 </>
               ) : (
@@ -2359,9 +2591,14 @@ function sanitizeSlideHtml(html: string): string {
   clean = clean.replace(/\s+on\w+\s*=\s*\S+/gi, '');
   // Remove javascript: urls
   clean = clean.replace(/href\s*=\s*["']javascript:[^"']*["']/gi, 'href="#"');
-  // Strip hard max-height + overflow:hidden from root div so content isn't clipped
-  clean = clean.replace(/max-height\s*:\s*\d+px\s*;?/gi, '');
-  clean = clean.replace(/overflow\s*:\s*hidden\s*;?/gi, '');
+  // Strip max-height + overflow:hidden ONLY from the root div (first tag), not descendants
+  const rootClose = clean.indexOf('>');
+  if (rootClose > 0) {
+    let rootTag = clean.slice(0, rootClose + 1);
+    rootTag = rootTag.replace(/max-height\s*:\s*\d+px\s*;?/gi, '');
+    rootTag = rootTag.replace(/overflow\s*:\s*hidden\s*;?/gi, '');
+    clean = rootTag + clean.slice(rootClose + 1);
+  }
   return clean;
 }
 
@@ -2544,7 +2781,7 @@ function AgentHtmlSlide({ html, onEdit }: { html: string; onEdit?: (newHtml: str
       wrapper.removeChild(clone);
 
       if (naturalH > 0 && naturalH > wH) {
-        const s = Math.max((wH - 4) / naturalH, 0.35);
+        const s = Math.max((wH - 4) / naturalH, 0.55);
         inner.style.transform = `scale(${s})`;
         inner.style.transformOrigin = 'top center';
         inner.style.width = `${wW / s}px`;

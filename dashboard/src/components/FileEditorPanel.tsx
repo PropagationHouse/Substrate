@@ -25,7 +25,11 @@ import {
   Check,
   RotateCcw,
   Music,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
+import { MarkdownRenderer } from '@/features/markdown/MarkdownRenderer';
+import { sanitizeHtml } from '@/lib/sanitize';
 
 interface AuditFinding {
   severity: 'error' | 'warning' | 'info';
@@ -90,6 +94,13 @@ export function FileEditorPanel({ file, loading, onSave, onClose, onChange }: Fi
   const [editPreview, setEditPreview] = useState<string | null>(null);
   const [editInstruction, setEditInstruction] = useState<string | null>(null);
 
+  // Preview mode for MD/HTML files
+  const [showPreview, setShowPreview] = useState(false);
+  const fileExt = file.path.split('.').pop()?.toLowerCase() || '';
+  const isPreviewable = fileExt === 'md' || fileExt === 'mdx' || fileExt === 'html' || fileExt === 'htm';
+  const isMarkdown = fileExt === 'md' || fileExt === 'mdx';
+  const isHtml = fileExt === 'html' || fileExt === 'htm';
+
   // Reset audit when file changes
   useEffect(() => {
     setAuditResult(null);
@@ -98,6 +109,7 @@ export function FileEditorPanel({ file, loading, onSave, onClose, onChange }: Fi
     setShowAudit(false);
     setEditPreview(null);
     setEditInstruction(null);
+    setShowPreview(false);
   }, [file.path]);
 
   const runAudit = useCallback(async () => {
@@ -194,6 +206,21 @@ export function FileEditorPanel({ file, loading, onSave, onClose, onChange }: Fi
           {file.dirty && <span className="text-[10px] text-amber-400/70">modified</span>}
         </div>
         <div className="flex items-center gap-1">
+          {/* Preview toggle for MD/HTML */}
+          {isPreviewable && (
+            <button
+              onClick={() => setShowPreview(p => !p)}
+              className={`h-6 px-2 rounded-md flex items-center gap-1 text-[10px] font-medium transition-all ${
+                showPreview
+                  ? 'text-cyan-400 bg-cyan-400/[0.1]'
+                  : 'text-cyan-400/60 hover:text-cyan-400 hover:bg-cyan-400/[0.08]'
+              }`}
+              title={showPreview ? 'Show source' : 'Preview rendered'}
+            >
+              {showPreview ? <EyeOff size={11} /> : <Eye size={11} />}
+              <span>{showPreview ? 'Source' : 'Preview'}</span>
+            </button>
+          )}
           {/* Audit button */}
           <button
             onClick={runAudit}
@@ -266,6 +293,19 @@ export function FileEditorPanel({ file, loading, onSave, onClose, onChange }: Fi
                 src={file.content}
                 className="w-full max-w-sm"
                 style={{ filter: 'invert(0.85) hue-rotate(180deg)', borderRadius: '8px' }}
+              />
+            </div>
+          ) : showPreview && isMarkdown ? (
+            <div className="w-full h-full overflow-y-auto p-5">
+              <div className="prose prose-invert prose-sm max-w-none">
+                <MarkdownRenderer content={editPreview ?? file.content} />
+              </div>
+            </div>
+          ) : showPreview && isHtml ? (
+            <div className="w-full h-full overflow-y-auto p-5">
+              <div
+                className="prose prose-invert prose-sm max-w-none"
+                dangerouslySetInnerHTML={{ __html: sanitizeHtml(editPreview ?? file.content) }}
               />
             </div>
           ) : (

@@ -10776,6 +10776,197 @@ def api_local_research_prompts():
         return jsonify({'ok': True, 'prompts': data.get('prompts', {})})
 
 
+# ── Deep Research via Gemini with Google Search grounding ────────────────────
+
+DEEP_RESEARCH_SYSTEM_PROMPT = """You are a deep research analyst conducting thorough, multi-source investigation.
+
+METHODOLOGY:
+1. Search for primary sources, academic papers, news reports, and expert analysis
+2. Cross-reference claims across multiple sources
+3. Identify conflicting viewpoints and note them
+4. Prioritize recent data (last 12 months) unless historical context is needed
+5. Include specific statistics, quotes, and citations
+
+Return your findings as a JSON object with this exact structure:
+{
+  "title": "concise descriptive title",
+  "summary": "2-3 sentence executive summary of key findings",
+  "sections": [
+    { "heading": "Insight-led heading (max 8 words)", "body": "Data-rich body with stats, comparisons, and analysis. 3-6 sentences per section." }
+  ],
+  "sources": [
+    { "url": "https://real-url.com/page", "label": "Source Name" }
+  ],
+  "keyTopics": ["topic1", "topic2"],
+  "followUpQuestions": ["deeper question 1?", "deeper question 2?", "deeper question 3?"]
+}
+
+SECTION BODY FORMATTING:
+* Start each section with a 1-2 sentence overview.
+* Use bullet points with **bold lead-ins**: "* **Key Point**: explanation..."
+* Include stat callouts: [STAT: value | description]
+* Include comparisons: [COMPARE: A = val | B = val | C = val]
+* Include timelines: [TIMELINE: 2023 = val | 2024 = val | 2025 = val]
+* Include process flows: [FLOW: Step1 -> Step2 -> Step3]
+* Optionally include pull quotes: > "Notable quote" -- Attribution
+
+RULES:
+- Include 5-8 detailed sections covering different angles
+- Every claim should be backed by specific data
+- ONLY include real source URLs from your search results — never fabricate URLs
+- If you found no sources, omit the sources array
+- Be thorough and analytical — this is deep research, not a summary
+
+IMPORTANT: Return ONLY the JSON object, no markdown fences, no extra text."""
+
+
+@app.route('/api/local/deep-research', methods=['POST'])
+def api_local_deep_research():
+    """Deep research using Gemini API with Google Search grounding.
+    
+    Accepts: { "query": "...", "context": "optional prior research context" }
+    Returns: Structured research JSON with grounded source URLs.
+    """
+    data = request.get_json(silent=True) or {}
+    query = data.get('query', '').strip()
+    context = data.get('context', '').strip()
+    
+    if not query:
+        return jsonify({'error': 'Missing query'}), 400
+    
+    # Resolve Google API key
+    api_key = None
+    if 'agent' in globals() and agent is not None:
+        api_key = _resolve_remote_key(agent.config, provider='google')
+    if not api_key:
+        api_key = os.environ.get('GOOGLE_API_KEY', '').strip()
+    
+    if not api_key:
+        return jsonify({'error': 'No Google API key configured. Set GOOGLE_API_KEY or add it in settings.'}), 400
+    
+    # Build the user prompt
+    user_prompt = f"Conduct deep research on: {query}"
+    if context:
+        user_prompt = f"Prior research context:\n{context[:3000]}\n\nNow conduct DEEPER research on: {query}"
+    
+    # Use Gemini with Google Search grounding
+    model_name = 'gemini-2.5-flash'  # Good balance of speed + quality for grounded research
+    endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
+    
+    payload = {
+        'contents': [{'role': 'user', 'parts': [{'text': user_prompt}]}],
+        'systemInstruction': {'parts': [{'text': DEEP_RESEARCH_SYSTEM_PROMPT}]},
+        'tools': [{'googleSearch': {}}],
+        'generationConfig': {
+            'temperature': 0.7,
+            'maxOutputTokens': 16000,
+            'responseMimeType': 'text/plain',
+        },
+    }
+    
+    logger.info(f"[DEEP_RESEARCH] Starting deep research: '{query[:80]}' via {model_name} with Google Search grounding")
+    
+    try:
+        resp = requests.post(endpoint, headers={'Content-Type': 'application/json'}, json=payload, timeout=120)
+        
+        if resp.status_code != 200:
+            logger.error(f"[DEEP_RESEARCH] Gemini API error {resp.status_code}: {resp.text[:500]}")
+            return jsonify({'error': f'Gemini API error: {resp.status_code}', 'detail': resp.text[:300]}), 502
+        
+        result = resp.json()
+        
+        # Extract the text content
+        text_content = ''
+        grounding_sources = []
+        
+        candidates = result.get('candidates', [])
+        if candidates:
+            candidate = candidates[0]
+            parts = candidate.get('content', {}).get('parts', [])
+            for part in parts:
+                if 'text' in part:
+                    text_content += part['text']
+            
+            # Extract grounding metadata — real source URLs from Google Search
+            grounding_meta = candidate.get('groundingMetadata', {})
+            grounding_chunks = grounding_meta.get('groundingChunks', [])
+            for chunk in grounding_chunks:
+                web = chunk.get('web', {})
+                if web.get('uri'):
+                    grounding_sources.append({
+                        'url': web['uri'],
+                        'label': web.get('title', web['uri'][:60]),
+                    })
+            
+            # Also check groundingSupports for additional citation info
+            grounding_supports = grounding_meta.get('groundingSupports', [])
+            for support in grounding_supports:
+                for idx in support.get('groundingChunkIndices', []):
+                    pass  # We already have the chunks above
+        
+        if not text_content:
+            return jsonify({'error': 'Empty response from Gemini'}), 502
+        
+        logger.info(f"[DEEP_RESEARCH] Got {len(text_content)} chars, {len(grounding_sources)} grounding sources")
+        
+        # Try to parse the JSON response
+        parsed = None
+        # Strip markdown fences
+        cleaned = text_content.replace('```json', '').replace('```', '').strip()
+        try:
+            parsed = json.loads(cleaned)
+        except json.JSONDecodeError:
+            # Try to find JSON object in text
+            import re as _re_dr
+            json_match = _re_dr.search(r'\{[\s\S]*\}', cleaned)
+            if json_match:
+                try:
+                    parsed = json.loads(json_match.group(0))
+                except json.JSONDecodeError:
+                    pass
+        
+        if not parsed:
+            # Return raw text as a single section
+            parsed = {
+                'title': query[:100],
+                'summary': text_content[:300],
+                'sections': [{'heading': 'Research Findings', 'body': text_content}],
+                'sources': [],
+                'keyTopics': [query.lower()[:30]],
+                'followUpQuestions': [],
+            }
+        
+        # Merge grounding sources with parsed sources (dedup by URL)
+        existing_urls = set()
+        merged_sources = []
+        for s in parsed.get('sources', []):
+            if isinstance(s, dict) and s.get('url'):
+                if s['url'] not in existing_urls:
+                    existing_urls.add(s['url'])
+                    merged_sources.append(s)
+        for s in grounding_sources:
+            if s['url'] not in existing_urls:
+                existing_urls.add(s['url'])
+                merged_sources.append(s)
+        parsed['sources'] = merged_sources
+        
+        # Add metadata
+        parsed['_deepResearch'] = True
+        parsed['_model'] = model_name
+        parsed['_groundingSources'] = len(grounding_sources)
+        
+        logger.info(f"[DEEP_RESEARCH] Success: '{parsed.get('title', 'untitled')[:60]}', {len(parsed.get('sections', []))} sections, {len(merged_sources)} sources")
+        
+        return jsonify({'ok': True, 'result': parsed})
+        
+    except requests.Timeout:
+        logger.error(f"[DEEP_RESEARCH] Timeout after 120s for query: '{query[:80]}'")
+        return jsonify({'error': 'Deep research timed out. Try a more specific query.'}), 504
+    except Exception as e:
+        logger.error(f"[DEEP_RESEARCH] Error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
 # ── Map helpers for slide design ──────────────────────────────────────────────
 
 def _get_google_maps_key():
@@ -10816,8 +11007,26 @@ def _extract_locations_via_llm(heading, body):
     logger.info(f"[MAP] Extracting locations from: '{heading[:80]}'")
     try:
         extract_msgs = [
-            {'role': 'system', 'content': 'Extract SPECIFIC geographic locations (trails, parks, landmarks, facilities, neighborhoods) from the text. Prefer specific places over general cities. Return ONLY a JSON array of objects with "name" (display name) and "query" (specific geocoding query — include state/country for precision). If no real geographic locations exist, return []. No explanation. Example: [{"name":"Walker Valley ORV","query":"Walker Valley ORV Trail System, Skagit County, WA"}]'},
-            {'role': 'user', 'content': f'Extract specific locations from:\n{combined[:1500]}'}
+            {'role': 'system', 'content': """You are a geographic location extractor for map visualization. Your job is to find REAL, specific mappable locations from text — but ONLY when the text genuinely discusses a place.
+
+RULES:
+- ONLY extract locations that are explicitly mentioned or directly discussed in the text.
+- If the text is about concepts, economics, statistics, trends, analysis, or abstract topics — return an empty array [].
+- Do NOT invent or force locations. If a slide discusses "price stagnation" or "market trends", that is NOT geographic — return [].
+- Do NOT return generic country/state/region centers as locations.
+- Only return specific places: trails, parks, neighborhoods, streets, landmarks, buildings, straits, ports, etc.
+
+For each location, build a search query with geographic context (city/state/country).
+Return ONLY a JSON array: [{"name":"Display Name","query":"Specific Place, City/Country"}]
+
+Return [] if the text has no specific geographic places. This is expected and correct for many slides.
+
+Examples:
+- Text about "urban riding in Bellingham" → [{"name":"Railroad Trail","query":"Railroad Trail, Bellingham, WA"}]
+- Text about "the Strait of Hormuz" → [{"name":"Strait of Hormuz","query":"Strait of Hormuz, Iran"}]
+- Text about "price trends and market analysis" → []
+- Text about "economic indicators and forecasts" → []"""},
+            {'role': 'user', 'content': f'Extract mappable locations from this text (return [] if no specific places are discussed):\n{combined[:1500]}'}
         ]
         result = agent.call_llm_sync(extract_msgs, max_tokens_override=256)
         raw = result.get('content', '').strip()
@@ -10862,9 +11071,90 @@ def _geocode_location(query, api_key):
     return None
 
 
-def _build_static_map_url(locations_with_coords, api_key, width=580, height=320, accent='818cf8'):
+def _places_search(query, api_key, location_bias=None):
+    """Search Google Places API for specific POIs (trails, parks, neighborhoods, etc).
+    Returns list of (lat, lng, name, place_id) or empty list.
+    location_bias: optional (lat, lng) tuple to bias results toward a region.
+    """
+    try:
+        params = {
+            'query': query,
+            'key': api_key,
+        }
+        if location_bias:
+            params['location'] = f'{location_bias[0]},{location_bias[1]}'
+            params['radius'] = 50000  # 50km radius bias for better discovery
+        resp = requests.get(
+            'https://maps.googleapis.com/maps/api/place/textsearch/json',
+            params=params,
+            timeout=10
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            results = []
+            for r in data.get('results', [])[:3]:
+                loc = r['geometry']['location']
+                name = r.get('name', query)
+                pid = r.get('place_id', '')
+                results.append((loc['lat'], loc['lng'], name, pid))
+                logger.info(f"[MAP] Places found: '{name}' at {loc['lat']:.4f},{loc['lng']:.4f}")
+            return results
+    except Exception as e:
+        logger.debug(f"[MAP] Places search failed for '{query}': {e}")
+    return []
+
+
+def _get_directions_polyline(origin, destination, api_key, waypoints=None, mode='walking'):
+    """Get an encoded polyline for a route between two points using Google Directions API.
+    origin/destination: (lat, lng) tuples
+    waypoints: optional list of (lat, lng) intermediate points
+    mode: 'walking', 'driving', 'bicycling', 'transit'
+    Returns encoded polyline string or None.
+    """
+    try:
+        params = {
+            'origin': f'{origin[0]},{origin[1]}',
+            'destination': f'{destination[0]},{destination[1]}',
+            'mode': mode,
+            'key': api_key,
+        }
+        if waypoints:
+            wp_str = '|'.join(f'{w[0]},{w[1]}' for w in waypoints)
+            params['waypoints'] = wp_str
+        resp = requests.get(
+            'https://maps.googleapis.com/maps/api/directions/json',
+            params=params,
+            timeout=10
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            if data.get('routes'):
+                polyline = data['routes'][0].get('overview_polyline', {}).get('points')
+                if polyline:
+                    # Also extract distance/duration for context
+                    legs = data['routes'][0].get('legs', [])
+                    total_dist = sum(l.get('distance', {}).get('value', 0) for l in legs)
+                    total_dur = sum(l.get('duration', {}).get('value', 0) for l in legs)
+                    dist_km = total_dist / 1000
+                    dur_min = total_dur / 60
+                    logger.info(f"[MAP] Directions: {dist_km:.1f}km, {dur_min:.0f}min, mode={mode}, polyline={len(polyline)} chars")
+                    return {
+                        'polyline': polyline,
+                        'distance_km': round(dist_km, 1),
+                        'duration_min': round(dur_min),
+                        'mode': mode,
+                    }
+            else:
+                logger.debug(f"[MAP] Directions: no routes found (status: {data.get('status', 'UNKNOWN')})")
+    except Exception as e:
+        logger.debug(f"[MAP] Directions API failed: {e}")
+    return None
+
+
+def _build_static_map_url(locations_with_coords, api_key, width=580, height=320, accent='818cf8', zoom_override=None, route_polyline=None):
     """Build a Google Static Maps URL with dark styling and markers.
     locations_with_coords: list of (lat, lng, name) tuples
+    zoom_override: if set, use this zoom level instead of auto-calculating
     """
     if not locations_with_coords or not api_key:
         return None
@@ -10906,8 +11196,8 @@ def _build_static_map_url(locations_with_coords, api_key, width=580, height=320,
     
     if len(locations_with_coords) == 1:
         lat, lng, _ = locations_with_coords[0]
-        # Zoom 13 = neighborhood/trail level detail (good for specific locations)
-        params += f'&center={lat},{lng}&zoom=13'
+        _zoom = zoom_override if zoom_override else 13
+        params += f'&center={lat},{lng}&zoom={_zoom}'
     elif len(locations_with_coords) >= 2:
         # Calculate center and smart zoom based on marker spread
         lats = [loc[0] for loc in locations_with_coords]
@@ -10933,51 +11223,197 @@ def _build_static_map_url(locations_with_coords, api_key, width=580, height=320,
             zoom = 13  # Neighborhood
         params += f'&center={center_lat},{center_lng}&zoom={zoom}'
     
-    url = f'{base}?{params}&{"&".join(style_params)}&{"&".join(marker_params)}'
-    logger.info(f"[MAP] Static map URL built: {len(locations_with_coords)} markers, maptype=hybrid")
+    # Add route polyline if available (real route path from Directions API)
+    path_param = ''
+    if route_polyline:
+        path_color = f'0x{marker_color}cc'  # accent color with some transparency
+        path_param = f'&path=color:{path_color}|weight:4|enc:{route_polyline}'
+        logger.info(f"[MAP] Adding route polyline to map ({len(route_polyline)} chars)")
+    
+    url = f'{base}?{params}&{"&".join(style_params)}&{"&".join(marker_params)}{path_param}'
+    
+    # Google Static Maps has ~8192 char URL limit — drop polyline if too long
+    if len(url) > 8100 and path_param:
+        logger.warning(f"[MAP] URL too long ({len(url)} chars) — dropping route polyline")
+        url = f'{base}?{params}&{"&".join(style_params)}&{"&".join(marker_params)}'
+    
+    logger.info(f"[MAP] Static map URL built: {len(locations_with_coords)} markers, route={'yes' if path_param and path_param in url else 'no'}, {len(url)} chars")
     return url
 
 
-def _generate_map_context_inner(heading, body, accent='#818cf8'):
-    """Extract locations from body text via LLM, geocode them, build a static map URL.
+def _generate_map_context_inner(heading, body, accent='#818cf8', research_query='', used_locations=None):
+    """Build a slide-specific map by searching for locations relevant to THIS slide's heading.
+    Each slide gets a UNIQUE map because each heading is different.
+    used_locations: list of (lat, lng) tuples already used by previous slides — skip these.
     Returns a string to inject into the design prompt, or empty string.
     """
     api_key = _get_google_maps_key()
     if not api_key:
         logger.warning("[MAP] No API key — skipping map context")
-        return ''
+        return '', []
     
-    logger.info(f"[MAP] Starting map pipeline for: '{heading[:80]}'")
+    _used = used_locations or []
+    logger.info(f"[MAP] Starting map pipeline for: '{heading[:80]}'" + (f" (query: '{research_query[:60]}')" if research_query else '') + f" (used: {len(_used)} prev locations)")
     
-    # Use LLM to extract specific place names from heading + body
-    # (Don't geocode the heading directly — abstract headings like
-    #  'Scarcity of Local Legal Trails' resolve to wrong locations)
+    def _is_used(lat, lng):
+        """Check if a location is too close to one already used in a previous slide."""
+        return any(abs(lat - u[0]) < 0.008 and abs(lng - u[1]) < 0.008 for u in _used)
+    
+    # ── Extract a city/region bias from the research query ──
+    _city_bias = None
+    _city_name = ''
+    _is_geographic_query = False
+    if research_query:
+        import re as _re_map
+        _city_patterns = [
+            _re_map.search(r'(?:in|near|around|at|of)\s+([A-Za-z][a-zA-Z\s]+,\s*[A-Z]{2})\b', research_query, _re_map.IGNORECASE),
+            _re_map.search(r'(?:in|near|around|at|of)\s+([A-Za-z][a-zA-Z\s]+,\s*[A-Za-z]+)', research_query, _re_map.IGNORECASE),
+            _re_map.search(r'\b([A-Za-z][a-zA-Z]+,\s*[A-Z]{2})\b', research_query),
+            _re_map.search(r'(?:in|near|around|at|of)\s+([A-Z][a-zA-Z\s]{2,25})\b', research_query),
+        ]
+        for _match in _city_patterns:
+            if _match:
+                _city_name = _match.group(1).strip()
+                _city_geo = _geocode_location(_city_name, api_key)
+                if _city_geo:
+                    _city_bias = (_city_geo[0], _city_geo[1])
+                    _is_geographic_query = True
+                    logger.info(f"[MAP] City bias from regex: '{_city_name}' → {_city_bias[0]:.4f},{_city_bias[1]:.4f}")
+                break
+        
+        if not _city_bias:
+            # Only geocode the full query if it contains geographic place words
+            # Avoid geocoding conceptual queries like 'gas prices' which return random locations
+            import re as _re_geo_chk
+            _has_geo_hint = _re_geo_chk.search(
+                r'\b(?:strait|island|river|sea|ocean|gulf|bay|mountain|lake|city|town|country|border|coast|port|harbor|canal|peninsula)\b',
+                research_query, _re_geo_chk.IGNORECASE
+            )
+            if _has_geo_hint:
+                _full_geo = _geocode_location(research_query[:150], api_key)
+                if _full_geo:
+                    _city_bias = (_full_geo[0], _full_geo[1])
+                    _city_name = _full_geo[2]
+                    _is_geographic_query = True
+                    logger.info(f"[MAP] City bias from full query geocode: '{_city_name}' → {_city_bias[0]:.4f},{_city_bias[1]:.4f}")
+            else:
+                logger.info(f"[MAP] Skipping city bias geocode — query doesn't look geographic: '{research_query[:80]}'")
+        
+        if not _is_geographic_query:
+            _geo_keywords = ['trail', 'route', 'path', 'ride', 'riding', 'hike', 'hiking', 'walk', 'walking',
+                             'neighborhood', 'area', 'region', 'city', 'town', 'park', 'mountain', 'river',
+                             'beach', 'coast', 'forest', 'urban', 'scenic', 'explore', 'navigate', 'alley',
+                             'street', 'road', 'drive', 'driving', 'bike', 'biking', 'cycling', 'terrain',
+                             'geography', 'geographic', 'location', 'place', 'destination', 'travel']
+            _is_geographic_query = any(kw in research_query.lower() for kw in _geo_keywords)
+            if _is_geographic_query:
+                logger.info(f"[MAP] Geographic intent detected from keywords in query")
+    
     geocoded = []
+    _is_specific = False
+    
+    # ── Strategy 1 (PRIMARY): LLM extracts locations from slide heading + body ──
+    # The LLM can find specific trails, neighborhoods, POIs from body text.
     try:
-        llm_locations = _extract_locations_via_llm(heading, body)
+        llm_input_body = body
+        if research_query and research_query.lower() not in body.lower():
+            llm_input_body = f"Original research query: {research_query}\n\n{body}"
+        llm_locations = _extract_locations_via_llm(heading, llm_input_body)
         for loc in llm_locations:
             if len(geocoded) >= 3:
                 break
+            # Try direct geocode FIRST (LLM query already has geographic context)
             lr = _geocode_location(loc['query'], api_key)
-            if lr:
-                is_dup = any(abs(lr[0] - g[0]) < 0.01 and abs(lr[1] - g[1]) < 0.01 for g in geocoded)
-                if not is_dup:
-                    geocoded.append(lr)
-                    logger.info(f"[MAP] Location '{loc['name']}' geocoded: {lr[0]:.4f},{lr[1]:.4f} ({lr[2]})")
+            if lr and not _is_used(lr[0], lr[1]):
+                geocoded.append(lr)
+                _is_specific = True
+                logger.info(f"[MAP] Strategy 1 Geocode: '{loc['name']}' → '{lr[2]}' at {lr[0]:.4f},{lr[1]:.4f}")
+                continue
+            # Fallback: Places search WITHOUT bias first, then WITH bias
+            places = _places_search(loc['query'], api_key, location_bias=None)
+            if not places and _city_bias:
+                places = _places_search(loc['query'], api_key, location_bias=_city_bias)
+            if places:
+                for plat, plng, pname, _pid in places[:5]:
+                    if not _is_used(plat, plng):
+                        geocoded.append((plat, plng, pname))
+                        _is_specific = True
+                        logger.info(f"[MAP] Strategy 1 Places: '{loc['name']}' → '{pname}' at {plat:.4f},{plng:.4f}")
+                        break
+                    else:
+                        logger.info(f"[MAP] Strategy 1: skipping '{pname}' (used by prev slide)")
     except Exception as e:
-        logger.debug(f"[MAP] LLM extraction failed: {e}")
+        logger.debug(f"[MAP] Strategy 1 (LLM extraction) failed: {e}")
     
+    # ── Strategy 2 (FALLBACK): Use the slide HEADING as a geocode/Places search ──
+    if not geocoded and heading:
+        import re as _re_map2
+        _clean_heading = _re_map2.sub(r'\b(the|a|an|of|for|and|in|on|to|is|are|was|were|with|your|our|their|how|why|what|where|best|top|most|key|essential|ultimate|guide)\b', '', heading, flags=_re_map2.IGNORECASE).strip()
+        if _clean_heading and len(_clean_heading) > 3:
+            # Try direct geocode of heading first (no bias)
+            _heading_geo = _geocode_location(_clean_heading, api_key)
+            if _heading_geo and not _is_used(_heading_geo[0], _heading_geo[1]):
+                geocoded.append(_heading_geo)
+                _is_specific = True
+                logger.info(f"[MAP] Strategy 2 Geocode: '{_clean_heading[:40]}' → '{_heading_geo[2]}' at {_heading_geo[0]:.4f},{_heading_geo[1]:.4f}")
+            else:
+                # Try Places search without bias, then with bias
+                _heading_query = f"{_clean_heading}, {_city_name}" if _city_name else _clean_heading
+                logger.info(f"[MAP] Strategy 2: heading Places search: '{_heading_query[:60]}'")
+                places = _places_search(_heading_query, api_key, location_bias=None)
+                if not places and _city_bias:
+                    places = _places_search(_heading_query, api_key, location_bias=_city_bias)
+                if places:
+                    for plat, plng, pname, _pid in places[:5]:
+                        if not _is_used(plat, plng):
+                            geocoded.append((plat, plng, pname))
+                            _is_specific = True
+                            logger.info(f"[MAP] Strategy 2 HIT: '{_clean_heading[:40]}' → '{pname}' at {plat:.4f},{plng:.4f}")
+                            break
+                        else:
+                            logger.info(f"[MAP] Strategy 2: skipping '{pname}' (used by prev slide)")
+    
+    # Strategy 3 REMOVED: no more generic city center fallback.
+    # If no specific location found, skip the map entirely — maps should only appear when relevant.
+
     if not geocoded:
-        logger.info(f"[MAP] No locations geocoded for: '{heading[:60]}'")
-        return ''
+        logger.info(f"[MAP] No locations for: '{heading[:60]}' — skipping map")
+        return '', []
     
     logger.info(f"[MAP] {len(geocoded)} location(s) geocoded successfully")
     
+    # ── Get real route polyline if 2+ locations found ──
+    _route_info = None
+    _route_polyline = None
+    if len(geocoded) >= 2:
+        # Detect travel mode from context
+        _combined_lower = f"{heading} {body} {research_query}".lower()
+        if any(w in _combined_lower for w in ['bike', 'biking', 'cycling', 'bicycle', 'ride', 'riding']):
+            _mode = 'bicycling'
+        elif any(w in _combined_lower for w in ['drive', 'driving', 'car', 'vehicle', 'motor']):
+            _mode = 'driving'
+        elif any(w in _combined_lower for w in ['transit', 'bus', 'train', 'subway']):
+            _mode = 'transit'
+        else:
+            _mode = 'walking'
+        
+        _origin = (geocoded[0][0], geocoded[0][1])
+        _dest = (geocoded[-1][0], geocoded[-1][1])
+        _waypoints = [(g[0], g[1]) for g in geocoded[1:-1]] if len(geocoded) > 2 else None
+        _route_info = _get_directions_polyline(_origin, _dest, api_key, waypoints=_waypoints, mode=_mode)
+        if _route_info:
+            _route_polyline = _route_info['polyline']
+            logger.info(f"[MAP] Route: {_route_info['distance_km']}km, {_route_info['duration_min']}min via {_mode}")
+    
     accent_hex = accent.lstrip('#')[:6]
-    map_url = _build_static_map_url(geocoded, api_key, accent=accent_hex)
+    map_url = _build_static_map_url(
+        geocoded, api_key, accent=accent_hex,
+        zoom_override=15 if _is_specific and len(geocoded) == 1 else None,
+        route_polyline=_route_polyline,
+    )
     if not map_url:
         logger.warning("[MAP] Failed to build static map URL")
-        return ''
+        return '', []
     
     logger.info(f"[MAP] Map URL built successfully ({len(map_url)} chars)")
     
@@ -10988,10 +11424,23 @@ def _generate_map_context_inner(heading, body, accent='#818cf8'):
     
     # Build a Google Maps link for the primary location
     primary_lat, primary_lng = geocoded[0][0], geocoded[0][1]
-    gmaps_link = f'https://www.google.com/maps/@{primary_lat},{primary_lng},14z'
+    gmaps_link = f'https://www.google.com/maps/@{primary_lat},{primary_lng},15z'
     if len(geocoded) > 1:
         # Link to directions between first two points
-        gmaps_link = f'https://www.google.com/maps/dir/{geocoded[0][0]},{geocoded[0][1]}/{geocoded[1][0]},{geocoded[1][1]}'
+        gmaps_link = f'https://www.google.com/maps/dir/{geocoded[0][0]},{geocoded[0][1]}/{geocoded[-1][0]},{geocoded[-1][1]}'
+    
+    # Build route stats block for the LLM to display
+    _route_stats = ''
+    if _route_info:
+        _route_stats = f"""
+Route data (real Google Directions API data — display these stats on the slide!):
+  Distance: {_route_info['distance_km']} km
+  Duration: {_route_info['duration_min']} min
+  Mode: {_route_info['mode']}
+  The route polyline is ALREADY drawn on the map image — the colored path is a real route.
+"""
+    
+    _new_coords = [(g[0], g[1]) for g in geocoded]
     
     return f"""
 === REAL MAP DATA AVAILABLE ===
@@ -11004,7 +11453,7 @@ Google Maps link (for clickable map):
 
 Locations on the map:
 {location_list}
-
+{_route_stats}
 MAP EMBEDDING RULES:
 1. Wrap the map in a link: <a href="{gmaps_link}" target="_blank" style="display:block;text-decoration:none"><img src="{map_url}" style="width:100%;max-height:160px;object-fit:cover;border-radius:10px" alt="Map" /></a>
 2. The map is a SUPPLEMENT — it should take roughly 25-30% of the slide, NOT dominate it.
@@ -11012,16 +11461,18 @@ MAP EMBEDDING RULES:
 4. Place the map in context — above or beside data, not as the only visual.
 5. The slide should be informative even if the map image fails to load.
 6. Do NOT use any other image URLs or fabricate satellite/terrain images. ONLY the URL above is valid.
-"""
+""", _new_coords
 
 
-def _generate_map_context(heading, body, accent='#818cf8'):
-    """Wrapper with hard 15s timeout -- never stalls the design loop."""
+def _generate_map_context(heading, body, accent='#818cf8', research_query='', used_locations=None):
+    """Wrapper with hard 15s timeout -- never stalls the design loop.
+    Returns (map_context_string, new_coords_list) tuple.
+    """
     import threading
-    result = ['']
+    result = [('', [])]
     def run():
         try:
-            result[0] = _generate_map_context_inner(heading, body, accent)
+            result[0] = _generate_map_context_inner(heading, body, accent, research_query=research_query, used_locations=used_locations)
         except Exception as e:
             logger.debug(f"[MAP] Map context generation failed: {e}")
     t = threading.Thread(target=run, daemon=True)
@@ -11029,7 +11480,7 @@ def _generate_map_context(heading, body, accent='#818cf8'):
     t.join(timeout=15)
     if t.is_alive():
         logger.warning("[MAP] Map context generation timed out (15s) -- skipping")
-        return ''
+        return '', []
     return result[0]
 
 
@@ -11077,9 +11528,10 @@ def api_debug_map_test():
     steps['4_map_url'] = map_url if map_url else 'EMPTY (URL build failed)'
     
     # Step 5: Full context
-    map_context = _generate_map_context(heading, body, '#818cf8')
+    map_context, _debug_coords = _generate_map_context(heading, body, '#818cf8')
     steps['5_map_context_length'] = len(map_context) if map_context else 0
     steps['5_map_context_has_url'] = 'maps.googleapis.com/maps/api/staticmap' in map_context if map_context else False
+    steps['5_new_coords'] = _debug_coords
     
     return jsonify({
         'ok': True,
@@ -11087,6 +11539,283 @@ def api_debug_map_test():
         'map_context_preview': map_context[:500] if map_context else 'EMPTY',
         'test_img_html': f'<img src="{map_url}" style="width:580px;border-radius:12px" />' if map_url else 'N/A'
     })
+
+
+@app.route('/api/local/batch-map-locations', methods=['POST'])
+def api_batch_map_locations():
+    """Pre-compute UNIQUE map locations for ALL slides in one batch.
+    
+    One LLM call sees ALL slide headings and assigns a DIFFERENT location per slide.
+    Then geocode + build map URLs for each. Frontend calls this BEFORE designing slides.
+    
+    Body: {
+        "slides": [{"heading": "...", "body": "..."}, ...],
+        "researchQuery": "...",
+        "accentColor": "#818cf8"
+    }
+    Returns: { "ok": true, "maps": [{ "mapContext": "...", "coords": [...] }, ...] }
+    Each entry in maps[] corresponds to the same-index slide. mapContext may be "" if no location found.
+    """
+    data = request.get_json(silent=True) or {}
+    slides = data.get('slides', [])
+    research_query = data.get('researchQuery', '')
+    accent = data.get('accentColor', '#818cf8')
+    
+    if not slides:
+        return jsonify({'ok': False, 'error': 'No slides provided'}), 400
+    
+    if 'agent' not in globals() or agent is None:
+        return jsonify({'ok': False, 'error': 'Agent not initialized'}), 503
+    
+    api_key = _get_google_maps_key()
+    if not api_key:
+        return jsonify({'ok': True, 'maps': [{'mapContext': '', 'coords': []}] * len(slides)})
+    
+    import time as _time
+    _t0 = _time.time()
+    logger.info(f"[BATCH_MAP] Starting batch map for {len(slides)} slides, query='{research_query[:60]}'")
+    
+    # ── Step 1: Get city bias from research query ──
+    _city_bias = None
+    _city_name = ''
+    if research_query:
+        import re as _re_batch
+        _city_patterns = [
+            _re_batch.search(r'(?:in|near|around|at|of)\s+([A-Za-z][a-zA-Z\s]+,\s*[A-Z]{2})\b', research_query, _re_batch.IGNORECASE),
+            _re_batch.search(r'(?:in|near|around|at|of)\s+([A-Za-z][a-zA-Z\s]+,\s*[A-Za-z]+)', research_query, _re_batch.IGNORECASE),
+            _re_batch.search(r'\b([A-Za-z][a-zA-Z]+,\s*[A-Z]{2})\b', research_query),
+            _re_batch.search(r'(?:in|near|around|at|of)\s+([A-Z][a-zA-Z\s]{2,25})\b', research_query),
+        ]
+        for _match in _city_patterns:
+            if _match:
+                _city_name = _match.group(1).strip()
+                _city_geo = _geocode_location(_city_name, api_key)
+                if _city_geo:
+                    _city_bias = (_city_geo[0], _city_geo[1])
+                    logger.info(f"[BATCH_MAP] City bias: '{_city_name}' → {_city_bias[0]:.4f},{_city_bias[1]:.4f}")
+                break
+        if not _city_bias:
+            # Only geocode the full query if it looks geographic (contains place-like words)
+            # Avoid geocoding conceptual queries like 'gas prices' which return random locations
+            import re as _re_geo_check
+            _has_geo_hint = _re_geo_check.search(
+                r'\b(?:strait|island|river|sea|ocean|gulf|bay|mountain|lake|city|town|country|border|coast|port|harbor|canal|peninsula)\b',
+                research_query, _re_geo_check.IGNORECASE
+            )
+            if _has_geo_hint:
+                _full_geo = _geocode_location(research_query[:150], api_key)
+                if _full_geo:
+                    _city_bias = (_full_geo[0], _full_geo[1])
+                    _city_name = _full_geo[2]
+                    logger.info(f"[BATCH_MAP] City bias from geocode: '{_city_name}'")
+            else:
+                logger.info(f"[BATCH_MAP] Skipping city bias geocode — query doesn't look geographic: '{research_query[:80]}'")
+    
+    # ── Step 2: ONE LLM call to assign unique locations to ALL slides ──
+    slide_summaries = '\n'.join(
+        f"Slide {i+1}: \"{s.get('heading','')}\" — {s.get('body','')[:200]}"
+        for i, s in enumerate(slides)
+    )
+    
+    batch_extract_msgs = [
+        {'role': 'system', 'content': f"""You extract geographic locations for map visualization on presentation slides.
+The research topic is: "{research_query}"
+{f'The main geographic area is: {_city_name}' if _city_name else ''}
+
+For each slide, decide if a MAP is relevant. Only assign a location if the slide's content is genuinely about a specific place, region, or geographic feature.
+
+RULES:
+- ONLY assign locations to slides that discuss specific geographic places, regions, landmarks, or physical locations.
+- If a slide is about concepts, economics, statistics, analysis, trends, comparisons, or abstract topics — return EMPTY name and query. Do NOT invent a location.
+- When you DO assign a location, be SPECIFIC: the actual place mentioned in the content.
+- Never assign generic country/state centers. Never force a map where content is not geographic.
+- If no slides have geographic relevance, return ALL empty entries. That is perfectly fine.
+
+EXAMPLE — for a 4-slide deck about "Housing Market Analysis":
+[
+  {{"slide": 1, "name": "", "query": ""}},
+  {{"slide": 2, "name": "Austin, TX", "query": "Austin, Texas downtown"}},
+  {{"slide": 3, "name": "", "query": ""}},
+  {{"slide": 4, "name": "Phoenix, AZ", "query": "Phoenix, Arizona"}}
+]
+(Slides 1 and 3 are about concepts/trends — no map. Slides 2 and 4 specifically discuss those cities.)
+
+Return ONLY a JSON array with exactly one entry per slide, in order.
+If a slide has no geographic relevance, use {{"slide": N, "name": "", "query": ""}}."""},
+        {'role': 'user', 'content': f'Assign a location ONLY to slides that discuss specific places:\n\n{slide_summaries[:3000]}'}
+    ]
+    
+    per_slide_locations = [None] * len(slides)
+    try:
+        result = agent.call_llm_sync(batch_extract_msgs, max_tokens_override=512)
+        raw = result.get('content', '').strip()
+        logger.info(f"[BATCH_MAP] === LLM RAW RESPONSE ({len(raw)} chars) ===")
+        logger.info(f"[BATCH_MAP] {raw[:500]}")
+        # Parse JSON
+        if raw.startswith('```'):
+            raw = raw.split('\n', 1)[-1] if '\n' in raw else raw[3:]
+            if raw.endswith('```'):
+                raw = raw[:-3].strip()
+        start = raw.find('[')
+        end = raw.rfind(']')
+        if start >= 0 and end > start:
+            import json
+            locations = json.loads(raw[start:end+1])
+            logger.info(f"[BATCH_MAP] Parsed {len(locations)} location entries from LLM")
+            for loc in locations:
+                if not isinstance(loc, dict):
+                    logger.warning(f"[BATCH_MAP] Skipping non-dict entry: {loc}")
+                    continue
+                idx = loc.get('slide', 0) - 1
+                query = loc.get('query', '').strip()
+                name = loc.get('name', '').strip()
+                if 0 <= idx < len(slides) and query:
+                    per_slide_locations[idx] = {'name': name, 'query': query}
+                    logger.info(f"[BATCH_MAP] ✓ Slide {idx+1}: name='{name}' query='{query}'")
+                else:
+                    logger.warning(f"[BATCH_MAP] ✗ Slide {idx+1}: SKIPPED (idx_valid={0 <= idx < len(slides)}, query='{query[:50]}')")
+            # Summary of what LLM assigned
+            _assigned = sum(1 for p in per_slide_locations if p is not None)
+            logger.info(f"[BATCH_MAP] === LLM ASSIGNMENT SUMMARY: {_assigned}/{len(slides)} slides got locations ===")
+            for _si, _sl in enumerate(per_slide_locations):
+                if _sl:
+                    logger.info(f"[BATCH_MAP]   Slide {_si+1}: '{_sl['name']}' → '{_sl['query']}'")
+                else:
+                    logger.info(f"[BATCH_MAP]   Slide {_si+1}: (no location assigned)")
+    except Exception as e:
+        logger.warning(f"[BATCH_MAP] LLM batch extraction failed: {e}", exc_info=True)
+    
+    # ── Step 3: Geocode each slide's location + build map context ──
+    accent_hex = accent.lstrip('#')[:6]
+    results = []
+    used_coords = []
+    
+    for i, loc_data in enumerate(per_slide_locations):
+        if not loc_data or not loc_data['query']:
+            results.append({'mapContext': '', 'coords': []})
+            continue
+        
+        geocoded = []
+        places = None
+        # Try Geocode API FIRST with the LLM's query (already has geographic context like 'Strait of Hormuz, Iran')
+        # This avoids the city bias pulling results to the wrong continent
+        logger.info(f"[BATCH_MAP] Slide {i+1}: trying Geocode first for '{loc_data['query']}'")
+        _direct_geo = _geocode_location(loc_data['query'], api_key)
+        if _direct_geo:
+            geocoded.append(_direct_geo)
+            logger.info(f"[BATCH_MAP] Slide {i+1}: ✓ Direct geocode → '{_direct_geo[2]}' at {_direct_geo[0]:.6f},{_direct_geo[1]:.6f}")
+        
+        # If direct geocode failed, try Places API (without bias first, then with bias)
+        if not geocoded:
+            logger.info(f"[BATCH_MAP] Slide {i+1}: trying Places (no bias) for '{loc_data['query']}'")
+            places = _places_search(loc_data['query'], api_key, location_bias=None)
+            if not places and _city_bias:
+                logger.info(f"[BATCH_MAP] Slide {i+1}: trying Places (with bias) for '{loc_data['query']}'")
+                places = _places_search(loc_data['query'], api_key, location_bias=_city_bias)
+        if places and not geocoded:
+            logger.info(f"[BATCH_MAP] Slide {i+1}: Places returned {len(places)} results:")
+            for _pi, (plat, plng, pname, _pid) in enumerate(places[:5]):
+                _is_dup = any(abs(plat - u[0]) < 0.008 and abs(plng - u[1]) < 0.008 for u in used_coords)
+                logger.info(f"[BATCH_MAP]   [{_pi}] '{pname}' at {plat:.6f},{plng:.6f} dup={_is_dup}")
+                if not _is_dup and not geocoded:
+                    geocoded.append((plat, plng, pname))
+                    logger.info(f"[BATCH_MAP] Slide {i+1}: ✓ SELECTED '{pname}' at {plat:.6f},{plng:.6f}")
+            if not geocoded:
+                plat, plng, pname, _pid = places[0]
+                geocoded.append((plat, plng, pname))
+                logger.info(f"[BATCH_MAP] Slide {i+1}: ⚠ All dupes, forced first: '{pname}' at {plat:.6f},{plng:.6f}")
+        elif not geocoded:
+            logger.info(f"[BATCH_MAP] Slide {i+1}: Places returned 0 results")
+        
+        if not geocoded:
+            # Try geocoding the location name directly as a last resort
+            logger.info(f"[BATCH_MAP] Slide {i+1}: last resort — geocoding name '{loc_data.get('name', '')}'")
+            if loc_data.get('name'):
+                lr = _geocode_location(loc_data['name'], api_key)
+                if lr:
+                    geocoded.append(lr)
+                    logger.info(f"[BATCH_MAP] Slide {i+1}: Name geocode → '{lr[2]}' at {lr[0]:.6f},{lr[1]:.6f}")
+                else:
+                    logger.warning(f"[BATCH_MAP] Slide {i+1}: All geocoding attempts failed")
+        
+        if not geocoded:
+            logger.warning(f"[BATCH_MAP] Slide {i+1}: ✗ NO LOCATION FOUND for '{loc_data['query']}'")
+            results.append({'mapContext': '', 'coords': []})
+            continue
+        
+        new_coords = [(g[0], g[1]) for g in geocoded]
+        used_coords.extend(new_coords)
+        
+        # Build map URL — vary zoom based on specificity
+        # More specific locations (trails, buildings) get higher zoom; broader concepts get lower
+        _loc_name_lower = (loc_data.get('name','') + ' ' + loc_data.get('query','')).lower()
+        if any(w in _loc_name_lower for w in ['trail', 'trailhead', 'peak', 'summit', 'bridge', 'falls', 'dam', 'intersection']):
+            _zoom = 15  # Very specific point
+        elif any(w in _loc_name_lower for w in ['park', 'lake', 'forest', 'road', 'drive', 'river', 'creek', 'mountain']):
+            _zoom = 14  # Broader natural feature
+        elif any(w in _loc_name_lower for w in ['neighborhood', 'district', 'downtown', 'area', 'region', 'valley']):
+            _zoom = 13  # Area-level
+        else:
+            _zoom = 14  # Default — enough context
+        map_url = _build_static_map_url(geocoded, api_key, accent=accent_hex, zoom_override=_zoom, width=640, height=400)
+        if not map_url:
+            results.append({'mapContext': '', 'coords': new_coords})
+            continue
+        
+        # Build Google Maps link
+        gmaps_link = f'https://www.google.com/maps/@{geocoded[0][0]},{geocoded[0][1]},15z'
+        
+        location_list = '\n'.join(
+            f'  {chr(65+j)}) {name} ({lat:.4f}, {lng:.4f})'
+            for j, (lat, lng, name) in enumerate(geocoded)
+        )
+        
+        map_context = f"""
+=== REAL MAP DATA (slide {i+1}) ===
+Map image URL: {map_url}
+Google Maps link: {gmaps_link}
+Location: {loc_data['name']}
+Coordinates: {geocoded[0][0]:.5f}, {geocoded[0][1]:.5f}
+
+MAP EMBED HTML (copy exactly — do NOT change src or href):
+<a href="{gmaps_link}" target="_blank" style="display:block;text-decoration:none;border-radius:14px;overflow:hidden;min-width:250px;box-shadow:0 4px 24px rgba(0,0,0,0.4),0 0 0 1px rgba(255,255,255,0.06)">
+  <img src="{map_url}" style="width:100%;height:auto;object-fit:cover;border-radius:14px;display:block" alt="{loc_data['name']}" />
+  <div style="font-size:8px;color:rgba(255,255,255,0.35);margin-top:5px;text-align:center;letter-spacing:0.05em">📍 {loc_data['name']} — tap to explore</div>
+</a>
+
+MAP LAYOUT OPTIONS (choose based on content density):
+OPTION A — HERO MAP (use when slide is primarily about this location):
+  Top: map at full width (~560px), 180-200px tall, rounded corners
+  Below: 2-3 stat cards or key facts in a grid
+  Map takes ~50% of slide height
+
+OPTION B — SPLIT LAYOUT (use when slide has lots of data):
+  Left (~45%): map image, 280px wide
+  Right (~55%): data cards, stats, key facts
+  Both columns balanced in height
+
+Do NOT shrink the map below 250px wide. It should be a prominent, beautiful visual element.
+Do NOT use any other image URLs. ONLY the URL above is valid for maps.
+"""
+        results.append({'mapContext': map_context, 'coords': new_coords})
+        logger.info(f"[BATCH_MAP] Slide {i+1}: map context built ({len(map_context)} chars)")
+    
+    _total = _time.time() - _t0
+    _maps_count = sum(1 for r in results if r['mapContext'])
+    logger.info(f"[BATCH_MAP] === FINAL GEOCODE SUMMARY ({_maps_count}/{len(slides)} maps, {_total:.1f}s) ===")
+    for _ri, _rr in enumerate(results):
+        if _rr['coords']:
+            _c = _rr['coords'][0]
+            _loc_name = per_slide_locations[_ri]['name'] if per_slide_locations[_ri] else '?'
+            logger.info(f"[BATCH_MAP]   Slide {_ri+1}: '{_loc_name}' → ({_c[0]:.6f}, {_c[1]:.6f}) hasMap={bool(_rr['mapContext'])}")
+        else:
+            logger.info(f"[BATCH_MAP]   Slide {_ri+1}: (no coords)")
+    # Check for coordinate duplication
+    _all_coords = [tuple(r['coords'][0]) for r in results if r['coords']]
+    _unique_coords = set(_all_coords)
+    if len(_unique_coords) < len(_all_coords):
+        logger.warning(f"[BATCH_MAP] ⚠ DUPLICATE COORDINATES DETECTED: {len(_all_coords)} total, only {len(_unique_coords)} unique!")
+    return jsonify({'ok': True, 'maps': results})
 
 
 @app.route('/api/local/slide-design', methods=['POST'])
@@ -11115,6 +11844,11 @@ def api_local_slide_design():
     edit_instruction = data.get('editInstruction', '')
     existing_html = data.get('existingHtml', '')
     skip_map = data.get('skipMap', False)
+    research_query = data.get('researchQuery', '')
+    precomputed_map_context = data.get('precomputedMapContext', '')  # from batch-map-locations endpoint
+    used_locations = data.get('usedLocations', [])  # list of [lat, lng] from previous slides
+    # Convert to list of tuples for the map pipeline
+    _used_locs = [(u[0], u[1]) for u in used_locations if isinstance(u, (list, tuple)) and len(u) >= 2]
 
     if not heading and not body:
         return jsonify({'ok': False, 'error': 'No content provided'}), 400
@@ -11124,13 +11858,17 @@ def api_local_slide_design():
 
     import time as _time
     _t0 = _time.time()
-    logger.info(f"[SLIDE_DESIGN] Starting slide {slide_index + 1}/{total_slides}: '{heading[:60]}'")
+    logger.info(f"[SLIDE_DESIGN] Starting slide {slide_index + 1}/{total_slides}: '{heading[:60]}'" + (' (precomputed map)' if precomputed_map_context else ''))
 
-    # Generate real map context via LLM location extraction + Google Maps API
+    # Use pre-computed map context from batch endpoint if available, else run per-slide pipeline
     map_context = ''
-    if not skip_map:
-        logger.info(f"[SLIDE_DESIGN] Slide {slide_index + 1}: attempting map context for '{heading[:60]}'")
-        map_context = _generate_map_context(heading, body, accent)
+    _new_coords = []
+    if precomputed_map_context:
+        map_context = precomputed_map_context
+        logger.info(f"[SLIDE_DESIGN] Slide {slide_index + 1}: using precomputed map context ({len(map_context)} chars)")
+    elif not skip_map:
+        logger.info(f"[SLIDE_DESIGN] Slide {slide_index + 1}: attempting per-slide map context for '{heading[:60]}'")
+        map_context, _new_coords = _generate_map_context(heading, body, accent, research_query=research_query, used_locations=_used_locs)
         _t1 = _time.time()
         if map_context:
             logger.info(f"[SLIDE_DESIGN] Slide {slide_index + 1}: map context generated ({_t1 - _t0:.1f}s, {len(map_context)} chars)")
@@ -11147,135 +11885,149 @@ def api_local_slide_design():
     else:
         _edit_block = "No edit -- design from scratch."
 
-    design_prompt = f"""You are an elite presentation designer (Apple Keynote x Bloomberg x Figma quality).
-Design ONE slide as a single <div> with ALL styles inline. Return ONLY that HTML.
+    # ── Smart prompt builder: analyze content, select relevant patterns, enforce variety ──
+    import re as _re_prompt
+    _body_lower = body.lower()
+    _has_stat = bool(_re_prompt.search(r'\[stat:', _body_lower))
+    _has_compare = bool(_re_prompt.search(r'\[compare:', _body_lower))
+    _has_timeline = bool(_re_prompt.search(r'\[timeline:', _body_lower))
+    _has_flow = bool(_re_prompt.search(r'\[flow:', _body_lower))
+    _has_quote = bool(_re_prompt.search(r'^>', body, _re_prompt.MULTILINE))
+    _has_bullets = bool(_re_prompt.search(r'^\s*[\*\-]', body, _re_prompt.MULTILINE))
+    _has_numbers = bool(_re_prompt.search(r'\d+[\.\,]?\d*\s*[%$MBKTkmbt]', body))
 
+    # Extract map URLs from map_context if present
+    _map_mandate = ''
+    _has_map = False
+    _ctx_map_url = ''
+    _ctx_gmaps = ''
+    _ctx_loc_name = 'Location'
+    if map_context:
+        _ctx_map_url_m = _re_prompt.search(r'(https://maps\.googleapis\.com/maps/api/staticmap[^\s"<>]+)', map_context)
+        _ctx_gmaps_m = _re_prompt.search(r'(https://www\.google\.com/maps/[^\s"<>]+)', map_context)
+        _ctx_map_url = _ctx_map_url_m.group(1) if _ctx_map_url_m else ''
+        _ctx_gmaps = _ctx_gmaps_m.group(1) if _ctx_gmaps_m else ''
+        _ctx_locations = _re_prompt.findall(r'[A-Z]\)\s+(.+?)(?:\s+\()', map_context)
+        _ctx_loc_name = _ctx_locations[0] if _ctx_locations else 'Location'
+        _has_map = bool(_ctx_map_url)
+
+    # Build ONLY the relevant visual vocabulary entries
+    _patterns = []
+    # Always include stat grid (E) + icon grid (J) as versatile fallbacks
+    _always = {'E', 'J'}
+    _selected = set(_always)
+
+    if _has_stat or _has_numbers:
+        _selected.add('I')  # Giant hero stat
+    if _has_compare:
+        _selected.update({'A', 'G'})  # Bar chart + comparison table
+    if _has_timeline:
+        _selected.add('F')  # Timeline
+    if _has_flow:
+        _selected.add('C')  # Flow diagram
+    if _has_quote:
+        _selected.add('H')  # Cinematic quote
+    if _has_bullets and not _has_stat:
+        _selected.add('J')  # Icon grid (already in always)
+    if _has_numbers and not _has_compare:
+        _selected.update({'A', 'B'})  # Bar chart + donut
+    # If nothing specific detected, include a broad set
+    if _selected == _always:
+        _selected.update({'A', 'I', 'H'})
+
+    _vocab_map = {
+        'A': f"""A) BAR CHART:
+<div style="display:flex;flex-direction:column;gap:8px"><div style="display:flex;align-items:center;gap:10px"><span style="font-size:9px;color:rgba(255,255,255,0.4);width:60px;text-align:right">Label</span><div style="height:22px;border-radius:6px;background:linear-gradient(90deg,{accent}cc,{accent}40);width:75%"></div><span style="font-size:11px;font-weight:700;color:{accent}">75%</span></div></div>""",
+        'B': f"""B) DONUT/PIE:
+<svg viewBox="0 0 120 120" width="120" height="120"><circle cx="60" cy="60" r="50" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="10"/><circle cx="60" cy="60" r="50" fill="none" stroke="{accent}" stroke-width="10" stroke-dasharray="220 94" stroke-linecap="round" transform="rotate(-90 60 60)"/><text x="60" y="65" text-anchor="middle" fill="white" font-size="22" font-weight="800">70%</text></svg>""",
+        'C': f"""C) FLOW DIAGRAM:
+<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><div style="padding:8px 14px;border-radius:10px;background:{accent}12;border:1px solid {accent}20;font-size:10px;color:{accent}cc">Step 1</div><span style="font-size:16px;color:{accent}40">&#8594;</span><div style="padding:8px 14px;border-radius:10px;background:{accent}18;border:1px solid {accent}30;font-size:10px;font-weight:700;color:{accent}">Result</div></div>""",
+        'E': f"""E) STAT GRID:
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px"><div style="padding:16px;border-radius:12px;background:{accent}06;border:1px solid {accent}0c"><div style="font-size:32px;font-weight:900;letter-spacing:-0.04em;background:linear-gradient(135deg,{accent},{accent}80);-webkit-background-clip:text;-webkit-text-fill-color:transparent">42M</div><div style="font-size:8px;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:0.15em;margin-top:4px">Active Users</div></div></div>""",
+        'F': f"""F) TIMELINE:
+<div style="display:flex;flex-direction:column;gap:0;padding-left:20px;border-left:2px solid {accent}20"><div style="position:relative;padding:10px 0 10px 20px"><div style="position:absolute;left:-7px;top:14px;width:12px;height:12px;border-radius:50%;background:{accent};box-shadow:0 0 12px {accent}60"></div><div style="font-size:8px;color:{accent}80;text-transform:uppercase;letter-spacing:0.1em">2024</div><div style="font-size:12px;color:rgba(255,255,255,0.8);font-weight:600;margin-top:2px">Event</div></div></div>""",
+        'G': f"""G) COMPARISON TABLE:
+<div style="display:grid;grid-template-columns:1fr auto 1fr;gap:0;border-radius:12px;overflow:hidden"><div style="padding:20px;background:{accent}06;text-align:center"><div style="font-size:18px;font-weight:800;color:{accent}">Option A</div></div><div style="padding:20px;display:flex;align-items:center;background:rgba(255,255,255,0.02)"><span style="font-size:10px;font-weight:800;color:rgba(255,255,255,0.2)">VS</span></div><div style="padding:20px;background:rgba(236,72,153,0.06);text-align:center"><div style="font-size:18px;font-weight:800;color:#ec4899">Option B</div></div></div>""",
+        'H': f"""H) CINEMATIC QUOTE:
+<div style="position:relative;padding:30px 20px"><div style="position:absolute;top:-10px;left:10px;font-size:120px;line-height:1;color:{accent}08;font-family:Georgia,serif">"</div><p style="font-size:20px;font-weight:300;font-style:italic;color:rgba(255,255,255,0.75);line-height:1.6;position:relative;z-index:1">Quote text</p><div style="margin-top:12px;font-size:9px;color:{accent}60;text-transform:uppercase;letter-spacing:0.15em">-- Attribution</div></div>""",
+        'I': f"""I) HERO STAT:
+<div style="text-align:center;padding:20px"><div style="font-size:72px;font-weight:900;letter-spacing:-0.04em;background:linear-gradient(135deg,{accent},#ec4899);-webkit-background-clip:text;-webkit-text-fill-color:transparent;line-height:1">$4.2T</div><div style="font-size:10px;color:rgba(255,255,255,0.35);text-transform:uppercase;letter-spacing:0.2em;margin-top:8px">Market Size</div></div>""",
+        'J': f"""J) ICON GRID:
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px"><div style="text-align:center;padding:14px 8px;border-radius:10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04)"><div style="font-size:28px;margin-bottom:6px">&#128300;</div><div style="font-size:10px;font-weight:600;color:rgba(255,255,255,0.7)">Research</div></div></div>""",
+    }
+
+    _vocab_section = '\n\n'.join(_vocab_map[k] for k in sorted(_selected) if k in _vocab_map)
+    _detected_patterns = ', '.join(sorted(_selected))
+    logger.info(f"[SLIDE_DESIGN] Slide {slide_index + 1}: detected patterns={_detected_patterns}, hasMap={_has_map}")
+
+    # Build map mandate + layout instructions TOGETHER (co-located)
+    if _has_map:
+        _map_mandate = f"""
+=== MANDATORY MAP IMAGE ===
+A real Google Maps satellite image MUST appear on this slide. Use this EXACT HTML (do NOT change src/href):
+
+<a href="{_ctx_gmaps}" target="_blank" style="display:block;text-decoration:none;border-radius:14px;overflow:hidden;min-width:250px;box-shadow:0 4px 24px rgba(0,0,0,0.4),0 0 0 1px rgba(255,255,255,0.06)">
+  <img src="{_ctx_map_url}" style="width:100%;height:auto;object-fit:cover;border-radius:14px;display:block" alt="{_ctx_loc_name}" />
+  <div style="font-size:8px;color:rgba(255,255,255,0.35);margin-top:5px;text-align:center;letter-spacing:0.05em">📍 {_ctx_loc_name} — tap to explore</div>
+</a>
+
+MAP LAYOUT — choose ONE:
+K1) HERO MAP: Full-width map at top (~560px wide, 180-200px tall), then 2-3 stat cards below in a grid. Best for location-focused slides.
+K2) SPLIT: 2-column grid — left ~45% map (min 250px wide), right ~55% data cards/stats. Best for data-heavy slides.
+
+RULES:
+- Map must be at least 250px wide. Do NOT shrink it into a tiny thumbnail.
+- The map is a PREMIUM visual — make it a beautiful, prominent part of the slide.
+- You MUST also include substantive data content alongside the map.
+- Do NOT fabricate image URLs. Do NOT use placeholder/stock images. ONLY the URL above is valid.
+"""
+    
+    # Slide position hint
+    _position_hint = ''
+    if slide_index == 0:
+        _position_hint = 'THIS IS THE OPENING SLIDE -- cinematic, dramatic. Oversized hero typography (48-72px), decorative SVG geometry at low opacity, bold gradient stat or pull-quote, generous whitespace.'
+    elif slide_index == total_slides - 1:
+        _position_hint = 'THIS IS THE FINAL SLIDE -- strong closer with a key takeaway stat, memorable quote, or bold call-to-action.'
+
+    # Variety enforcement: tell the LLM what patterns OTHER slides use
+    _variety_hint = ''
+    if deck_outline and total_slides > 2:
+        _variety_hint = f'VARIETY: This is a {total_slides}-slide deck. Each slide should use a DIFFERENT visual pattern. Do NOT repeat the same layout across slides. Mix bar charts, stat grids, icon grids, timelines, flow diagrams, and quotes.'
+
+    design_prompt = f"""You are an elite presentation designer (Apple Keynote x Bloomberg x Figma quality).
+Design ONE slide as a single <div> with ALL styles inline. Return ONLY the HTML.
+{_map_mandate}
 === CONTENT ===
 Heading: {heading}
 Body: {body}
 
-{map_context}
-=== DATA CONVENTIONS IN THE BODY -- parse and visualize these: ===
-The body may contain special markers. Convert each into the appropriate visual:
-* [STAT: value | description] -> Render as a hero stat: large gradient number + small label below
-* [COMPARE: A = val | B = val | C = val] -> Render as HORIZONTAL BAR CHART with bars at proportional widths, or a 2-3 column stat grid
-* [TIMELINE: 2023 = val | 2024 = val | 2025 = val] -> Render as a TIMELINE with dots/bars showing progression, or an SVG line/bar chart
-* [FLOW: Step1 -> Step2 -> Step3] -> Render as a FLOW DIAGRAM with connected pill boxes and arrows
-* > "quote text" -- Attribution -> Render as a CINEMATIC QUOTE with large watermark quotation mark
-* Bullet points with **bold lead-ins** -> Render as an icon grid or numbered list with accent-colored indices
-If no markers are present, analyze the text for implicit data (numbers, percentages, comparisons) and visualize those.
-NEVER just render the raw marker text -- always convert it into a rich visual element.
-
-=== CONTEXT ===
-Slide {slide_index + 1} of {total_slides} in "{deck_title}"
-Outline: {deck_outline}
-Accent: {accent}
-{"THIS IS THE OPENING SLIDE -- make it CINEMATIC and DRAMATIC. Use oversized hero typography (48-72px), decorative SVG geometry (dashed circles, crosshairs, grid lines at very low opacity), a bold gradient stat or pull-quote, and generous whitespace. This slide sets the visual tone for the entire deck." if slide_index == 0 else "THIS IS THE FINAL SLIDE -- make it a strong closer with a key takeaway stat, memorable quote, or bold call-to-action visual." if slide_index == total_slides - 1 else ""}
+=== DATA MARKERS (convert each into rich visuals -- NEVER render raw marker text) ===
+[STAT: value | description] -> hero stat  |  [COMPARE: A=val | B=val] -> bar chart/grid
+[TIMELINE: year=val | year=val] -> timeline  |  [FLOW: A -> B -> C] -> flow diagram
+> "quote" -- Attribution -> cinematic quote  |  **bold lead-ins** -> numbered list/icon grid
 
 === DESIGN SYSTEM ===
-Canvas: dark bg (#0a0a12), ~580px wide × ~360px tall (16:10). You own the full card interior.
-CRITICAL: ALL content MUST fit within ~360px height. Do NOT exceed this. If content is dense, use smaller fonts, tighter gaps, and 2-column grids to compress. Scrolling is NOT available — anything beyond 360px is clipped and invisible.
-Colors: text rgba(255,255,255,0.88), secondary rgba(255,255,255,0.50), muted rgba(255,255,255,0.22), accent {accent} at 04-cc opacity.
-Fonts: system stack. Hero: 48-72px/900/-0.04em. Title: 20-28px/700. Body: 11-13px/300/1.8. Micro: 8-9px/uppercase/0.2em spacing.
+Canvas: dark bg (#0a0a12), ~580px wide x ~360px tall. ALL content MUST fit in 360px height (no scroll).
+Colors: text rgba(255,255,255,0.88), secondary 0.50, muted 0.22, accent {accent}.
+Fonts: system stack. Hero 48-72px/900. Title 20-28px/700. Body 11-13px/300. Micro 8-9px/uppercase.
+{_position_hint}
+{_variety_hint}
 
-=== VISUAL VOCABULARY -- pick the BEST fit, adapt creatively ===
+Slide {slide_index + 1} of {total_slides} in "{deck_title}" | Accent: {accent}
 
-A) SVG BAR CHART -- for any comparative numbers:
-<div style="display:flex;flex-direction:column;gap:8px">
-  <div style="display:flex;align-items:center;gap:10px"><span style="font-size:9px;color:rgba(255,255,255,0.4);width:60px;text-align:right">Label</span><div style="height:22px;border-radius:6px;background:linear-gradient(90deg,{accent}cc,{accent}40);width:75%"></div><span style="font-size:11px;font-weight:700;color:{accent}">75%</span></div>
-</div>
+=== VISUAL PATTERNS (use these as starting points, adapt to content) ===
 
-B) SVG DONUT/PIE -- for proportions:
-<svg viewBox="0 0 120 120" width="120" height="120"><circle cx="60" cy="60" r="50" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="10"/><circle cx="60" cy="60" r="50" fill="none" stroke="{accent}" stroke-width="10" stroke-dasharray="220 94" stroke-linecap="round" transform="rotate(-90 60 60)"/><text x="60" y="65" text-anchor="middle" fill="white" font-size="22" font-weight="800">70%</text></svg>
-
-C) FLOW DIAGRAM -- for processes, pipelines:
-<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-  <div style="padding:8px 14px;border-radius:10px;background:{accent}12;border:1px solid {accent}20;font-size:10px;color:{accent}cc">Step 1</div>
-  <span style="font-size:16px;color:{accent}40">&#8594;</span>
-  <div style="padding:8px 14px;border-radius:10px;background:{accent}12;border:1px solid {accent}20;font-size:10px;color:{accent}cc">Step 2</div>
-  <span style="font-size:16px;color:{accent}40">&#8594;</span>
-  <div style="padding:8px 14px;border-radius:10px;background:{accent}18;border:1px solid {accent}30;font-size:10px;font-weight:700;color:{accent}">Result</div>
-</div>
-
-D) RADIAL CONCEPT MAP -- for relationships:
-<div style="position:relative;width:280px;height:200px;margin:0 auto">
-  <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);padding:12px 20px;border-radius:50%;background:{accent}18;border:2px solid {accent}40;font-size:12px;font-weight:800;color:white">Core</div>
-  <div style="position:absolute;top:10px;left:20px;padding:6px 12px;border-radius:8px;background:rgba(255,255,255,0.04);border:1px solid {accent}15;font-size:9px;color:rgba(255,255,255,0.5)">Node A</div>
-  <div style="position:absolute;top:10px;right:20px;padding:6px 12px;border-radius:8px;background:rgba(255,255,255,0.04);border:1px solid {accent}15;font-size:9px;color:rgba(255,255,255,0.5)">Node B</div>
-</div>
-
-E) STAT GRID -- for multiple data points:
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-  <div style="padding:16px;border-radius:12px;background:{accent}06;border:1px solid {accent}0c"><div style="font-size:32px;font-weight:900;letter-spacing:-0.04em;background:linear-gradient(135deg,{accent},{accent}80);-webkit-background-clip:text;-webkit-text-fill-color:transparent">42M</div><div style="font-size:8px;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:0.15em;margin-top:4px">Active Users</div></div>
-</div>
-
-F) TIMELINE -- for chronological data:
-<div style="display:flex;flex-direction:column;gap:0;padding-left:20px;border-left:2px solid {accent}20">
-  <div style="position:relative;padding:10px 0 10px 20px"><div style="position:absolute;left:-7px;top:14px;width:12px;height:12px;border-radius:50%;background:{accent};box-shadow:0 0 12px {accent}60"></div><div style="font-size:8px;color:{accent}80;text-transform:uppercase;letter-spacing:0.1em">2024</div><div style="font-size:12px;color:rgba(255,255,255,0.8);font-weight:600;margin-top:2px">Event title</div></div>
-</div>
-
-G) COMPARISON TABLE -- for A vs B:
-<div style="display:grid;grid-template-columns:1fr auto 1fr;gap:0;border-radius:12px;overflow:hidden">
-  <div style="padding:20px;background:{accent}06;text-align:center"><div style="font-size:18px;font-weight:800;color:{accent}">Option A</div></div>
-  <div style="padding:20px;display:flex;align-items:center;background:rgba(255,255,255,0.02)"><span style="font-size:10px;font-weight:800;color:rgba(255,255,255,0.2);padding:4px 8px;border-radius:6px;background:rgba(255,255,255,0.04)">VS</span></div>
-  <div style="padding:20px;background:rgba(236,72,153,0.06);text-align:center"><div style="font-size:18px;font-weight:800;color:#ec4899">Option B</div></div>
-</div>
-
-H) CINEMATIC QUOTE:
-<div style="position:relative;padding:30px 20px">
-  <div style="position:absolute;top:-10px;left:10px;font-size:120px;line-height:1;color:{accent}08;font-family:Georgia,serif">"</div>
-  <p style="font-size:20px;font-weight:300;font-style:italic;color:rgba(255,255,255,0.75);line-height:1.6;position:relative;z-index:1">Quote text here</p>
-  <div style="margin-top:12px;font-size:9px;color:{accent}60;text-transform:uppercase;letter-spacing:0.15em">-- Attribution</div>
-</div>
-
-I) GIANT HERO STAT -- for one show-stopping number:
-<div style="text-align:center;padding:20px">
-  <div style="font-size:72px;font-weight:900;letter-spacing:-0.04em;background:linear-gradient(135deg,{accent},#ec4899);-webkit-background-clip:text;-webkit-text-fill-color:transparent;line-height:1">$4.2T</div>
-  <div style="font-size:10px;color:rgba(255,255,255,0.35);text-transform:uppercase;letter-spacing:0.2em;margin-top:8px">Global Market Size by 2030</div>
-  <div style="width:60px;height:2px;background:linear-gradient(90deg,{accent}80,transparent);margin:16px auto 0"></div>
-</div>
-
-J) ICON GRID -- emoji-anchored info blocks:
-<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
-  <div style="text-align:center;padding:14px 8px;border-radius:10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04)"><div style="font-size:28px;margin-bottom:6px">&#128300;</div><div style="font-size:10px;font-weight:600;color:rgba(255,255,255,0.7)">Research</div><div style="font-size:8px;color:rgba(255,255,255,0.3);margin-top:3px">Description</div></div>
-</div>
+{_vocab_section}
 
 === RULES ===
-1. Return ONLY one <div style="...">...</div>. No markdown, no explanation, no JSON.
-2. NO class=, NO <script>, NO <style> blocks. The ONLY exception: if a "=== REAL MAP DATA AVAILABLE ===" section was provided above, you MUST embed that <img src> URL — this is a pre-authorized external image.
-3. ALL styles MUST be inline style="...".
-4. EVERY slide MUST have at least one visual element (chart, diagram, SVG, stat grid, flow, icon grid). Pure text slides are FORBIDDEN.
-5. Adapt the examples above -- change values, colors, sizes to match the actual content.
-6. SVG is encouraged for charts. Inline SVG with viewBox works perfectly.
-7. Mix patterns -- e.g. a hero stat + a bar chart below, or a flow diagram + stat grid.
-8. Use CSS grid and flexbox. Create breathing room with padding/gap.
-9. Keep the content faithful to the heading/body -- don't fabricate data, but DO visualize the existing data dramatically.
-10. Your root <div> MUST have: style="width:100%;box-sizing:border-box" — the card will scroll if needed, so prioritize showing ALL data over cramming.
-11. Use clean spacing (gap:8-12px, padding:12-20px). Prefer 2-column grids for dense data but use vertical stacking when content needs room to breathe.
-
-K) REAL MAP SLIDE -- when a "=== REAL MAP DATA AVAILABLE ===" section with an <img> URL was provided above, use THIS pattern:
-<div style="width:100%;box-sizing:border-box;padding:16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif">
-  <div style="font-size:8px;color:{accent}80;text-transform:uppercase;letter-spacing:0.15em;margin-bottom:4px">Location Intelligence</div>
-  <div style="font-size:20px;font-weight:800;color:rgba(255,255,255,0.9);margin-bottom:8px">Heading Here</div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-    <div>
-      <a href="GOOGLE_MAPS_LINK_HERE" target="_blank" style="display:block;text-decoration:none;border-radius:10px;overflow:hidden;max-height:140px">
-        <img src="PASTE_THE_REAL_MAP_URL_HERE" style="width:100%;border-radius:10px;display:block" alt="Map — click to open in Google Maps" />
-      </a>
-      <div style="font-size:7px;color:rgba(255,255,255,0.3);margin-top:4px;text-align:center">Click map to open in Google Maps</div>
-    </div>
-    <div style="display:flex;flex-direction:column;gap:8px">
-      <div style="padding:10px;border-radius:8px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06)"><div style="font-size:9px;font-weight:700;color:{accent}">Key Fact</div><div style="font-size:8px;color:rgba(255,255,255,0.5)">Detail</div></div>
-      <div style="padding:10px;border-radius:8px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06)"><div style="font-size:9px;font-weight:700;color:{accent}">Key Fact</div><div style="font-size:8px;color:rgba(255,255,255,0.5)">Detail</div></div>
-    </div>
-  </div>
-</div>
-CRITICAL MAP RULES:
-- Replace PASTE_THE_REAL_MAP_URL_HERE with the EXACT maps.googleapis.com URL from the "=== REAL MAP DATA ===" section.
-- Replace GOOGLE_MAPS_LINK_HERE with the google.com/maps link from the map data section.
-- The map should be ~25-30% of the slide. The rest MUST have stats, facts, or data grids.
-- Do NOT fabricate or hallucinate ANY image URLs. The ONLY valid <img src> for maps is the maps.googleapis.com URL provided above.
-- Do NOT use placeholder images, stock photos, or generated satellite/terrain/landscape images. If no map URL was provided, use SVG graphics instead.
+1. Return ONLY one <div style="width:100%;box-sizing:border-box;...">...</div>. No markdown, no JSON.
+2. NO class=, NO <script>, NO <style> blocks. ALL styles inline.
+3. EVERY slide MUST have at least one visual element (chart, SVG, stat grid, flow, icon grid). Pure text is FORBIDDEN.
+4. Adapt patterns -- change values, colors, sizes to match the actual content. Mix patterns (hero stat + bar chart, flow + stat grid).
+5. Keep content faithful to heading/body. Don't fabricate data, but DO visualize existing data dramatically.
+6. Use CSS grid/flexbox. Clean spacing (gap:8-12px, padding:12-20px). 2-column grids for dense data.
+7. SVG is encouraged. Inline SVG with viewBox works perfectly.
+{"8. " + "MAP: You MUST include the map <img> from the MANDATORY MAP IMAGE section. Use layout K1 (hero) or K2 (split). Map must be at least 250px wide — never a tiny thumbnail." if _has_map else "8. Do NOT use any external image URLs. Use SVG graphics for all visuals."}
 
 === EDIT INSTRUCTION ===
 {_edit_block}"""
@@ -11293,6 +12045,21 @@ CRITICAL MAP RULES:
             else:
                 return ''
         return c
+
+    def _validate_html_quality(html_str):
+        """Basic quality checks: minimum content, has visual elements, balanced root tag."""
+        if not html_str or len(html_str) < 100:
+            return False, 'too short'
+        # Strip tags to get text content
+        _text_only = _re.sub(r'<[^>]+>', ' ', html_str)
+        _text_only = _re.sub(r'\s+', ' ', _text_only).strip()
+        if len(_text_only) < 20:
+            return False, 'almost no text content'
+        # Check for at least one visual element indicator
+        _visual_indicators = ['svg', 'grid', 'flex', 'gradient', 'border-radius', 'font-size']
+        if not any(v in html_str.lower() for v in _visual_indicators):
+            return False, 'no visual elements detected'
+        return True, 'ok'
 
     try:
         messages = [
@@ -11318,7 +12085,14 @@ CRITICAL MAP RULES:
 
             html_content = _clean_html(raw)
             if html_content:
-                break
+                _valid, _reason = _validate_html_quality(html_content)
+                if _valid:
+                    break
+                else:
+                    logger.warning(f"[SLIDE_DESIGN] Slide {slide_index + 1} attempt {_attempt}: quality check failed ({_reason}), html={html_content[:150]}")
+                    if _attempt < _MAX_BACKEND_RETRIES:
+                        html_content = ''
+                        _time.sleep(1.5 * _attempt)
             else:
                 logger.warning(f"[SLIDE_DESIGN] Slide {slide_index + 1} attempt {_attempt}: non-HTML content: {raw[:200]}")
                 if _attempt < _MAX_BACKEND_RETRIES:
@@ -11346,19 +12120,9 @@ CRITICAL MAP RULES:
                 if _fake_count:
                     logger.info(f"[SLIDE_DESIGN] Slide {slide_index + 1}: replaced {_fake_count} fake/hallucinated img URL(s) with real map")
 
-                # Step 2: If LLM included NO images at all, inject a compact map
+                # Step 2: If LLM included NO images at all, log a warning (the mandate should have handled it)
                 if '<img ' not in html_content:
-                    logger.info(f"[SLIDE_DESIGN] Slide {slide_index + 1}: no images in HTML — injecting compact map")
-                    _link_open = f'<a href="{_gmaps_link}" target="_blank" style="display:block;text-decoration:none">' if _gmaps_link else ''
-                    _link_close = '</a>' if _gmaps_link else ''
-                    _map_block = (
-                        f'<div style="border-radius:10px;overflow:hidden;margin:8px 0;max-height:150px">'
-                        f'{_link_open}<img src="{_real_map_url}" style="width:100%;display:block;border-radius:10px" alt="Map" />{_link_close}'
-                        f'</div>'
-                    )
-                    _insert_pos = html_content.find('>', html_content.find('<div')) + 1
-                    if _insert_pos > 0:
-                        html_content = html_content[:_insert_pos] + _map_block + html_content[_insert_pos:]
+                    logger.warning(f"[SLIDE_DESIGN] Slide {slide_index + 1}: map mandate was provided but LLM included no images — skipping injection")
 
                 # Step 3: Ensure real map img is wrapped in a clickable Google Maps link
                 if _gmaps_link and 'maps.googleapis.com/maps/api/staticmap' in html_content:
@@ -11373,11 +12137,22 @@ CRITICAL MAP RULES:
                             html_content = html_content[:_img_match.start()] + _linked_img + html_content[_img_match.end():]
                             logger.info(f"[SLIDE_DESIGN] Slide {slide_index + 1}: wrapped map img in Google Maps link")
 
+                # Step 4: Ensure map image has border-radius for polished look (but don't constrain size)
+                _map_img_pattern = r'(<img\s[^>]*src="https://maps\.googleapis\.com/maps/api/staticmap[^"]*"[^>]*)(style="[^"]*")'
+                _map_img_match = _re.search(_map_img_pattern, html_content)
+                if _map_img_match:
+                    _old_style = _map_img_match.group(2)
+                    # Only add border-radius if not already present
+                    if 'border-radius' not in _old_style:
+                        _new_style = _old_style.rstrip('"') + ';border-radius:12px"'
+                        html_content = html_content[:_map_img_match.start(2)] + _new_style + html_content[_map_img_match.end(2):]
+                        logger.info(f"[SLIDE_DESIGN] Slide {slide_index + 1}: added border-radius to map image")
+
                 logger.info(f"[SLIDE_DESIGN] Slide {slide_index + 1}: map post-processing done")
 
         _total = _time.time() - _t0
-        logger.info(f"[SLIDE_DESIGN] Slide {slide_index + 1} SUCCESS: {len(html_content)} chars, total {_total:.1f}s")
-        return jsonify({'ok': True, 'html': html_content})
+        logger.info(f"[SLIDE_DESIGN] Slide {slide_index + 1} SUCCESS: {len(html_content)} chars, total {_total:.1f}s, newCoords={len(_new_coords)}")
+        return jsonify({'ok': True, 'html': html_content, 'newCoords': _new_coords})
 
     except Exception as e:
         logger.error(f"[SLIDE_DESIGN] Error on slide {slide_index + 1}: {e}")
@@ -14028,17 +14803,24 @@ def main():
         # Kill any stale Python process holding our port from a previous session FIRST
         _kill_stale_port_holders()
 
-        # Brief pause to let OS release ports after killing stale processes
-        time.sleep(0.5)
-
-        # Prevent duplicate instances: if port 8765 is still bound, exit
+        # Wait for OS to release ports after killing stale processes, with retry
         import socket as _sock
-        _test = _sock.socket(_sock.AF_INET, _sock.SOCK_STREAM)
-        try:
-            _test.bind(('127.0.0.1', 8765))
-            _test.close()
-        except OSError:
-            _test.close()
+        _port_acquired = False
+        for _attempt in range(6):  # up to 6 attempts (0..5), ~6s total
+            if _attempt > 0:
+                time.sleep(1)
+            _test = _sock.socket(_sock.AF_INET, _sock.SOCK_STREAM)
+            _test.setsockopt(_sock.SOL_SOCKET, _sock.SO_REUSEADDR, 1)
+            try:
+                _test.bind(('127.0.0.1', 8765))
+                _test.close()
+                _port_acquired = True
+                break
+            except OSError:
+                _test.close()
+                if _attempt < 5:
+                    print(f"[STARTUP] Port 8765 still busy, retrying ({_attempt + 1}/5)...", flush=True)
+        if not _port_acquired:
             print("[STARTUP] Port 8765 already in use — another instance is running. Exiting.", file=sys.stderr, flush=True)
             sys.exit(0)
         

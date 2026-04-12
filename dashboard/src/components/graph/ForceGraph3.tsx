@@ -17,7 +17,7 @@ import { forceX, forceY } from 'd3-force';
 import { SlidersHorizontal, RotateCcw, ZoomIn, ZoomOut, X, Search } from 'lucide-react';
 
 // ─── Types ────────────────────────────────────────────────────────
-export type NodeKind = 'agent' | 'model' | 'memory' | 'file' | 'conversation' | 'task' | 'live' | 'skill' | 'macro' | 'tool' | 'subagent';
+export type NodeKind = 'agent' | 'model' | 'memory' | 'file' | 'conversation' | 'task' | 'live' | 'skill' | 'macro' | 'tool' | 'subagent' | 'research';
 
 export interface LiveEvent {
   id: string;
@@ -61,6 +61,7 @@ const PAL: Record<string, { color: string; rgb: string }> = {
   macro:  { color: '#06b6d4', rgb: '6,182,212' },
   tool:   { color: '#ef4444', rgb: '239,68,68' },
   subagent: { color: '#e879f9', rgb: '232,121,249' },
+  research: { color: '#c084fc', rgb: '192,132,252' },
 };
 
 const KEY_FILES = new Set([
@@ -184,6 +185,7 @@ export interface ForceGraphProps {
     tools:  Array<{ name: string; path: string; size: number }>;
   } | null;
   subagents?: Array<{ id: string; name: string; status: string; parentSession?: string; message?: string }>;
+  researchItems?: Array<{ id: string; title: string; type: string; topics: string[]; sourceUrls?: Array<{ url: string; label: string }>; parentId?: string; timestamp: number }>;
   externalHighlightRef?: { current: string | null };
   onNodeClick?: (kind: NodeKind, id: string, detail?: string) => void;
   onNodeDoubleClick?: (kind: NodeKind, id: string, detail?: string) => void;
@@ -213,6 +215,7 @@ function buildGraphData(
   specialFolders: ForceGraphProps['specialFolders'] = null,
   daysShown: number = 20,
   subagents: ForceGraphProps['subagents'] = [],
+  researchItems: ForceGraphProps['researchItems'] = [],
 ) {
   const nodes: GNode[] = [];
   const links: GLink[] = [];
@@ -611,6 +614,140 @@ function buildGraphData(
     });
   }
 
+  // ── Research items — intelligence hub results ──────────────────
+  if (researchItems && researchItems.length > 0) {
+    nodes.push({ id: 'hub-research', kind: 'research', nodeType: 'hub', label: 'Research', detail: `${researchItems.length} items`, size: 10, color: PAL.research.color, colorRgb: PAL.research.rgb, count: researchItems.length });
+    links.push({ source: A, target: 'hub-research', linkType: 'core' });
+
+    // Color rotation for research items
+    const researchColors = [
+      { color: '#c084fc', rgb: '192,132,252' },
+      { color: '#a78bfa', rgb: '167,139,250' },
+      { color: '#e879f9', rgb: '232,121,249' },
+      { color: '#818cf8', rgb: '129,140,248' },
+      { color: '#f472b6', rgb: '244,114,182' },
+      { color: '#22d3ee', rgb: '34,211,238' },
+    ];
+
+    researchItems.slice(0, 30).forEach((ri, idx) => {
+      const nId = `research:${ri.id}`;
+      const col = researchColors[idx % researchColors.length];
+      const shortTitle = ri.title.length > 35 ? ri.title.slice(0, 33) + '…' : ri.title;
+      const isFollowUp = !!ri.parentId;
+      nodes.push({ id: nId, kind: 'research', nodeType: 'leaf', label: shortTitle, detail: ri.title, size: isFollowUp ? 3 : 4.5, color: col.color, colorRgb: col.rgb });
+
+      // Link to parent research item if follow-up, otherwise to hub
+      if (isFollowUp) {
+        const parentNodeId = `research:${ri.parentId}`;
+        const parentExists = researchItems.some(r => r.id === ri.parentId);
+        if (parentExists) {
+          links.push({ source: parentNodeId, target: nId, linkType: 'follow-up' });
+        } else {
+          links.push({ source: 'hub-research', target: nId, linkType: 'research' });
+        }
+      } else {
+        links.push({ source: 'hub-research', target: nId, linkType: 'research' });
+      }
+
+      // Source URL leaf nodes (max 3 per item)
+      if (ri.sourceUrls) {
+        ri.sourceUrls.slice(0, 3).forEach((src, si) => {
+          const srcId = `source:${ri.id}:${si}`;
+          const shortLabel = src.label.length > 25 ? src.label.slice(0, 23) + '…' : src.label;
+          nodes.push({ id: srcId, kind: 'research', nodeType: 'leaf', label: shortLabel, detail: src.url, size: 2, color: '#94a3b8', colorRgb: '148,163,184' });
+          links.push({ source: nId, target: srcId, linkType: 'source' });
+        });
+      }
+    });
+
+    // ── Concept nodes — visible keyword hubs connecting research items ──
+    const STOP_WORDS = new Set(['the','a','an','and','or','of','in','on','to','for','is','are','was','were','be','been',
+      'has','have','had','do','does','did','will','would','could','should','may','might','shall',
+      'with','at','by','from','into','about','between','through','its','this','that','these','those',
+      'what','how','why','when','where','which','who','their','our','your','new','not','but','all',
+      'more','most','some','any','each','every','no','than','very','just','also','now','dig','deeper',
+      'expand','findings','find','additional','sources','explore','angles','covered','latest',
+      'developments','research','analysis','impact','overview','update','report','deep','current',
+      'based','using','related','including','recently','today','show','look','understanding']);
+    const sliced = researchItems.slice(0, 30);
+
+    // Extract keywords from title + topics; also extract multi-word phrases from topics
+    const extractTerms = (ri: typeof sliced[0]): string[] => {
+      const terms: string[] = [];
+      // Single words from title
+      const titleWords = ri.title.toLowerCase().split(/[^a-z0-9'-]+/).filter(w => w.length > 2 && !STOP_WORDS.has(w));
+      terms.push(...titleWords);
+      // Topics as whole phrases (these are often multi-word concepts like "machine learning")
+      if (ri.topics) {
+        for (const t of ri.topics) {
+          const tLow = t.toLowerCase().trim();
+          if (tLow.length > 2 && !STOP_WORDS.has(tLow)) terms.push(tLow);
+        }
+      }
+      return [...new Set(terms)];
+    };
+
+    const itemTerms = sliced.map(ri => ({ id: ri.id, terms: extractTerms(ri) }));
+
+    // Build term → research item index
+    const termIndex = new Map<string, string[]>();
+    for (const { id, terms } of itemTerms) {
+      for (const t of terms) {
+        if (!termIndex.has(t)) termIndex.set(t, []);
+        termIndex.get(t)!.push(id);
+      }
+    }
+
+    // Create visible concept nodes for terms shared by 2+ research items
+    const conceptColors = [
+      { color: '#a78bfa', rgb: '167,139,250' },  // violet
+      { color: '#67e8f9', rgb: '103,232,249' },  // cyan
+      { color: '#fbbf24', rgb: '251,191,36' },   // amber
+      { color: '#34d399', rgb: '52,211,153' },    // emerald
+      { color: '#fb7185', rgb: '251,113,133' },   // rose
+      { color: '#38bdf8', rgb: '56,189,248' },    // sky
+    ];
+    let conceptCount = 0;
+    const MAX_CONCEPTS = 25;
+    // Sort by how many items share the term (most connected first)
+    // No upper cap — if many items share a keyword, that's a strong concept
+    const sharedTerms = [...termIndex.entries()]
+      .filter(([term, ids]) => ids.length >= 2 && term.length > 2)
+      .sort((a, b) => b[1].length - a[1].length);
+
+    for (const [term, itemIds] of sharedTerms) {
+      if (conceptCount >= MAX_CONCEPTS) break;
+      const conceptId = `concept:${term}`;
+      const col = conceptColors[conceptCount % conceptColors.length];
+      const displayLabel = term.length > 18 ? term.slice(0, 16) + '…' : term;
+      nodes.push({ id: conceptId, kind: 'research', nodeType: 'leaf', label: displayLabel, detail: `Shared concept: "${term}" (${itemIds.length} items)`, size: 2.5 + Math.min(itemIds.length * 0.5, 3), color: col.color, colorRgb: col.rgb });
+      // Link concept to the research hub
+      links.push({ source: 'hub-research', target: conceptId, linkType: 'concept' });
+      // Link each research item to the concept
+      for (const itemId of itemIds) {
+        links.push({ source: `research:${itemId}`, target: conceptId, linkType: 'shared-topic' });
+      }
+      conceptCount++;
+    }
+
+    // ── Cross-link research to memory nodes with matching keywords ──
+    const memoryNodes = nodes.filter(n => n.id.startsWith('fact:') || n.id.startsWith('lesson:') || n.id.startsWith('mem-'));
+    for (const { id, terms } of itemTerms) {
+      let memLinks = 0;
+      for (const n of memoryNodes) {
+        if (memLinks >= 2) break;
+        if (!n.label) continue;
+        const nLabel = n.label.toLowerCase();
+        // Match if any significant term (>3 chars) appears in the memory label
+        const match = terms.some(t => t.length > 3 && nLabel.includes(t));
+        if (match) {
+          links.push({ source: `research:${id}`, target: n.id, linkType: 'topic-match' });
+          memLinks++;
+        }
+      }
+    }
+  }
+
   // Live activity events (ephemeral)
   liveEvents.forEach(ev => {
     nodes.push({ id: ev.id, kind: 'live', nodeType: 'leaf', label: ev.label, detail: ev.detail || ev.label, size: 2.5, color: PAL.live.color, colorRgb: PAL.live.rgb, pulse: true });
@@ -621,7 +758,7 @@ function buildGraphData(
 }
 
 // ─── Component ────────────────────────────────────────────────────
-export function ForceGraph({ agentName, agentState, model, memories, files, messages, tasks, liveEvents = [], gatewayModels = [], sessions = [], chatDates = [], realMemory = null, specialFolders = null, subagents = [], externalHighlightRef, onNodeClick, onNodeDoubleClick }: ForceGraphProps) {
+export function ForceGraph({ agentName, agentState, model, memories, files, messages, tasks, liveEvents = [], gatewayModels = [], sessions = [], chatDates = [], realMemory = null, specialFolders = null, subagents = [], researchItems = [], externalHighlightRef, onNodeClick, onNodeDoubleClick }: ForceGraphProps) {
   const fgRef = useRef<any>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [graphSize, setGraphSize] = useState({ w: 800, h: 600 });
@@ -685,7 +822,7 @@ export function ForceGraph({ agentName, agentState, model, memories, files, mess
   const prevSignatureRef = useRef('');
   const graphData = useMemo(
     () => {
-      const next = buildGraphData(agentName, agentStateRef.current, model, memories, files, messages, tasks, liveEventsRef.current, gatewayModels, sessions, chatDates, realMemory, specialFolders, Math.round(gpVal('daysShown', 20)), subagents);
+      const next = buildGraphData(agentName, agentStateRef.current, model, memories, files, messages, tasks, liveEventsRef.current, gatewayModels, sessions, chatDates, realMemory, specialFolders, Math.round(gpVal('daysShown', 20)), subagents, researchItems);
       // Only return a new object if the graph structure actually changed
       // This prevents react-force-graph-2d from reheating on cosmetic changes
       const sig = next.nodes.length + ':' + next.links.length + ':' + next.nodes.map(n => n.id).join(',');
@@ -697,7 +834,7 @@ export function ForceGraph({ agentName, agentState, model, memories, files, mess
       return next;
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [agentName, model, memories, files, messages, tasks, gatewayModels, sessions, chatDates, realMemory, specialFolders, gpVal('daysShown', 20), subagents],
+    [agentName, model, memories, files, messages, tasks, gatewayModels, sessions, chatDates, realMemory, specialFolders, gpVal('daysShown', 20), subagents, researchItems],
   );
 
   // Pre-compute neighbor sets for click isolation
@@ -717,6 +854,9 @@ export function ForceGraph({ agentName, agentState, model, memories, files, mess
   const extHighlightRef = externalHighlightRef ?? { current: null };
 
   const isHighlighted = useCallback((nodeId: string) => {
+    // If search is active, highlight all matching nodes + their neighbors
+    const sm = searchMatchRef.current;
+    if (sm) return sm.has(nodeId);
     const hn = highlightedNodeRef.current;
     if (!hn) return true;
     return nodeId === hn || (neighborMap.get(hn)?.has(nodeId) ?? false);
@@ -832,14 +972,56 @@ export function ForceGraph({ agentName, agentState, model, memories, files, mess
 
   const handleBgClick = useCallback(() => { setHighlightedNode(null); lastClickRef.current = null; }, []);
 
-  // Search — filter nodes by label/detail
+  // Search — filter nodes by label/detail, sorted by relevance
   const searchResults = useMemo(() => {
     if (!searchQuery.trim()) return [];
     const q = searchQuery.toLowerCase();
-    return graphData.nodes
+    const matches = graphData.nodes
       .filter(n => n.label.toLowerCase().includes(q) || (n.detail || '').toLowerCase().includes(q))
-      .slice(0, 20);
+      .map(n => {
+        // Score: label match > detail-only, exact > partial, research/file nodes boosted
+        let score = 0;
+        const labelLow = n.label.toLowerCase();
+        const detailLow = (n.detail || '').toLowerCase();
+        if (labelLow === q) score += 100;
+        else if (labelLow.includes(q)) score += 50;
+        if (detailLow.includes(q)) score += 10;
+        // Boost research, file, concept nodes over memory hubs
+        if (n.id.startsWith('research:') || n.id.startsWith('concept:')) score += 20;
+        if (n.kind === 'file') score += 15;
+        if (n.nodeType === 'hub') score -= 5;
+        return { node: n, score };
+      })
+      .sort((a, b) => b.score - a.score);
+    return matches.map(m => m.node);
   }, [searchQuery, graphData]);
+  const searchTotal = searchResults.length;
+  const searchDisplay = searchResults.slice(0, 30);
+
+  // While searching, highlight ALL matching nodes + their neighbors
+  const searchMatchIds = useMemo(() => {
+    if (!searchQuery.trim() || searchResults.length === 0) return null;
+    const ids = new Set<string>();
+    for (const n of searchResults) {
+      ids.add(n.id);
+      const neighbors = neighborMap.get(n.id);
+      if (neighbors) neighbors.forEach(nid => ids.add(nid));
+    }
+    return ids;
+  }, [searchResults, searchQuery, neighborMap]);
+  const searchMatchRef = useRef<Set<string> | null>(null);
+  searchMatchRef.current = searchMatchIds;
+
+  // Force canvas repaint when search highlights change
+  useEffect(() => {
+    const fg = fgRef.current;
+    if (fg) {
+      // Nudge d3 alpha to trigger a repaint cycle
+      fg.d3ReheatSimulation?.();
+      // Fallback: directly tickle the renderer
+      try { fg.renderer?.()?.refresh?.(); } catch { /* ignore */ }
+    }
+  }, [searchMatchIds]);
 
   const navigateToNode = useCallback((node: GNode) => {
     const fg = fgRef.current;
@@ -1077,9 +1259,9 @@ export function ForceGraph({ agentName, agentState, model, memories, files, mess
                 onChange={e => setSearchQuery(e.target.value)}
                 onKeyDown={e => {
                   if (e.key === 'Escape') { setSearchOpen(false); setSearchQuery(''); }
-                  if (e.key === 'Enter' && searchResults.length > 0) navigateToNode(searchResults[0]);
+                  if (e.key === 'Enter' && searchDisplay.length > 0) navigateToNode(searchDisplay[0]);
                 }}
-                placeholder="Search nodes…"
+                placeholder={`Search ${graphData.nodes.length} nodes (${graphData.nodes.filter(n => n.id.startsWith('research:')).length} research)…`}
                 autoFocus
                 className="flex-1 bg-transparent text-white/80 text-[11px] placeholder-white/25 focus:outline-none"
               />
@@ -1089,25 +1271,30 @@ export function ForceGraph({ agentName, agentState, model, memories, files, mess
             </div>
             {searchQuery.trim() && (
               <div className="border-t border-white/[0.06] max-h-60 overflow-y-auto">
-                {searchResults.length === 0 ? (
+                {searchDisplay.length === 0 ? (
                   <div className="px-3 py-3 text-[10px] text-white/25 text-center">No matches</div>
                 ) : (
-                  searchResults.map(n => (
-                    <button
-                      key={n.id}
-                      onClick={() => navigateToNode(n)}
-                      className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-white/[0.06] transition-colors text-left group"
-                    >
-                      <div className="w-2 h-2 rounded-full shrink-0" style={{ background: n.color }} />
-                      <div className="flex-1 min-w-0">
-                        <div className="text-[11px] text-white/70 truncate group-hover:text-white/90">{n.label}</div>
-                        {n.detail && n.detail !== n.label && (
-                          <div className="text-[9px] text-white/30 truncate">{n.detail}</div>
-                        )}
-                      </div>
-                      <span className="text-[8px] text-white/20 uppercase shrink-0">{n.kind}</span>
-                    </button>
-                  ))
+                  <>
+                    <div className="px-3 py-1 text-[9px] text-white/30 bg-white/[0.02] border-b border-white/[0.04]">
+                      {searchTotal} match{searchTotal !== 1 ? 'es' : ''} highlighted in graph
+                    </div>
+                    {searchDisplay.map(n => (
+                      <button
+                        key={n.id}
+                        onClick={() => navigateToNode(n)}
+                        className="w-full flex items-center gap-2 px-3 py-1.5 hover:bg-white/[0.06] transition-colors text-left group"
+                      >
+                        <div className="w-2 h-2 rounded-full shrink-0" style={{ background: n.color }} />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[11px] text-white/70 truncate group-hover:text-white/90">{n.label}</div>
+                          {n.detail && n.detail !== n.label && (
+                            <div className="text-[9px] text-white/30 truncate">{n.detail}</div>
+                          )}
+                        </div>
+                        <span className="text-[8px] text-white/20 uppercase shrink-0">{n.kind}</span>
+                      </button>
+                    ))}
+                  </>
                 )}
               </div>
             )}

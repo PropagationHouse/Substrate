@@ -208,6 +208,44 @@ function useSubagents(ready: boolean): SubagentInfo[] {
   return subs;
 }
 
+// ─── Research items fetcher (for ForceGraph visualization) ──────────
+interface ResearchGraphItem { id: string; title: string; type: string; topics: string[]; sourceUrls?: Array<{ url: string; label: string }>; parentId?: string; timestamp: number }
+function useResearchItems(ready: boolean): ResearchGraphItem[] {
+  const [items, setItems] = useState<ResearchGraphItem[]>([]);
+
+  useEffect(() => {
+    if (!ready) return;
+    let cancelled = false;
+
+    const fetchItems = () => {
+      fetch('/api/local/research-feed')
+        .then(r => r.ok ? r.json() : null)
+        .then(d => {
+          if (cancelled || !d?.ok) return;
+          const raw: any[] = d.items || [];
+          console.debug('[useResearchItems]', raw.length, 'items from research feed');
+          setItems(raw.map((it: any) => ({
+            id: it.id || `r-${Math.random().toString(36).slice(2, 8)}`,
+            title: it.title || 'Untitled',
+            type: it.type || 'research',
+            topics: it.topics || [],
+            sourceUrls: it.sourceUrls,
+            parentId: it.parentId,
+            timestamp: it.timestamp || Date.now(),
+          })));
+        })
+        .catch(() => {});
+    };
+
+    fetchItems();
+    // Refresh every 30s to pick up new research
+    const iv = setInterval(fetchItems, 30000);
+    return () => { cancelled = true; clearInterval(iv); };
+  }, [ready]);
+
+  return items;
+}
+
 // ─── Chat timeline fetcher (reads dates from Vite middleware) ──────
 interface ChatDateEntry { date: string; count: number }
 function useChatTimeline(ready: boolean): ChatDateEntry[] {
@@ -374,6 +412,7 @@ export default function App({ onLogout }: AppProps) {
   const realMemory = useRealMemory(connectionState === 'connected');
   const specialFolders = useSpecialFolders(connectionState === 'connected');
   const subagents = useSubagents(connectionState === 'connected');
+  const researchItems = useResearchItems(connectionState === 'connected');
 
   // Fetch gateway model catalog + discover models from API keys in custom_settings
   const [gatewayModels, setGatewayModels] = useState<Array<{ id: string; label: string; provider: string }>>([]);
@@ -500,6 +539,7 @@ export default function App({ onLogout }: AppProps) {
 
   const [chatOpen, setChatOpen] = useState(false);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
+  const [workspacePath, setWorkspacePath] = useState<string | undefined>(undefined);
   const hoveredFileRef = useRef<{ current: string | null }>({ current: null });
   const setHoveredFilePath = useCallback((filePath: string | null, entryType?: 'file' | 'directory') => {
     if (!filePath) { hoveredFileRef.current.current = null; return; }
@@ -778,6 +818,7 @@ export default function App({ onLogout }: AppProps) {
             realMemory={realMemory}
             specialFolders={specialFolders}
             subagents={subagents}
+            researchItems={researchItems}
             externalHighlightRef={hoveredFileRef.current}
             onNodeClick={(kind, id, detail) => {
               if (id.startsWith('doc:')) {
@@ -786,21 +827,57 @@ export default function App({ onLogout }: AppProps) {
               } else if (id.startsWith('cfg:')) {
                 openFileEditor('custom_settings.json');
               } else if (id.startsWith('vimg:')) {
-                // Visual memory image — open in preview
                 if (detail) openFileEditor(detail);
-              } else if (id.startsWith('f:') || id.startsWith('dir:')) {
-                // Workspace file node — open in preview
-                const filePath = detail || id.replace('f:', '').replace('dir:', '');
+              } else if (id.startsWith('dir:')) {
+                const dirPath = detail || id.replace('dir:', '');
+                setWorkspacePath(dirPath);
+                setWorkspaceOpen(true);
+              } else if (id.startsWith('f:')) {
+                const filePath = detail || id.replace('f:', '');
                 if (kind === 'file' && filePath) openFileEditor(filePath);
+              } else if (id.startsWith('skills:') || id.startsWith('macros:') || id.startsWith('tools:')) {
+                // Special folder files — open in editor
+                if (detail) openFileEditor(detail);
               } else if (id.startsWith('day:')) {
                 const date = id.replace('day:', '');
                 openDayPreview(date);
-              } else if (kind === 'conversation') {
+              } else if (id === 'hub-ws' || id === 'hub-core') {
+                // Workspace/Core hub — open file browser at root
+                setWorkspacePath('');
+                setWorkspaceOpen(true);
+              } else if (id.startsWith('hub-skills') || id.startsWith('hub-macros') || id.startsWith('hub-tools')) {
+                // Special folder hubs — open workspace at that folder
+                const folder = id.replace('hub-', '');
+                setWorkspacePath(folder);
+                setWorkspaceOpen(true);
+              } else if (id.startsWith('skills-dir:') || id.startsWith('macros-dir:') || id.startsWith('tools-dir:')) {
+                // Special folder sub-directories
+                const folder = id.split('-dir:')[0];
+                const subDir = id.split('-dir:')[1];
+                setWorkspacePath(`${folder}/${subDir}`);
+                setWorkspaceOpen(true);
+              } else if (kind === 'task' || id.startsWith('t:')) {
+                setTasksOpen(true);
+              } else if (kind === 'conversation' || id.startsWith('sess:') || id.startsWith('c:')) {
                 setChatOpen(true);
+              } else if (kind === 'memory' || id.startsWith('fact:') || id.startsWith('lesson:') || id.startsWith('mem-')) {
+                // Memory nodes — open the memory.json file for viewing
+                openFileEditor('memory.json');
+              } else if (id.startsWith('research:') || id === 'hub-research' || id.startsWith('concept:')) {
+                // Research / concept nodes — open Research/Intelligence Hub
+                setResearchOpen(true);
+              } else if (id.startsWith('source:')) {
+                // Source URL nodes — open link in new tab
+                if (detail) window.open(detail, '_blank', 'noopener,noreferrer');
               }
             }}
             onNodeDoubleClick={(kind, id, detail) => {
-              if ((kind === 'file' || kind === 'skill' || kind === 'macro' || kind === 'tool') && detail) {
+              if (id.startsWith('dir:')) {
+                // Directory node — open workspace panel navigated to that folder
+                const dirPath = detail || id.replace('dir:', '');
+                setWorkspacePath(dirPath);
+                setWorkspaceOpen(true);
+              } else if ((kind === 'file' || kind === 'skill' || kind === 'macro' || kind === 'tool') && detail) {
                 openFileEditor(detail);
               } else if (id.startsWith('day:')) {
                 const date = id.replace('day:', '');
@@ -846,7 +923,7 @@ export default function App({ onLogout }: AppProps) {
             minHeight={300}
             onClose={() => setWorkspaceOpen(false)}
           >
-            <WorkspacePanel onClose={() => setWorkspaceOpen(false)} onFileHover={setHoveredFilePath} onOpenFile={openFileEditor} />
+            <WorkspacePanel onClose={() => setWorkspaceOpen(false)} onFileHover={setHoveredFilePath} onOpenFile={openFileEditor} initialPath={workspacePath} />
           </FloatingWindow>
         </div>
 

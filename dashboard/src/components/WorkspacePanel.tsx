@@ -20,6 +20,7 @@ interface WorkspacePanelProps {
   onClose: () => void;
   onFileHover?: (filePath: string | null, entryType?: 'file' | 'directory') => void;
   onOpenFile?: (filePath: string) => void;
+  initialPath?: string;
 }
 
 const IMAGE_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico']);
@@ -62,13 +63,13 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)}M`;
 }
 
-export function WorkspacePanel({ onFileHover, onOpenFile }: WorkspacePanelProps) {
+export function WorkspacePanel({ onFileHover, onOpenFile, initialPath }: WorkspacePanelProps) {
   const [currentPath, setCurrentPath] = useState('');
   const [entries, setEntries] = useState<DirEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [editFile, setEditFile] = useState<{ path: string; content: string; dirty: boolean; type?: 'text' | 'image' | 'audio' } | null>(null);
   const [editLoading, setEditLoading] = useState(false);
-  const [viewMode, setViewMode] = useState<'grid' | 'list' | 'spatial'>('grid');
+  const [viewMode, setViewMode] = useState<'grid' | 'list' | 'spatial'>('spatial');
   const [spatialLayer, setSpatialLayer] = useState(0);
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
   const [searchQuery, setSearchQuery] = useState('');
@@ -104,7 +105,7 @@ export function WorkspacePanel({ onFileHover, onOpenFile }: WorkspacePanelProps)
     setLoading(false);
   }, []);
 
-  useEffect(() => { fetchDir(''); }, [fetchDir]);
+  useEffect(() => { fetchDir(initialPath || ''); }, [fetchDir, initialPath]);
 
   const openFile = useCallback(async (filePath: string) => {
     setEditLoading(true);
