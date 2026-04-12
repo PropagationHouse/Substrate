@@ -129,6 +129,36 @@ def install_deps():
         return {"ok": False, "error": str(e)}
 
 
+def build_dashboard():
+    """Build the dashboard frontend (npm install + vite build)."""
+    dashboard_dir = os.path.join(APP_DIR, 'dashboard')
+    dist_index = os.path.join(dashboard_dir, 'dist', 'index.html')
+    if not os.path.exists(os.path.join(dashboard_dir, 'package.json')):
+        return {"ok": False, "error": "dashboard/package.json not found"}
+    try:
+        # Check if Node.js / npm is available
+        npm_cmd = 'npm.cmd' if sys.platform == 'win32' else 'npm'
+        npx_cmd = 'npx.cmd' if sys.platform == 'win32' else 'npx'
+
+        subprocess.run(
+            [npm_cmd, 'install'],
+            cwd=dashboard_dir, capture_output=True, text=True, timeout=120
+        )
+        result = subprocess.run(
+            [npx_cmd, 'vite', 'build'],
+            cwd=dashboard_dir, capture_output=True, text=True, timeout=120
+        )
+        if result.returncode == 0 and os.path.exists(dist_index):
+            return {"ok": True}
+        return {"ok": False, "error": result.stderr[-300:] if result.stderr else "vite build failed"}
+    except FileNotFoundError:
+        return {"ok": False, "error": "Node.js/npm not found — dashboard build skipped"}
+    except subprocess.TimeoutExpired:
+        return {"ok": False, "error": "Dashboard build timed out"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
 def create_dirs():
     """Create necessary directories if they don't exist."""
     dirs = [
@@ -214,6 +244,16 @@ if __name__ == '__main__':
                 print(f"ERROR: {install_result['error']}")
                 sys.exit(1)
             print(f"Dependencies installed (v{results['app_version']})!")
+        # Build dashboard if dist/ is missing
+        dashboard_dist = os.path.join(APP_DIR, 'dashboard', 'dist', 'index.html')
+        if not os.path.exists(dashboard_dist):
+            print("Building dashboard...")
+            dash_result = build_dashboard()
+            if dash_result["ok"]:
+                print("Dashboard built successfully!")
+            else:
+                print(f"WARNING: Dashboard build failed: {dash_result['error']}")
+                print("You can build manually later: cd dashboard && npm install && npx vite build")
         if not results["ollama"]["ok"]:
             print("WARNING: Ollama not found. Install from https://ollama.com for local LLM support.")
         print(f"Substrate v{results['app_version']} is ready!")
