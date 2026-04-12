@@ -82,7 +82,20 @@ if "%IS_UPDATE%"=="1" (
 )
 call npm install
 
-:: ── Create all required directories ──────────────────────────────────
+:: ── Build Dashboard ────────────────────────────────────────────────
+echo.
+echo Building Substrate Dashboard...
+pushd dashboard
+call npm install
+call npx vite build
+popd
+if exist dashboard\dist\index.html (
+    echo   Dashboard built successfully.
+) else (
+    echo   WARNING: Dashboard build may have failed. You can rebuild later with: cd dashboard ^& npx vite build
+)
+
+:: ── Create all required directories ──────────────────────────────
 echo.
 echo Ensuring all directories exist...
 for %%D in (
