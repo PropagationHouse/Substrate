@@ -1042,52 +1042,9 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 # Supported models and their configurations
+# NOTE: Local/Ollama models are NOT listed here — they are discovered dynamically
+# via Ollama's /api/tags endpoint at runtime. Only remote provider models belong here.
 SUPPORTED_MODELS = {
-    "deepseek-r1:latest": {
-        "endpoint": "http://localhost:11434/api/generate",
-        "size": "4.7B parameters",
-        "provider": "ollama"
-    },
-    "deepseek-r1:32b": {
-        "endpoint": "http://localhost:11434/api/generate",
-        "size": "32B parameters",
-        "provider": "ollama"
-    },
-    "dolphin3:latest": {
-        "endpoint": "http://localhost:11434/api/generate",
-        "size": "7B parameters",
-        "provider": "ollama"
-    },
-    "qwen2.5-coder:14b": {
-        "endpoint": "http://localhost:11434/api/generate",
-        "size": "14B parameters",
-        "provider": "ollama"
-    },
-    "dolphin-mixtral:latest": {
-        "endpoint": "http://localhost:11434/api/generate",
-        "size": "7B parameters",
-        "provider": "ollama"
-    },
-    "llama3.2-vision:11b": {
-        "endpoint": "http://localhost:11434/api/generate",
-        "size": "11B parameters",
-        "provider": "ollama"
-    },
-    "falcon:latest": {
-        "endpoint": "http://localhost:11434/api/generate",
-        "size": "7B parameters",
-        "provider": "ollama"
-    },
-    "dolphin-mistral:7b": {
-        "endpoint": "http://localhost:11434/api/generate",
-        "size": "7B parameters",
-        "provider": "ollama"
-    },
-    "dolphin3:8b": {
-        "endpoint": "http://localhost:11434/api/generate",
-        "size": "8B parameters",
-        "provider": "ollama"
-    },
     "grok-latest": {
         "endpoint": "https://api.x.ai/v1/chat/completions",
         "provider": "xai",

@@ -24,12 +24,35 @@ if "%IS_UPDATE%"=="1" (
     echo.
 )
 
-:: Check if Python is installed
+:: Check if Python is installed — auto-install if missing
 python --version > nul 2>&1
 if %errorlevel% neq 0 (
-    echo Python is not installed or not in PATH. Please install Python 3.10 or higher.
-    pause
-    exit /b 1
+    echo Python not found. Downloading Python 3.12 automatically...
+    set "PY_URL=https://www.python.org/ftp/python/3.12.10/python-3.12.10-amd64.exe"
+    set "PY_INSTALLER=%TEMP%\python-3.12.10-amd64.exe"
+    curl -L -o "%PY_INSTALLER%" "%PY_URL%"
+    if %errorlevel% neq 0 (
+        echo Failed to download Python. Please install manually from https://python.org
+        pause
+        exit /b 1
+    )
+    echo Installing Python silently...
+    "%PY_INSTALLER%" /quiet InstallAllUsers=0 PrependPath=1 Include_pip=1 Include_venv=1 Include_launcher=1 Include_test=0 Include_doc=0
+    if %errorlevel% neq 0 (
+        echo Python installation failed. Please install manually from https://python.org
+        pause
+        exit /b 1
+    )
+    del "%PY_INSTALLER%" > nul 2>&1
+    :: Refresh PATH for this session
+    for /f "tokens=2*" %%A in ('reg query "HKCU\Environment" /v Path 2^>nul') do set "PATH=%%B;%PATH%"
+    python --version > nul 2>&1
+    if %errorlevel% neq 0 (
+        echo Python installed but not found in PATH. Please restart this script.
+        pause
+        exit /b 1
+    )
+    echo Python installed successfully!
 )
 
 :: Check if Node.js is installed

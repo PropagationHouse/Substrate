@@ -1068,14 +1068,129 @@ async function runFirstRunCheck() {
         }
     }
     if (!pythonExe) {
-        dialog.showErrorBox(
-            'Python Not Found',
-            'Substrate requires Python 3.10 or higher.\n\n' +
-            'Please install Python from https://python.org\n' +
-            'Make sure to check "Add Python to PATH" during installation.'
-        );
-        app.quit();
-        return;
+        // Auto-download and install Python silently
+        console.log('[FirstRun] Python not found — attempting automatic install');
+        const https = require('https');
+        const PYTHON_VERSION = '3.12.10';
+        const PYTHON_URL = `https://www.python.org/ftp/python/${PYTHON_VERSION}/python-${PYTHON_VERSION}-amd64.exe`;
+        const installerPath = path.join(app.getPath('temp'), `python-${PYTHON_VERSION}-amd64.exe`);
+
+        // Show a setup window for the Python download
+        let pySetupWin = new BrowserWindow({
+            width: 480, height: 280, frame: false, resizable: false, center: true, alwaysOnTop: true,
+            backgroundColor: '#1a1a2e',
+            webPreferences: { nodeIntegration: false, contextIsolation: true }
+        });
+        const pySetupHTML = `data:text/html;charset=utf-8,${encodeURIComponent(`<!DOCTYPE html>
+<html><head><style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: -apple-system, 'Segoe UI', sans-serif; background: #1a1a2e;
+         color: #e0e0e0; display:flex; flex-direction:column; align-items:center;
+         justify-content:center; height:100vh; padding:30px; user-select:none;
+         -webkit-app-region: drag; }
+  h1 { font-size: 20px; font-weight: 600; margin-bottom: 8px; color: #4fc3f7; }
+  .subtitle { font-size: 12px; color: rgba(255,255,255,0.4); margin-bottom: 24px; }
+  .status { font-size: 13px; color: rgba(255,255,255,0.7); margin-bottom: 14px; min-height: 20px; text-align: center; }
+  .progress-track { width: 100%; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden; }
+  .progress-bar { height: 100%; width: 0%; background: linear-gradient(90deg, #4fc3f7, #81d4fa); border-radius: 3px; transition: width 0.3s ease; }
+</style></head><body>
+  <h1>Installing Python</h1>
+  <div class="subtitle">Python ${PYTHON_VERSION} is required and will be installed automatically</div>
+  <div class="status" id="status">Downloading Python...</div>
+  <div class="progress-track"><div class="progress-bar" id="bar"></div></div>
+</body></html>`)}`;
+        pySetupWin.loadURL(pySetupHTML);
+
+        const updatePySetup = (status, percent) => {
+            if (pySetupWin && !pySetupWin.isDestroyed()) {
+                pySetupWin.webContents.executeJavaScript(
+                    `document.getElementById('status').textContent = ${JSON.stringify(status)};` +
+                    `document.getElementById('bar').style.width = '${percent}%';`
+                ).catch(() => {});
+            }
+        };
+
+        try {
+            // Download the installer
+            await new Promise((resolve, reject) => {
+                const file = fs.createWriteStream(installerPath);
+                const request = (url) => {
+                    https.get(url, (response) => {
+                        if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+                            request(response.headers.location);
+                            return;
+                        }
+                        const total = parseInt(response.headers['content-length'], 10) || 0;
+                        let downloaded = 0;
+                        response.on('data', (chunk) => {
+                            downloaded += chunk.length;
+                            if (total > 0) {
+                                const pct = Math.round((downloaded / total) * 70);
+                                updatePySetup(`Downloading Python... ${Math.round(downloaded / 1024 / 1024)}MB`, pct);
+                            }
+                        });
+                        response.pipe(file);
+                        file.on('finish', () => { file.close(); resolve(); });
+                    }).on('error', reject);
+                };
+                request(PYTHON_URL);
+            });
+
+            // Run the installer silently — installs for current user, adds to PATH
+            updatePySetup('Installing Python (this may take a minute)...', 75);
+            await new Promise((resolve, reject) => {
+                const proc = spawn(installerPath, [
+                    '/quiet', 'InstallAllUsers=0', 'PrependPath=1',
+                    'Include_pip=1', 'Include_venv=1',
+                    'Include_launcher=1', 'Include_test=0', 'Include_doc=0'
+                ], { stdio: 'pipe', shell: true });
+                proc.on('close', code => {
+                    if (code === 0) resolve();
+                    else reject(new Error(`Python installer exited with code ${code}`));
+                });
+                proc.on('error', reject);
+            });
+
+            updatePySetup('Python installed! Verifying...', 95);
+
+            // Refresh PATH in current process so we can find the newly installed Python
+            try {
+                const userPath = execSync('reg query "HKCU\\Environment" /v Path', { encoding: 'utf-8', timeout: 5000 });
+                const match = userPath.match(/Path\s+REG_[A-Z_]+\s+(.*)/i);
+                if (match) {
+                    process.env.PATH = match[1].trim() + ';' + process.env.PATH;
+                }
+            } catch (_) {}
+
+            // Retry finding Python
+            for (const cmd of ['python', 'python3', 'py']) {
+                try {
+                    execSync(`${cmd} --version`, { stdio: 'pipe', timeout: 10000 });
+                    pythonExe = cmd;
+                    break;
+                } catch (_) {}
+            }
+
+            // Clean up installer
+            try { fs.unlinkSync(installerPath); } catch (_) {}
+
+        } catch (pyInstallErr) {
+            console.error('[FirstRun] Python auto-install failed:', pyInstallErr.message);
+        }
+
+        if (pySetupWin && !pySetupWin.isDestroyed()) pySetupWin.close();
+
+        if (!pythonExe) {
+            dialog.showErrorBox(
+                'Python Not Found',
+                'Substrate could not install Python automatically.\n\n' +
+                'Please install Python 3.10+ from https://python.org\n' +
+                'Make sure to check "Add Python to PATH" during installation,\n' +
+                'then restart Substrate.'
+            );
+            app.quit();
+            return;
+        }
     }
     console.log('[FirstRun] Python found:', pythonExe);
 
