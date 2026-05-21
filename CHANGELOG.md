@@ -6,6 +6,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.2.15] — 2026-05-21
+
+### Widget GIF Persistence & Dashboard Enhancements
+
+#### Added
+- **Widget emotion GIF system** — Dashboard clock widget now loads and displays emotion GIFs synced from the server (`/ui/widget-style`), matching the Electron desktop widget
+- **Cross-interface GIF persistence** — GIF choices set in any interface (Electron, WebUI, Dashboard) now sync to all others via server endpoint
+- **Widget close button** — ✕ button in the widget top bar to fully dismiss it; persists across sessions
+- **Chat icon hover flyout** — Hovering the chat icon reveals a flyout with "Chat" and "Widget" (re-open) options
+- **Calendar drag-and-drop** — Kanban cards, content pills, and projects can be dragged onto the Media Suite calendar timeline
+- **Day Planner drag-and-drop** — Drop items on day/week views to schedule them
+- **Desktop widget** — Full emotion GIF panel with per-emotion slots, drag-drop URL management, cycling between variants
+- **Kanban hooks** — `useCircuitsTasks` and `useMediaSuiteTasks` for task integration
+- **Dual-monitor management skill**
+
+#### Fixed
+- `quickCreateProject` now includes `workspace_id` for secondary workspace persistence
+- Hardcoded user paths removed from skill files (replaced with `%USERPROFILE%` / relative paths)
+- Personal data files removed from git tracking (`chat_files.txt`, `profiles/default/*`)
+
+#### Security
+- `chloe_schedule.md`, `dashboard/src/chat_files.txt` added to `.gitignore`
+- `profiles/default/config.json` and `profiles/default/avatar.png` untracked from git
+
+---
+
 ## [1.2.0] — 2026-02-28
 
 ### First Public Release

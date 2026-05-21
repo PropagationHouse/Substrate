@@ -92,6 +92,7 @@ workspace/recordings/
 /CIRCUITS.md
 profiles/
 chloe_schedule.md
+dashboard/src/chat_files.txt
 
 # TLS certs (generated per-machine)
 certs/server.key

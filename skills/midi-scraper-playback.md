@@ -10,20 +10,20 @@ This skill allows the agent to find, download, and play MIDI files from the web 
 ## Execution Logic
 
 1.  **Search**: Use `web_search` to find a direct MIDI download link (e.g., from `piano-midi.de`).
-2.  **Download**: Use `curl` to download the MIDI file to `C:\Users\Bl0ck\ph\👻\🎼\🎶\`.
+2.  **Download**: Use `curl` to download the MIDI file to the user's MIDI directory.
     ```bash
-    mkdir -p "C:\Users\Bl0ck\ph\👻\🎼\🎶"
-    curl -L -o "C:\Users\Bl0ck\ph\👻\🎼\🎶\[filename].mid" "[url]"
+    mkdir -p "%USERPROFILE%\ph\👻\🎼\🎶"
+    curl -L -o "%USERPROFILE%\ph\👻\🎼\🎶\[filename].mid" "[url]"
     ```
 3.  **Find Port**: Identify the correct MIDI output port.
     ```bash
-    python C:\Users\Bl0ck\Desktop\Substrate\workspace\find_yamaha.py
+    python workspace/find_yamaha.py
     ```
 4.  **Play**: Run the playback script in the background.
     ```bash
-    python C:\Users\Bl0ck\Desktop\Substrate\workspace\play_midi.py "C:\Users\Bl0ck\ph\👻\🎼\🎶\[filename].mid" "[port_name]"
+    python workspace/play_midi.py "%USERPROFILE%\ph\👻\🎼\🎶\[filename].mid" "[port_name]"
     ```
-5.  **Log to Obsidian**: Create a new note in `C:\Users\Bl0ck\ph\MIDI\` with the following format:
+5.  **Log to Obsidian**: Create a new note in `%USERPROFILE%\ph\MIDI\` with the following format:
     - Title: `[Song Name] - [Composer]`
     - Content:
         - Composer: `[Composer]`

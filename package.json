@@ -1,6 +1,6 @@
 {
   "name": "substrate",
-  "version": "1.2.14",
+  "version": "1.2.15",
   "description": "Substrate - Autonomous Agent Interface",
   "productName": "Substrate",
   "main": "main.js",
@@ -65,6 +65,7 @@
       "radial_panel_fix.css",
       "font_fix.css",
       "auto_save_config.js",
+      "desktop_widget.js",
       "debug_renderer.js",
       "direct_chat_renderer.js",
       "direct_config_loader.js",

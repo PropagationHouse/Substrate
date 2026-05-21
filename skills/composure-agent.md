@@ -20,7 +20,7 @@ The agent can use the built-in features of Composure (Brainstorm, Drum Forge, Sy
 The agent can generate full Composure sessions based on the app's internal schemas.
 - **Tool**: `text_editor`.
 - **Trigger**: "Generate a full session," "Create a drum loop and chord melody."
-- **Logic**: The agent generates JSON data conforming to the `MidiIdea`, `DrumKit`, or `SynthPatch` schemas and saves them to the project folder (`C:\Users\Bl0ck\Desktop\Midi Studio\sessions`).
+- **Logic**: The agent generates JSON data conforming to the `MidiIdea`, `DrumKit`, or `SynthPatch` schemas and saves them to the project folder (`workspace/sessions`).
 
 ## Operational Guidelines
 - **Autonomy**: The agent should feel free to "take the stage" and express itself when the context allows.
