@@ -21,6 +21,8 @@ import {
   Code,
   Zap,
   BarChart3,
+  Film,
+  Clock,
 } from 'lucide-react';
 import { useGateway } from '@/contexts/GatewayContext';
 import { useSessionContext } from '@/contexts/SessionContext';
@@ -391,7 +393,7 @@ function CodePreviewContent({ code, language }: { code: string; language: string
 
 // ─── Main App ─────────────────────────────────────────────────────
 export default function App({ onLogout }: AppProps) {
-  const { connectionState, model } = useGateway();
+  const { connectionState, model, rpc } = useGateway();
   const { currentSession, agentName, agentStatus, sessions } = useSessionContext();
   const {
     messages, isGenerating, stream, processingStage,
@@ -476,6 +478,23 @@ export default function App({ onLogout }: AppProps) {
           }
         }
 
+        // Also fetch local Ollama models from /api/models
+        try {
+          const localRes = await fetch('/api/models');
+          if (localRes.ok) {
+            const localData = await localRes.json();
+            if (localData?.status === 'success' && Array.isArray(localData.models)) {
+              for (const m of localData.models) {
+                if (m.provider === 'ollama' && m.name && !seen.has(m.name)) {
+                  seen.add(m.name);
+                  const shortLabel = m.name.replace(/:latest$/, '');
+                  gwModels.push({ id: m.name, label: shortLabel, provider: 'ollama' });
+                }
+              }
+            }
+          }
+        } catch { /* Ollama not running — skip */ }
+
         console.debug('[App] Gateway models:', gwModels.length, gwModels.map(m => `${m.provider}/${m.id}`));
         setGatewayModels(gwModels);
       });
@@ -538,6 +557,22 @@ export default function App({ onLogout }: AppProps) {
   }, [messages]);
 
   const [chatOpen, setChatOpen] = useState(false);
+  const clockChatActiveRef = useRef(false);
+  const [widgetClosed, setWidgetClosed] = useState(() => {
+    try { const s = localStorage.getItem('cmdHubState'); if (s) return JSON.parse(s).closed === true; } catch(e){}
+    return false;
+  });
+
+  useEffect(() => {
+    const onClosed = () => setWidgetClosed(true);
+    const onReopened = () => setWidgetClosed(false);
+    window.addEventListener('substrate:widget-closed', onClosed);
+    window.addEventListener('substrate:widget-reopened', onReopened);
+    return () => {
+      window.removeEventListener('substrate:widget-closed', onClosed);
+      window.removeEventListener('substrate:widget-reopened', onReopened);
+    };
+  }, []);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [workspacePath, setWorkspacePath] = useState<string | undefined>(undefined);
   const hoveredFileRef = useRef<{ current: string | null }>({ current: null });
@@ -553,7 +588,65 @@ export default function App({ onLogout }: AppProps) {
   const [statsOpen, setStatsOpen] = useState(false);
   const [tasksOpen, setTasksOpen] = useState(false);
   const [tasksTab, setTasksTab] = useState<'board' | 'circuits'>('board');
+  const [mediaSuiteOpen, setMediaSuiteOpen] = useState(false);
   const [booted, setBooted] = useState(false);
+
+  // Listen for postMessage from Media Suite iframe and custom DOM events from clock widget
+  useEffect(() => {
+    const msgHandler = (e: MessageEvent) => {
+      if (e.data?.type === 'substrate:open-research') {
+        setResearchOpen(true);
+      }
+      // Sync research results from Media Suite into Intelligence Hub awareness
+      if (e.data?.type === 'substrate:research-result') {
+        setResearchOpen(true);
+        // Dispatch custom event so ResearchPanel can pick up the result
+        window.dispatchEvent(new CustomEvent('substrate:media-suite-research', { detail: e.data }));
+      }
+    };
+    // Clock widget dispatches this custom event to send chat messages
+    // Responses are piped back to the widget's chat wall (no side panel)
+    const clockChatHandler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.message) {
+        clockChatActiveRef.current = true;
+        handleSend(detail.message);
+      }
+    };
+    window.addEventListener('message', msgHandler);
+    window.addEventListener('substrate:clock-chat', clockChatHandler);
+    return () => {
+      window.removeEventListener('message', msgHandler);
+      window.removeEventListener('substrate:clock-chat', clockChatHandler);
+    };
+  }, [handleSend]);
+
+  // Pipe streaming responses back to the clock widget's chat wall
+  const lastMsgCountRef = useRef(messages.length);
+  useEffect(() => {
+    if (!clockChatActiveRef.current) return;
+    // Stream in progress — send thinking indicator
+    if (isGenerating && stream?.rawText) {
+      window.dispatchEvent(new CustomEvent('substrate:clock-chat-response', {
+        detail: { type: 'streaming', text: stream.rawText }
+      }));
+    }
+  }, [isGenerating, stream?.rawText]);
+
+  useEffect(() => {
+    if (!clockChatActiveRef.current) return;
+    // New assistant message arrived — send final response
+    if (messages.length > lastMsgCountRef.current) {
+      const newest = messages[messages.length - 1];
+      if (newest?.role === 'assistant' && newest.rawText) {
+        window.dispatchEvent(new CustomEvent('substrate:clock-chat-response', {
+          detail: { type: 'final', text: newest.rawText }
+        }));
+        clockChatActiveRef.current = false;
+      }
+    }
+    lastMsgCountRef.current = messages.length;
+  }, [messages.length]);
 
   // Standalone code/HTML preview (survives chat close)
   const [codePreview, setCodePreview] = useState<{ code: string; language: string } | null>(null);
@@ -629,6 +722,8 @@ export default function App({ onLogout }: AppProps) {
     if (connectionState === 'connected' && !booted) {
       setBooted(true);
       loadHistory();
+      // Tell clock widget that auth has passed
+      window.dispatchEvent(new Event('substrate:authenticated'));
     }
   }, [connectionState, booted, loadHistory]);
 
@@ -683,7 +778,7 @@ export default function App({ onLogout }: AppProps) {
 
   // ─── Main Layout — graph is the ONLY view ───────────────────────
   return (
-    <div className="substrate-bg h-screen flex flex-col overflow-hidden relative" style={{ zIndex: 1 }}>
+    <div className="substrate-bg h-screen flex flex-col overflow-hidden relative" data-substrate-app style={{ zIndex: 1 }}>
       {/* Top Bar — minimal */}
       <header className="relative z-20 flex items-center justify-between px-5 py-2.5 border-b border-white/[0.04]">
         <div className="flex items-center gap-3">
@@ -756,6 +851,21 @@ export default function App({ onLogout }: AppProps) {
             <BarChart3 size={15} />
           </button>
 
+          {/* Media Suite toggle */}
+          <button
+            onClick={() => setMediaSuiteOpen(o => !o)}
+            className={`
+              relative w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200
+              ${mediaSuiteOpen
+                ? 'bg-teal-500/20 border border-teal-400/25 text-teal-300'
+                : 'bg-white/[0.04] border border-white/[0.06] text-white/40 hover:text-white/60 hover:bg-white/[0.06]'
+              }
+            `}
+            title="Workbench"
+          >
+            <Film size={15} />
+          </button>
+
           {/* Tasks toggle */}
           <button
             onClick={() => setTasksOpen(o => !o)}
@@ -771,26 +881,49 @@ export default function App({ onLogout }: AppProps) {
             <LayoutGrid size={15} />
           </button>
 
-          {/* Chat toggle */}
-          <button
-            onClick={toggleChat}
-            className={`
-              relative w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200
-              ${chatOpen
-                ? 'bg-indigo-500/20 border border-indigo-400/25 text-indigo-300'
-                : 'bg-white/[0.04] border border-white/[0.06] text-white/40 hover:text-white/60 hover:bg-white/[0.06]'
-              }
-            `}
-          >
-            <MessageSquare size={15} />
-            {isGenerating && (
-              <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-indigo-400 animate-pulse" />
-            )}
-          </button>
+          {/* Chat toggle with hover flyout */}
+          <div className="relative group">
+            <button
+              onClick={toggleChat}
+              className={`
+                relative w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200
+                ${chatOpen
+                  ? 'bg-indigo-500/20 border border-indigo-400/25 text-indigo-300'
+                  : 'bg-white/[0.04] border border-white/[0.06] text-white/40 hover:text-white/60 hover:bg-white/[0.06]'
+                }
+              `}
+            >
+              <MessageSquare size={15} />
+              {isGenerating && (
+                <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-indigo-400 animate-pulse" />
+              )}
+            </button>
+            {/* Hover flyout */}
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:flex flex-col gap-1 p-1.5 rounded-xl bg-[#1a1a2e]/95 border border-white/[0.08] backdrop-blur-xl shadow-xl min-w-[120px] z-50">
+              <button
+                onClick={toggleChat}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs transition-all ${
+                  chatOpen ? 'text-indigo-300 bg-indigo-500/15' : 'text-white/60 hover:text-white/80 hover:bg-white/[0.06]'
+                }`}
+              >
+                <MessageSquare size={12} />
+                Chat
+              </button>
+              {widgetClosed && (
+                <button
+                  onClick={() => window.dispatchEvent(new Event('substrate:widget-reopen'))}
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs text-white/60 hover:text-white/80 hover:bg-white/[0.06] transition-all"
+                >
+                  <Clock size={12} />
+                  Widget
+                </button>
+              )}
+            </div>
+          </div>
 
           {onLogout && (
             <button
-              onClick={onLogout}
+              onClick={() => { window.dispatchEvent(new Event('substrate:logout')); onLogout(); }}
               className="w-9 h-9 rounded-xl flex items-center justify-center bg-white/[0.03] border border-white/[0.05] text-white/30 hover:text-white/50 hover:bg-white/[0.05] transition-all"
               title="Logout"
             >
@@ -872,7 +1005,17 @@ export default function App({ onLogout }: AppProps) {
               }
             }}
             onNodeDoubleClick={(kind, id, detail) => {
-              if (id.startsWith('dir:')) {
+              if (id.startsWith('model:')) {
+                // Model node — switch to this model as active
+                const modelId = id.replace('model:', '');
+                if (modelId && modelId !== model) {
+                  rpc('sessions.patch', { key: currentSession, model: modelId }).then(() => {
+                    console.log(`[Graph] Switched model to: ${modelId}`);
+                  }).catch((err) => {
+                    console.warn('[Graph] Model switch failed:', err);
+                  });
+                }
+              } else if (id.startsWith('dir:')) {
                 // Directory node — open workspace panel navigated to that folder
                 const dirPath = detail || id.replace('dir:', '');
                 setWorkspacePath(dirPath);
@@ -1090,6 +1233,28 @@ export default function App({ onLogout }: AppProps) {
                 {tasksTab === 'board' ? <KanbanBoard /> : <CircuitsView />}
               </div>
             </div>
+          </FloatingWindow>
+        </div>
+
+        {/* Media Suite — iframe FloatingWindow */}
+        <div className={mediaSuiteOpen ? '' : 'hidden'}>
+          <FloatingWindow
+            id="media-suite"
+            title="Workbench"
+            titleIcon={<Film size={13} className="text-teal-400" />}
+            defaultWidth={1100}
+            defaultHeight={720}
+            minWidth={600}
+            minHeight={400}
+            onClose={() => setMediaSuiteOpen(false)}
+          >
+            <iframe
+              src={`http://${window.location.hostname}:5000`}
+              className="w-full h-full border-none"
+              allow="clipboard-write; fullscreen"
+              allowFullScreen
+              style={{ background: '#1a1a2e' }}
+            />
           </FloatingWindow>
         </div>
 

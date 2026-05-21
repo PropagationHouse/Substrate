@@ -1,78 +1,111 @@
-/* Avatar Editor Styles */
+/* Avatar Editor — Glassmorphic/Neumorphic Redesign */
 .avatar-editor-container {
   position: fixed;
   bottom: 20px;
   right: 20px;
-  background-color: rgba(0, 0, 0, 0.8);
-  color: #fff;
-  padding: 10px;
-  border-radius: 5px;
+  background: rgba(15, 15, 30, 0.85);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  color: #e0e0e0;
+  padding: 16px;
+  border-radius: 16px;
   z-index: 9999;
-  max-width: 250px;
-  font-family: 'Courier New', monospace;
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+  max-width: 280px;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-size: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 .editor-controls {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 8px;
 }
 
 .editor-controls button {
-  background-color: #444;
-  color: #fff;
-  border: 1px solid #666;
-  border-radius: 3px;
-  padding: 5px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #ccc;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 6px 10px;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 11px;
+  font-family: inherit;
   transition: all 0.2s ease;
 }
 
 .editor-controls button:hover {
-  background-color: #555;
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(139, 92, 246, 0.3);
+  color: #fff;
+}
+
+.editor-controls button:active {
+  background: rgba(139, 92, 246, 0.15);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 .editor-controls button:disabled {
-  background-color: #333;
-  color: #777;
+  background: rgba(255, 255, 255, 0.02);
+  color: rgba(255, 255, 255, 0.2);
   cursor: not-allowed;
+  border-color: transparent;
 }
 
 .size-controls {
   display: flex;
   justify-content: space-between;
-  margin-top: 5px;
+  gap: 6px;
+  margin-top: 6px;
 }
 
 .size-controls button {
   flex: 1;
-  margin: 0 2px;
-  font-size: 14px;
-  padding: 5px 10px;
-  font-weight: bold;
+  font-size: 13px;
+  padding: 6px 10px;
+  font-weight: 600;
+  border-radius: 8px;
 }
 
 #size-up {
-  background-color: #2a2;
+  background: rgba(74, 222, 128, 0.12);
+  border-color: rgba(74, 222, 128, 0.2);
+  color: #4ade80;
+}
+#size-up:hover {
+  background: rgba(74, 222, 128, 0.2);
 }
 
 #size-down {
-  background-color: #a22;
+  background: rgba(248, 113, 113, 0.12);
+  border-color: rgba(248, 113, 113, 0.2);
+  color: #f87171;
+}
+#size-down:hover {
+  background: rgba(248, 113, 113, 0.2);
 }
 
 #selected-element {
   text-align: center;
-  padding: 3px;
-  border-radius: 3px;
-  background-color: rgba(0, 0, 0, 0.3);
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: rgba(139, 92, 246, 0.1);
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  color: #c4b5fd;
+  font-size: 11px;
+  font-weight: 500;
 }
 
 .editor-instructions {
-  font-size: 11px;
-  margin: 5px 0;
-  color: #aaa;
+  font-size: 10px;
+  margin: 6px 0;
+  color: rgba(255, 255, 255, 0.35);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding-top: 6px;
+  line-height: 1.4;
 }
 
 .edit-overlay {
@@ -81,7 +114,8 @@
   left: 0;
   width: 100%;
   height: 100%;
-  background-color: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
   z-index: 9000;
   pointer-events: none;
   display: none;
@@ -105,7 +139,8 @@
 
 /* Active drag element */
 .active-drag {
-  outline: 2px dashed #0f0 !important;
+  outline: 2px solid rgba(139, 92, 246, 0.8) !important;
+  box-shadow: 0 0 12px rgba(139, 92, 246, 0.4) !important;
 }
 
 /* Body selectable */
@@ -115,44 +150,30 @@
 
 /* CSS Output */
 #css-output {
-  font-family: 'Courier New', monospace;
+  font-family: 'SF Mono', 'Fira Code', monospace;
   font-size: 10px;
-  background-color: #222;
-  color: #0f0;
-  border: 1px solid #444;
+  background: rgba(0, 0, 0, 0.3);
+  color: rgba(139, 92, 246, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  padding: 8px;
   resize: vertical;
 }
 
 /* Highlight elements on hover when editor is active */
 .draggable:hover {
-  outline: 3px solid #ff6b6b !important;
-  box-shadow: 0 0 10px rgba(255, 0, 0, 0.7) !important;
+  outline: 2px solid rgba(139, 92, 246, 0.6) !important;
+  box-shadow: 0 0 8px rgba(139, 92, 246, 0.3) !important;
   z-index: 100 !important;
 }
 
 /* Highlight active drag element */
 .active-drag {
-  outline: 3px solid #ff0000 !important;
-  box-shadow: 0 0 15px rgba(255, 0, 0, 0.9) !important;
+  outline: 2px solid rgba(139, 92, 246, 0.9) !important;
+  box-shadow: 0 0 16px rgba(139, 92, 246, 0.5) !important;
   z-index: 200 !important;
-  background-color: rgba(255, 107, 107, 0.3) !important;
+  background-color: rgba(139, 92, 246, 0.08) !important;
 }
-
-/* Add handle indicators to show elements can be dragged */
-/* .draggable::before {
-  content: '↔';
-  position: absolute;
-  top: -15px;
-  left: 50%;
-  transform: translateX(-50%);
-  background-color: #ff6b6b;
-  color: white;
-  padding: 2px 5px;
-  border-radius: 3px;
-  font-size: 10px;
-  pointer-events: none;
-  z-index: 101;
-} */
 
 /* Ensure avatar container allows interaction */
 .animated-avatar.editor-active * {
@@ -171,36 +192,39 @@
 .dimension-controls {
   display: flex;
   flex-direction: column;
-  margin: 10px 0;
-  padding: 8px;
-  background-color: #222;
-  border-radius: 4px;
-  border: 1px solid #444;
+  margin: 8px 0;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .dimension-controls label {
   display: block;
-  margin-bottom: 5px;
-  font-size: 12px;
-  color: #0f0;
-  font-weight: bold;
+  margin-bottom: 6px;
+  font-size: 10px;
+  color: rgba(139, 92, 246, 0.7);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .dimension-row {
   display: flex;
   align-items: center;
-  margin-bottom: 5px;
+  margin-bottom: 4px;
 }
 
 .dimension-row span {
   width: 60px;
-  font-size: 12px;
-  color: #ccc;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
 }
 
 .dimension-row button {
   margin: 0 3px;
-  padding: 2px 8px;
-  font-size: 12px;
+  padding: 3px 8px;
+  font-size: 11px;
   min-width: 25px;
+  border-radius: 6px;
 }

@@ -743,6 +743,89 @@ function substrateLocalPlugin() {
           console.warn('[research-feed] Workspace sync warning:', syncErr.message)
         }
       }
+      // ── Media Suite Research Sync ─────────────────────────────────
+      // Pulls articles from Media Suite Flask backend and merges them into
+      // the Intelligence Hub research feed, tagged with 'media-suite' topic.
+      // The Hub sees everything; Media Suite channels see only their own.
+      const mediaSuiteUrl = process.env.MEDIA_SUITE_URL || 'http://localhost:5000'
+
+      server.middlewares.use('/api/local/research-sync', async (_req: any, res: any) => {
+        res.setHeader('Content-Type', 'application/json')
+        try {
+          // Pull recent articles + search results from Media Suite
+          const [articlesResp, workspacesResp] = await Promise.all([
+            fetch(`${mediaSuiteUrl}/api/news?limit=50`).then(r => r.ok ? r.json() : []).catch(() => []),
+            fetch(`${mediaSuiteUrl}/api/workspaces`).then(r => r.ok ? r.json() : []).catch(() => []),
+          ])
+
+          const articles: any[] = Array.isArray(articlesResp) ? articlesResp : []
+          const workspaces: any[] = Array.isArray(workspacesResp) ? workspacesResp : []
+          const wsMap = new Map(workspaces.map((w: any) => [w.id, w.name || 'Media Suite']))
+
+          // Load existing research feed
+          const feedFile = path.join(workspaceRoot, 'data', 'research_feed.json')
+          const existing = safeReadJSON(feedFile)
+          const existingItems: any[] = existing?.items || []
+
+          // Build a set of already-synced Media Suite article IDs
+          // Remove old truncated v1 entries so they get re-synced with full content
+          const v1Ids = new Set(existingItems.filter((i: any) => i.id?.startsWith('ms-article-') && !i.id?.startsWith('ms-article-v2-')).map((i: any) => i.id))
+          if (v1Ids.size > 0) {
+            const before = existingItems.length
+            existingItems.splice(0, existingItems.length, ...existingItems.filter((i: any) => !v1Ids.has(i.id)))
+            if (existingItems.length < before) console.log(`[research-sync] Removed ${before - existingItems.length} old v1 entries for re-sync`)
+          }
+          const syncedIds = new Set(
+            existingItems
+              .filter((i: any) => i.id?.startsWith('ms-article-v2-'))
+              .map((i: any) => i.id)
+          )
+
+          // Convert Media Suite articles to Intelligence Hub feed items
+          let added = 0
+          for (const article of articles) {
+            const feedId = `ms-article-v2-${article.id}`
+            if (syncedIds.has(feedId)) continue
+
+            const wsName = article.workspace_id ? wsMap.get(article.workspace_id) || 'Media Suite' : 'Media Suite'
+            const isRealUrl = article.url && !article.url.startsWith('ai-research://') && article.url.startsWith('http')
+
+            const fullContent = article.content || article.summary || ''
+            const feedItem = {
+              id: feedId,
+              type: 'article' as const,
+              title: article.title || 'Untitled',
+              summary: (article.summary || article.content || '').slice(0, 500),
+              content: fullContent,
+              topics: ['media-suite', wsName.toLowerCase().replace(/\s+/g, '-')],
+              timestamp: article.published_at ? new Date(article.published_at).getTime() : Date.now(),
+              saved: article.is_pinned || false,
+              pending: false,
+              sourceUrls: isRealUrl ? [{ url: article.url, label: article.source || 'Source' }] : [],
+              sections: fullContent.length > 100 ? [
+                { heading: 'Summary', body: article.summary || fullContent.slice(0, 500) },
+                { heading: article.source || 'Source', body: fullContent },
+              ] : article.summary ? [{ heading: article.source || 'Source', body: article.summary }] : undefined,
+            }
+
+            existingItems.unshift(feedItem)
+            added++
+          }
+
+          // Save back if we added anything
+          if (added > 0) {
+            const data = { ...existing, items: existingItems }
+            mkdirSync(path.dirname(feedFile), { recursive: true })
+            writeFileSync(feedFile, JSON.stringify(data, null, 2), 'utf-8')
+          }
+
+          res.end(JSON.stringify({ ok: true, synced: added, total: existingItems.length, mediaSuiteArticles: articles.length }))
+        } catch (e: any) {
+          console.warn('[research-sync] Media Suite sync error:', e.message)
+          res.end(JSON.stringify({ ok: false, error: e.message, synced: 0 }))
+        }
+      })
+
       server.middlewares.use('/api/local/research-feed', (req: any, res: any) => {
         const feedFile = path.join(workspaceRoot, 'data', 'research_feed.json')
         if (req.method === 'POST') {
@@ -770,6 +853,49 @@ function substrateLocalPlugin() {
           res.end(JSON.stringify({ ok: true, items: data?.items || [], briefs: data?.briefs || [] }))
         }
       })
+      // ── Media Suite API proxy (middleware takes priority over generic /api proxy) ──
+      server.middlewares.use((req: any, res: any, next: any) => {
+        if (!req.url?.startsWith('/api/media-suite/')) return next()
+        const msUrl = process.env.MEDIA_SUITE_URL || 'http://localhost:5000'
+        const targetPath = req.url.replace(/^\/api\/media-suite/, '/api')
+        const targetUrl = `${msUrl}${targetPath}`
+        // Forward the request to Media Suite Flask backend
+        const method = req.method || 'GET'
+        const headers: Record<string, string> = { 'Accept': 'application/json' }
+        if (req.headers['content-type']) headers['Content-Type'] = req.headers['content-type']
+
+        if (method === 'GET' || method === 'HEAD') {
+          fetch(targetUrl, { method, headers })
+            .then(async (r) => {
+              res.statusCode = r.status
+              res.setHeader('Content-Type', r.headers.get('content-type') || 'application/json')
+              const text = await r.text()
+              res.end(text)
+            })
+            .catch((err: any) => {
+              console.warn('[media-suite proxy]', err.message)
+              res.statusCode = 502
+              res.end(JSON.stringify({ error: 'Media Suite unavailable', detail: err.message }))
+            })
+        } else {
+          let body = ''
+          req.on('data', (chunk: string) => { body += chunk })
+          req.on('end', () => {
+            fetch(targetUrl, { method, headers, body: body || undefined })
+              .then(async (r) => {
+                res.statusCode = r.status
+                res.setHeader('Content-Type', r.headers.get('content-type') || 'application/json')
+                const text = await r.text()
+                res.end(text)
+              })
+              .catch((err: any) => {
+                console.warn('[media-suite proxy]', err.message)
+                res.statusCode = 502
+                res.end(JSON.stringify({ error: 'Media Suite unavailable', detail: err.message }))
+              })
+          })
+        }
+      })
     },
   }
 }
@@ -794,6 +920,16 @@ export default defineConfig({
         target: substrateTarget,
         ws: true,
         changeOrigin: true,
+      },
+      '/media-suite': {
+        target: process.env.MEDIA_SUITE_URL || 'http://localhost:5000',
+        changeOrigin: true,
+        rewrite: (path: string) => path.replace(/^\/media-suite/, ''),
+      },
+      '/api/media-suite': {
+        target: process.env.MEDIA_SUITE_URL || 'http://localhost:5000',
+        changeOrigin: true,
+        rewrite: (path: string) => path.replace(/^\/api\/media-suite/, '/api'),
       },
     },
   },

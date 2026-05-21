@@ -47,6 +47,8 @@ function FilterPill({
   );
 }
 
+export type TaskSourceFilter = 'all' | 'human' | 'agent' | 'media-suite';
+
 interface KanbanHeaderProps {
   filters: KanbanFilters;
   onFiltersChange: (filters: KanbanFilters) => void;
@@ -56,6 +58,9 @@ interface KanbanHeaderProps {
   pendingProposalCount?: number;
   onApproveProposal?: (id: string) => void;
   onRejectProposal?: (id: string) => void;
+  sourceFilter?: TaskSourceFilter;
+  onSourceFilterChange?: (source: TaskSourceFilter) => void;
+  mediaSuiteLabel?: string;
 }
 
 export const KanbanHeader = memo(function KanbanHeader({
@@ -67,6 +72,9 @@ export const KanbanHeader = memo(function KanbanHeader({
   pendingProposalCount = 0,
   onApproveProposal,
   onRejectProposal,
+  sourceFilter = 'all',
+  onSourceFilterChange,
+  mediaSuiteLabel = 'Media Suite',
 }: KanbanHeaderProps) {
   const [showFilters, setShowFilters] = useState(false);
   const [showInbox, setShowInbox] = useState(false);
@@ -117,6 +125,13 @@ export const KanbanHeader = memo(function KanbanHeader({
   }, [onFiltersChange]);
 
   const hasActiveFilters = filters.q || filters.priority.length > 0 || filters.assignee || filters.labels.length > 0;
+
+  const sourceTabs: { key: TaskSourceFilter; label: string }[] = [
+    { key: 'all', label: 'All' },
+    { key: 'human', label: 'Human' },
+    { key: 'agent', label: 'Agent' },
+    { key: 'media-suite', label: mediaSuiteLabel },
+  ];
 
   return (
     <div className="shrink-0 space-y-3 border-b border-border/50 px-4 py-4">
@@ -219,7 +234,26 @@ export const KanbanHeader = memo(function KanbanHeader({
         </div>
       </div>
 
-      {/* Row 2: Filter controls (collapsible) */}
+      {/* Row 2: Source tabs */}
+      {onSourceFilterChange && (
+        <div className="flex items-center gap-1">
+          {sourceTabs.map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => onSourceFilterChange(tab.key)}
+              className={`h-7 rounded-full px-3 text-[0.733rem] font-medium transition-colors cursor-pointer ${
+                sourceFilter === tab.key
+                  ? 'bg-primary/15 border border-primary/30 text-primary'
+                  : 'border border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/40'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Row 3: Filter controls (collapsible) */}
       {showFilters && (
         <div className="cockpit-note flex flex-wrap items-center gap-2" data-tone="primary">
           <span className="text-[0.733rem] font-medium text-foreground">Priority</span>

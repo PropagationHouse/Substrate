@@ -744,7 +744,7 @@ def handle_sessions_reset(client: GatewayClient, params: Dict[str, Any]) -> Dict
 @rpc_handler('sessions.patch')
 def handle_sessions_patch(client: GatewayClient, params: Dict[str, Any]) -> Dict[str, Any]:
     """Update session metadata (model, thinking level, label)."""
-    session_key = params.get('sessionKey', '')
+    session_key = params.get('sessionKey', '') or params.get('key', '')
     if not session_key:
         raise RPCError('sessionKey is required', code=400)
 

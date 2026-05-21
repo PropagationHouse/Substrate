@@ -15,6 +15,7 @@ import {
   Plus, User, Bot, Repeat, Zap, Coffee, Trash2, Calendar,
   Edit3, Check, X, ChevronDown, ChevronRight, ExternalLink,
   RefreshCw, Link2, AlertTriangle, Clock, MessageSquare,
+  ChevronLeft, LayoutGrid,
 } from 'lucide-react';
 
 // ── Types ────────────────────────────────────────────────────────────
@@ -47,6 +48,7 @@ export interface KanbanTask {
   recurringConfig?: RecurringConfig;
   notionId?: string;
   notionUrl?: string;
+  channel?: string;          // workspace/channel name (e.g. 'MILLET')
 }
 
 // ── Constants ────────────────────────────────────────────────────────
@@ -121,9 +123,71 @@ async function notionPushTask(task: KanbanTask): Promise<{ ok: boolean; notionId
   } catch { return { ok: false }; }
 }
 
+// ── Media Suite helpers ──────────────────────────────────────────────
+interface MediaSuiteItem {
+  id: string | number;
+  title: string;
+  description?: string;
+  content_type?: string;
+  status: string;
+  scheduled_date?: string;
+  created_at?: string;
+  updated_at?: string;
+  workspace_id?: number | string;
+}
+
+function mapMsStatus(s: string): TaskColumn {
+  switch (s) {
+    case 'posted': case 'done': case 'published': return 'done';
+    case 'research': case 'scripting': case 'shooting': case 'editing': case 'scheduled': case 'in_progress': return 'in_progress';
+    case 'idea': case 'not_started': default: return 'backlog';
+  }
+}
+
+function msItemToTask(item: MediaSuiteItem, channelName?: string): KanbanTask {
+  return {
+    id: `ms:${item.id}`,
+    title: item.title,
+    description: item.description || undefined,
+    owner: 'human',
+    priority: 'medium',
+    schedule: item.scheduled_date ? 'scheduled' : 'whenever',
+    column: mapMsStatus(item.status),
+    createdAt: item.created_at ? new Date(item.created_at).getTime() : Date.now(),
+    updatedAt: item.updated_at ? new Date(item.updated_at).getTime() : Date.now(),
+    dueDate: item.scheduled_date || undefined,
+    channel: channelName,
+  };
+}
+
 // ── Owner filter ─────────────────────────────────────────────────────
-type OwnerFilter = 'all' | 'human' | 'agent';
-type ViewMode = 'board' | 'settings';
+type OwnerFilter = 'all' | 'human' | 'agent' | 'media-suite' | string;
+type ViewMode = 'board' | 'calendar' | 'settings';
+
+interface MsWorkspace {
+  id: string;
+  name: string;
+  is_main?: boolean;
+}
+
+// ── Media Suite API helpers ──────────────────────────────────────────
+function msRealId(taskId: string) { return taskId.replace(/^ms:/, ''); }
+
+async function msDeleteItem(msId: string) {
+  try { await fetch(`/api/media-suite/media-items/${msId}`, { method: 'DELETE' }); } catch { /* ignore */ }
+}
+
+async function msUpdateItem(msId: string, updates: Record<string, unknown>) {
+  try { await fetch(`/api/media-suite/media-items/${msId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updates) }); } catch { /* ignore */ }
+}
+
+function reverseMapStatus(col: TaskColumn): string {
+  switch (col) {
+    case 'done': return 'posted';
+    case 'in_progress': return 'in_progress';
+    case 'backlog': default: return 'not_started';
+  }
+}
 
 // ── Main Component ───────────────────────────────────────────────────
 export function KanbanBoard() {
@@ -134,10 +198,13 @@ export function KanbanBoard() {
   const [dragId, setDragId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<TaskColumn | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('board');
+  const [calendarOpen, setCalendarOpen] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState('');
   const [notionDbId, setNotionDbId] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [msTasks, setMsTasks] = useState<KanbanTask[]>([]);
+  const [msWorkspaces, setMsWorkspaces] = useState<MsWorkspace[]>([]);
 
   // Load from server on mount
   useEffect(() => {
@@ -147,6 +214,45 @@ export function KanbanBoard() {
       setLoaded(true);
     });
   }, []);
+
+  // Fetch ALL Media Suite workspaces on mount — each becomes a channel
+  useEffect(() => {
+    fetch('/api/media-suite/workspaces')
+      .then(r => r.ok ? r.json() : [])
+      .then((ws: MsWorkspace[]) => {
+        setMsWorkspaces(ws);
+      })
+      .catch(() => {});
+  }, []);
+
+  // Build workspace_id → name mapping for channel tagging
+  const wsIdToName = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const ws of msWorkspaces) map[String(ws.id)] = ws.name;
+    return map;
+  }, [msWorkspaces]);
+
+  // Fetch ALL Media Suite tasks (no workspace filter) — tag each with channel name
+  const refreshMsTasks = useCallback(() => {
+    fetch('/api/media-suite/media-items')
+      .then(r => r.ok ? r.json() : [])
+      .then((items: MediaSuiteItem[]) => {
+        const mapped = items.map(item => {
+          const chName = item.workspace_id ? wsIdToName[String(item.workspace_id)] : undefined;
+          return msItemToTask(item, chName);
+        });
+        console.log('[KanbanBoard] Media Suite items:', mapped.length, 'channels:', Object.keys(wsIdToName));
+        setMsTasks(mapped);
+      })
+      .catch((err) => console.warn('[KanbanBoard] MS fetch error:', err));
+  }, [wsIdToName]);
+
+  // Fetch Media Suite tasks on mount + poll every 10s
+  useEffect(() => {
+    refreshMsTasks();
+    const iv = setInterval(refreshMsTasks, 10_000);
+    return () => clearInterval(iv);
+  }, [refreshMsTasks]);
 
   // Auto-save to server when tasks change (debounced)
   const saveTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -174,6 +280,18 @@ export function KanbanBoard() {
   }, []);
 
   const updateTask = useCallback((taskId: string, updates: Partial<KanbanTask>) => {
+    // Media Suite task — update via Flask API, then refresh
+    if (taskId.startsWith('ms:')) {
+      const flaskUpdates: Record<string, unknown> = {};
+      if (updates.column) flaskUpdates.status = reverseMapStatus(updates.column);
+      if (updates.title) flaskUpdates.title = updates.title;
+      if (updates.description !== undefined) flaskUpdates.description = updates.description;
+      if (updates.dueDate !== undefined) flaskUpdates.scheduled_date = updates.dueDate || null;
+      msUpdateItem(msRealId(taskId), flaskUpdates).then(refreshMsTasks);
+      // Optimistic local update
+      setMsTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...updates, updatedAt: Date.now() } : t));
+      return;
+    }
     setTasks(prev => prev.map(t => {
       if (t.id !== taskId) return t;
       const updated = { ...t, ...updates, updatedAt: Date.now() };
@@ -183,12 +301,18 @@ export function KanbanBoard() {
       if (updates.column && updates.column !== 'done' && t.column === 'done') updated.completedAt = undefined;
       return updated;
     }));
-  }, []);
+  }, [refreshMsTasks]);
 
   const deleteTask = useCallback((taskId: string) => {
+    // Media Suite task — delete via Flask API, then refresh
+    if (taskId.startsWith('ms:')) {
+      setMsTasks(prev => prev.filter(t => t.id !== taskId));
+      msDeleteItem(msRealId(taskId)).then(refreshMsTasks);
+      return;
+    }
     setTasks(prev => prev.filter(t => t.id !== taskId));
     apiDeleteTask(taskId);
-  }, []);
+  }, [refreshMsTasks]);
 
   // ── Notion sync ──────────────────────────────────────────────────
   const handleNotionPull = useCallback(async () => {
@@ -213,11 +337,19 @@ export function KanbanBoard() {
     setTimeout(() => setSyncMsg(''), 3000);
   }, [updateTask]);
 
+  // ── Channel names derived from workspaces ──────────────────────────
+  const channelNames = useMemo(() => msWorkspaces.map(ws => ws.name), [msWorkspaces]);
+
   // ── Filtering & sorting ──────────────────────────────────────────
-  const filteredTasks = useMemo(() =>
-    filter === 'all' ? tasks : tasks.filter(t => t.owner === filter),
-    [tasks, filter]
-  );
+  const allTasks = useMemo(() => [...tasks, ...msTasks], [tasks, msTasks]);
+  const filteredTasks = useMemo(() => {
+    if (filter === 'all') return allTasks;
+    if (filter === 'media-suite') return msTasks;
+    if (filter === 'human') return tasks.filter(t => t.owner === 'human');
+    if (filter === 'agent') return tasks.filter(t => t.owner === 'agent');
+    // Channel filter — match by channel name
+    return allTasks.filter(t => t.channel === filter);
+  }, [allTasks, tasks, msTasks, filter]);
 
   const sortedColumn = useCallback((col: TaskColumn) =>
     filteredTasks
@@ -228,18 +360,22 @@ export function KanbanBoard() {
 
   // ── Drag handlers ────────────────────────────────────────────────
   const handleDragStart = useCallback((taskId: string) => { setDragId(taskId); }, []);
-  const handleDragEnd = useCallback(() => {
-    if (dragId && dropTarget) updateTask(dragId, { column: dropTarget });
+  const handleColumnDrop = useCallback((col: TaskColumn) => {
+    if (dragId) updateTask(dragId, { column: col });
     setDragId(null);
     setDropTarget(null);
-  }, [dragId, dropTarget, updateTask]);
+  }, [dragId, updateTask]);
+  const handleDragEnd = useCallback(() => {
+    setDragId(null);
+    setDropTarget(null);
+  }, []);
 
   // ── Stats ────────────────────────────────────────────────────────
   const stats = useMemo(() => {
-    const active = tasks.filter(t => t.column !== 'done');
+    const active = allTasks.filter(t => t.column !== 'done');
     const overdue = active.filter(t => t.dueDate && new Date(t.dueDate).getTime() < Date.now());
-    return { total: tasks.length, active: active.length, done: tasks.length - active.length, overdue: overdue.length };
-  }, [tasks]);
+    return { total: allTasks.length, active: active.length, done: allTasks.length - active.length, overdue: overdue.length };
+  }, [allTasks]);
 
   if (!loaded) {
     return <div className="h-full flex items-center justify-center text-white/20 text-[11px]">Loading tasks…</div>;
@@ -260,17 +396,38 @@ export function KanbanBoard() {
     <div className="h-full flex flex-col overflow-hidden">
       {/* Header */}
       <div className="flex items-center gap-2 px-4 py-2 border-b border-white/[0.05] shrink-0">
-        {/* Filter tabs */}
-        <div className="flex items-center gap-1 bg-white/[0.04] rounded-lg p-0.5">
-          {(['all', 'human', 'agent'] as OwnerFilter[]).map(f => (
-            <button key={f} onClick={() => setFilter(f)}
-              className={`px-2.5 py-1 rounded-md text-[10px] font-medium transition-all ${
-                filter === f ? 'bg-white/[0.1] text-white/80 shadow-sm' : 'text-white/35 hover:text-white/55'
+        {/* View mode toggle */}
+        <div className="flex items-center gap-0.5 bg-white/[0.04] rounded-lg p-0.5 mr-1">
+          <button onClick={() => setViewMode('board')}
+            className={`px-2 py-1 rounded-md text-[10px] font-medium transition-all ${
+              viewMode === 'board' ? 'bg-white/[0.1] text-white/80 shadow-sm' : 'text-white/35 hover:text-white/55'
+            }`}>
+            <span className="flex items-center gap-1"><LayoutGrid size={10} /> Board</span>
+          </button>
+          <button onClick={() => setViewMode('calendar')}
+            className={`px-2 py-1 rounded-md text-[10px] font-medium transition-all ${
+              viewMode === 'calendar' ? 'bg-white/[0.1] text-white/80 shadow-sm' : 'text-white/35 hover:text-white/55'
+            }`}>
+            <span className="flex items-center gap-1"><Calendar size={10} /> Calendar</span>
+          </button>
+        </div>
+
+        {/* Filter tabs — includes channel names */}
+        <div className="flex items-center gap-1 bg-white/[0.04] rounded-lg p-0.5 overflow-x-auto">
+          {([
+            { key: 'all', label: 'All' },
+            { key: 'human', label: 'Human' },
+            { key: 'agent', label: 'Agent' },
+            ...channelNames.map(name => ({ key: name, label: name })),
+          ] as { key: OwnerFilter; label: string }[]).map(f => (
+            <button key={f.key} onClick={() => setFilter(f.key)}
+              className={`px-2.5 py-1 rounded-md text-[10px] font-medium transition-all whitespace-nowrap ${
+                filter === f.key ? 'bg-white/[0.1] text-white/80 shadow-sm' : 'text-white/35 hover:text-white/55'
               }`}>
               <span className="flex items-center gap-1.5">
-                {f === 'human' && <User size={10} />}
-                {f === 'agent' && <Bot size={10} />}
-                {f === 'all' ? 'All' : f === 'human' ? 'Human' : 'Agent'}
+                {f.key === 'human' && <User size={10} />}
+                {f.key === 'agent' && <Bot size={10} />}
+                {f.label}
               </span>
             </button>
           ))}
@@ -294,6 +451,18 @@ export function KanbanBoard() {
           </button>
         )}
 
+        {/* Calendar sidebar toggle (board mode only) */}
+        {viewMode === 'board' && (
+          <button onClick={() => setCalendarOpen(o => !o)}
+            className={`flex items-center gap-1 px-2 py-1 rounded-md text-[9px] transition-all ${
+              calendarOpen
+                ? 'text-indigo-300/80 bg-indigo-500/15 border border-indigo-400/20'
+                : 'text-white/30 hover:text-white/50 bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06]'
+            }`}>
+            <Calendar size={9} /> {calendarOpen ? 'Hide Calendar' : 'Show Calendar'}
+          </button>
+        )}
+
         {/* Settings */}
         <button onClick={() => setViewMode('settings')}
           className="flex items-center gap-1 px-2 py-1 rounded-md text-[9px] text-white/30 hover:text-white/50 bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] transition-all">
@@ -308,69 +477,88 @@ export function KanbanBoard() {
         </div>
       )}
 
-      {/* Board columns */}
-      <div className="flex-1 flex gap-2 p-3 overflow-x-auto overflow-y-hidden min-h-0">
-        {COLUMNS.map(col => {
-          const colTasks = sortedColumn(col.key);
-          const isDropping = dropTarget === col.key && dragId != null;
+      {/* Board or Calendar view */}
+      {viewMode === 'board' ? (
+        <div className="flex-1 flex min-h-0 overflow-hidden"
+          onDragOver={e => { e.preventDefault(); }}
+        >
+          {/* Board columns */}
+          <div className={`flex-1 flex gap-2 p-3 overflow-x-auto overflow-y-hidden min-h-0 transition-all ${calendarOpen ? 'max-w-[60%]' : ''}`}>
+            {COLUMNS.map(col => {
+              const colTasks = sortedColumn(col.key);
+              const isDropping = dropTarget === col.key && dragId != null;
 
-          return (
-            <div key={col.key}
-              className={`flex-1 min-w-[220px] flex flex-col rounded-xl border transition-colors ${
-                isDropping ? 'border-indigo-400/30 bg-indigo-500/[0.04]' : 'border-white/[0.04] bg-white/[0.02]'
-              }`}
-              onDragOver={e => { e.preventDefault(); setDropTarget(col.key); }}
-              onDragLeave={() => setDropTarget(null)}
-              onDrop={e => { e.preventDefault(); handleDragEnd(); }}
-            >
-              {/* Column header */}
-              <div className="flex items-center justify-between px-3 py-2 border-b border-white/[0.04] shrink-0">
-                <div className="flex items-center gap-2">
-                  <span className={`text-[10px] font-bold uppercase tracking-wider ${col.color}`}>{col.label}</span>
-                  <span className="text-[9px] text-white/20 bg-white/[0.04] rounded-full px-1.5 py-0.5 min-w-[18px] text-center">{colTasks.length}</span>
+              return (
+                <div key={col.key}
+                  className={`flex-1 min-w-[180px] flex flex-col rounded-xl border transition-colors ${
+                    isDropping ? 'border-indigo-400/30 bg-indigo-500/[0.04]' : 'border-white/[0.04] bg-white/[0.02]'
+                  }`}
+                  onDragOver={e => { e.preventDefault(); e.stopPropagation(); setDropTarget(col.key); }}
+                  onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropTarget(null); }}
+                  onDrop={e => { e.preventDefault(); e.stopPropagation(); handleColumnDrop(col.key); }}
+                >
+                  {/* Column header */}
+                  <div className="flex items-center justify-between px-3 py-2 border-b border-white/[0.04] shrink-0">
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[10px] font-bold uppercase tracking-wider ${col.color}`}>{col.label}</span>
+                      <span className="text-[9px] text-white/20 bg-white/[0.04] rounded-full px-1.5 py-0.5 min-w-[18px] text-center">{colTasks.length}</span>
+                    </div>
+                    <button onClick={() => setAddingTo(addingTo === col.key ? null : col.key)}
+                      className="w-5 h-5 rounded-md flex items-center justify-center text-white/20 hover:text-white/50 hover:bg-white/[0.06] transition-all">
+                      <Plus size={11} />
+                    </button>
+                  </div>
+
+                  {/* Add task form */}
+                  {addingTo === col.key && (
+                    <AddTaskForm column={col.key} onAdd={addTask} onCancel={() => setAddingTo(null)} channels={channelNames} />
+                  )}
+
+                  {/* Task cards */}
+                  <div className="flex-1 overflow-y-auto p-1.5 space-y-1.5 min-h-0">
+                    {colTasks.map(task => (
+                      <TaskCard
+                        key={task.id}
+                        task={task}
+                        isEditing={editingId === task.id}
+                        onStartEdit={() => setEditingId(task.id)}
+                        onStopEdit={() => setEditingId(null)}
+                        onUpdate={(updates) => updateTask(task.id, updates)}
+                        onDelete={() => deleteTask(task.id)}
+                        onDragStart={() => handleDragStart(task.id)}
+                        onDragEnd={handleDragEnd}
+                        onPushNotion={() => handleNotionPush(task)}
+                        isDragging={dragId === task.id}
+                        hasNotion={!!notionDbId}
+                      />
+                    ))}
+                    {colTasks.length === 0 && addingTo !== col.key && (
+                      <div className="text-center text-[10px] text-white/15 py-6">No tasks</div>
+                    )}
+                  </div>
                 </div>
-                <button onClick={() => setAddingTo(addingTo === col.key ? null : col.key)}
-                  className="w-5 h-5 rounded-md flex items-center justify-center text-white/20 hover:text-white/50 hover:bg-white/[0.06] transition-all">
-                  <Plus size={11} />
-                </button>
-              </div>
+              );
+            })}
+          </div>
 
-              {/* Add task form */}
-              {addingTo === col.key && (
-                <AddTaskForm column={col.key} onAdd={addTask} onCancel={() => setAddingTo(null)} />
-              )}
-
-              {/* Task cards */}
-              <div className="flex-1 overflow-y-auto p-1.5 space-y-1.5 min-h-0">
-                {colTasks.map(task => (
-                  <TaskCard
-                    key={task.id}
-                    task={task}
-                    isEditing={editingId === task.id}
-                    onStartEdit={() => setEditingId(task.id)}
-                    onStopEdit={() => setEditingId(null)}
-                    onUpdate={(updates) => updateTask(task.id, updates)}
-                    onDelete={() => deleteTask(task.id)}
-                    onDragStart={() => handleDragStart(task.id)}
-                    onPushNotion={() => handleNotionPush(task)}
-                    isDragging={dragId === task.id}
-                    hasNotion={!!notionDbId}
-                  />
-                ))}
-                {colTasks.length === 0 && addingTo !== col.key && (
-                  <div className="text-center text-[10px] text-white/15 py-6">No tasks</div>
-                )}
-              </div>
+          {/* Collapsible calendar sidebar — drag board tasks here to set dates */}
+          {calendarOpen && (
+            <div className="w-[40%] min-w-[280px] border-l border-white/[0.04] shrink-0"
+              onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
+            >
+              <CalendarView tasks={filteredTasks} onUpdateTask={updateTask} />
             </div>
-          );
-        })}
-      </div>
+          )}
+        </div>
+      ) : (
+        <CalendarView tasks={filteredTasks} onUpdateTask={updateTask} />
+      )}
     </div>
   );
 }
 
 // ── Task Card ────────────────────────────────────────────────────────
-function TaskCard({ task, isEditing, onStartEdit, onStopEdit, onUpdate, onDelete, onDragStart, onPushNotion, isDragging, hasNotion }: {
+function TaskCard({ task, isEditing, onStartEdit, onStopEdit, onUpdate, onDelete, onDragStart, onDragEnd, onPushNotion, isDragging, hasNotion }: {
   task: KanbanTask;
   isEditing: boolean;
   onStartEdit: () => void;
@@ -378,6 +566,7 @@ function TaskCard({ task, isEditing, onStartEdit, onStopEdit, onUpdate, onDelete
   onUpdate: (updates: Partial<KanbanTask>) => void;
   onDelete: () => void;
   onDragStart: () => void;
+  onDragEnd: () => void;
   onPushNotion: () => void;
   isDragging: boolean;
   hasNotion: boolean;
@@ -395,7 +584,8 @@ function TaskCard({ task, isEditing, onStartEdit, onStopEdit, onUpdate, onDelete
   return (
     <div
       draggable
-      onDragStart={e => { e.dataTransfer.effectAllowed = 'move'; onDragStart(); }}
+      onDragStart={e => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', task.id); onDragStart(); }}
+      onDragEnd={onDragEnd}
       className={`group relative rounded-lg border px-2.5 py-2 cursor-grab active:cursor-grabbing transition-all ${
         isDragging
           ? 'opacity-40 border-indigo-400/30 bg-indigo-500/10'
@@ -417,6 +607,11 @@ function TaskCard({ task, isEditing, onStartEdit, onStopEdit, onUpdate, onDelete
             {task.owner === 'human' ? <User size={8} /> : <Bot size={8} />}
             {task.owner === 'human' ? 'Human' : 'Agent'}
           </div>
+          {task.channel && (
+            <div className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[8px] font-medium bg-teal-500/10 text-teal-400/70 border border-teal-400/15">
+              {task.channel}
+            </div>
+          )}
           <button onClick={e => { e.stopPropagation(); onStartEdit(); }}
             className="w-4 h-4 rounded flex items-center justify-center text-white/0 group-hover:text-white/25 hover:!text-indigo-400/60 hover:bg-indigo-500/10 transition-all">
             <Edit3 size={8} />
@@ -671,10 +866,11 @@ function TaskEditForm({ task, onSave, onCancel }: {
 }
 
 // ── Add Task Form ────────────────────────────────────────────────────
-function AddTaskForm({ column, onAdd, onCancel }: {
+function AddTaskForm({ column, onAdd, onCancel, channels = [] }: {
   column: TaskColumn;
   onAdd: (task: Partial<KanbanTask> & { title: string; column: TaskColumn }) => void;
   onCancel: () => void;
+  channels?: string[];
 }) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -682,6 +878,7 @@ function AddTaskForm({ column, onAdd, onCancel }: {
   const [priority, setPriority] = useState<TaskPriority>('medium');
   const [schedule, setSchedule] = useState<TaskSchedule>('whenever');
   const [dueDate, setDueDate] = useState('');
+  const [channel, setChannel] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { inputRef.current?.focus(); }, []);
@@ -697,6 +894,7 @@ function AddTaskForm({ column, onAdd, onCancel }: {
       priority,
       schedule,
       dueDate: dueDate || undefined,
+      channel: channel || undefined,
     });
   };
 
@@ -775,6 +973,29 @@ function AddTaskForm({ column, onAdd, onCancel }: {
           className="bg-white/[0.06] border border-white/[0.08] rounded-md px-2 py-0.5 text-[10px] text-white/60 outline-none focus:border-indigo-400/30 transition-colors [color-scheme:dark]" />
       </div>
 
+      {/* Channel */}
+      {channels.length > 0 && (
+        <div className="flex items-center gap-1.5">
+          <span className="text-[9px] text-white/25 w-10">Channel</span>
+          <div className="flex gap-1 flex-wrap">
+            <button onClick={() => setChannel('')}
+              className={`px-1.5 py-0.5 rounded text-[9px] transition-all ${
+                !channel ? 'text-white/70 bg-white/[0.08] border border-white/[0.12]' : 'text-white/25 border border-transparent hover:text-white/40'
+              }`}>
+              None
+            </button>
+            {channels.map(ch => (
+              <button key={ch} onClick={() => setChannel(ch)}
+                className={`px-1.5 py-0.5 rounded text-[9px] transition-all ${
+                  channel === ch ? 'text-teal-300/80 bg-teal-500/15 border border-teal-400/20' : 'text-white/25 border border-transparent hover:text-white/40'
+                }`}>
+                {ch}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Actions */}
       <div className="flex items-center gap-1.5 pt-0.5">
         <button onClick={handleSubmit}
@@ -785,6 +1006,214 @@ function AddTaskForm({ column, onAdd, onCancel }: {
           className="px-2 py-1 rounded-md text-[10px] text-white/30 hover:text-white/50 transition-all">
           Cancel
         </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Calendar View ─────────────────────────────────────────────────────
+function CalendarView({ tasks, onUpdateTask }: {
+  tasks: KanbanTask[];
+  onUpdateTask: (taskId: string, updates: Partial<KanbanTask>) => void;
+}) {
+  const [currentDate, setCurrentDate] = useState(() => new Date());
+  const [dragOverDate, setDragOverDate] = useState<string | null>(null);
+
+  const year = currentDate.getFullYear();
+  const month = currentDate.getMonth();
+  const monthName = currentDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+
+  // Build calendar grid
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+  const startOffset = firstDay.getDay(); // 0=Sun
+  const daysInMonth = lastDay.getDate();
+  const today = new Date();
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+  // Group tasks by dueDate
+  const tasksByDate = useMemo(() => {
+    const map: Record<string, KanbanTask[]> = {};
+    for (const t of tasks) {
+      if (t.dueDate) {
+        if (!map[t.dueDate]) map[t.dueDate] = [];
+        map[t.dueDate].push(t);
+      }
+    }
+    return map;
+  }, [tasks]);
+
+  // Unscheduled tasks (no dueDate)
+  const unscheduled = useMemo(() => tasks.filter(t => !t.dueDate && t.column !== 'done'), [tasks]);
+
+  const prevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
+  const nextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
+  const goToday = () => setCurrentDate(new Date());
+
+  // Format a date key for a given day of the month
+  const dateKey = (day: number) =>
+    `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+
+  // Drag handlers for calendar cells
+  const handleCellDragOver = (e: React.DragEvent, date: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverDate(date);
+  };
+
+  const handleCellDragLeave = (e: React.DragEvent) => {
+    e.stopPropagation();
+    setDragOverDate(null);
+  };
+
+  const handleCellDrop = (e: React.DragEvent, date: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOverDate(null);
+    const taskId = e.dataTransfer.getData('text/plain');
+    if (taskId) {
+      onUpdateTask(taskId, { dueDate: date, schedule: 'scheduled' });
+    }
+  };
+
+  // Drag start for calendar task pills
+  const handleTaskDragStart = (e: React.DragEvent, taskId: string) => {
+    e.stopPropagation();
+    e.dataTransfer.setData('text/plain', taskId);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  // Unscheduled sidebar drop — clears the date
+  const handleUnschedDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const taskId = e.dataTransfer.getData('text/plain');
+    if (taskId) {
+      onUpdateTask(taskId, { dueDate: undefined, schedule: 'whenever' });
+    }
+  };
+
+  // Build cells: empty leading + days
+  const cells: Array<{ day: number | null; date: string }> = [];
+  for (let i = 0; i < startOffset; i++) cells.push({ day: null, date: '' });
+  for (let d = 1; d <= daysInMonth; d++) cells.push({ day: d, date: dateKey(d) });
+
+  return (
+    <div className="flex-1 flex min-h-0 overflow-hidden"
+      onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
+    >
+      {/* Calendar grid */}
+      <div className="flex-1 flex flex-col min-h-0 p-3">
+        {/* Month navigation */}
+        <div className="flex items-center gap-2 mb-2 shrink-0">
+          <button onClick={prevMonth} className="w-6 h-6 rounded-md flex items-center justify-center text-white/30 hover:text-white/60 hover:bg-white/[0.06] transition-all">
+            <ChevronLeft size={14} />
+          </button>
+          <span className="text-[12px] font-bold text-white/70 min-w-[140px] text-center">{monthName}</span>
+          <button onClick={nextMonth} className="w-6 h-6 rounded-md flex items-center justify-center text-white/30 hover:text-white/60 hover:bg-white/[0.06] transition-all">
+            <ChevronRight size={14} />
+          </button>
+          <button onClick={goToday}
+            className="ml-2 px-2 py-0.5 rounded text-[9px] text-white/30 hover:text-white/60 border border-white/[0.06] hover:bg-white/[0.04] transition-all">
+            Today
+          </button>
+        </div>
+
+        {/* Day headers */}
+        <div className="grid grid-cols-7 gap-px shrink-0">
+          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(d => (
+            <div key={d} className="text-[9px] font-bold text-white/25 text-center py-1 uppercase tracking-wider">{d}</div>
+          ))}
+        </div>
+
+        {/* Calendar cells */}
+        <div className="grid grid-cols-7 gap-px flex-1 auto-rows-fr min-h-0 overflow-y-auto">
+          {cells.map((cell, i) => {
+            if (cell.day === null) {
+              return <div key={`empty-${i}`} className="bg-white/[0.01] rounded" />;
+            }
+            const isToday = cell.date === todayStr;
+            const isOver = dragOverDate === cell.date;
+            const dayTasks = tasksByDate[cell.date] || [];
+
+            return (
+              <div
+                key={cell.date}
+                className={`rounded border p-0.5 flex flex-col min-h-[48px] transition-colors ${
+                  isOver
+                    ? 'border-indigo-400/40 bg-indigo-500/[0.08]'
+                    : isToday
+                      ? 'border-indigo-400/20 bg-indigo-500/[0.04]'
+                      : 'border-white/[0.03] bg-white/[0.015] hover:bg-white/[0.03]'
+                }`}
+                onDragOver={e => handleCellDragOver(e, cell.date)}
+                onDragLeave={handleCellDragLeave}
+                onDrop={e => handleCellDrop(e, cell.date)}
+              >
+                <div className={`text-[9px] font-medium px-0.5 mb-0.5 ${
+                  isToday ? 'text-indigo-300' : 'text-white/30'
+                }`}>{cell.day}</div>
+                <div className="flex-1 space-y-0.5 overflow-y-auto min-h-0">
+                  {dayTasks.map(task => {
+                    const pri = PRIORITY_CONFIG[task.priority];
+                    return (
+                      <div
+                        key={task.id}
+                        draggable
+                        onDragStart={e => handleTaskDragStart(e, task.id)}
+                        className="group/pill flex items-center gap-1 px-1 py-0.5 rounded bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.06] cursor-grab active:cursor-grabbing transition-all"
+                        title={task.title}
+                      >
+                        <div className={`w-1 h-1 rounded-full ${pri.dot} shrink-0`} />
+                        <span className="text-[8px] text-white/60 truncate flex-1">{task.title}</span>
+                        {task.channel && (
+                          <span className="text-[7px] text-teal-400/50 shrink-0">{task.channel}</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Unscheduled sidebar — drag tasks here to remove date, or drag from here to calendar */}
+      <div
+        className="w-[180px] shrink-0 border-l border-white/[0.04] flex flex-col min-h-0"
+        onDragOver={e => { e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect = 'move'; }}
+        onDrop={handleUnschedDrop}
+      >
+        <div className="px-3 py-2 border-b border-white/[0.04] shrink-0">
+          <div className="text-[10px] font-bold text-white/40 uppercase tracking-wider">Unscheduled</div>
+          <div className="text-[9px] text-white/20 mt-0.5">{unscheduled.length} task(s)</div>
+        </div>
+        <div className="flex-1 overflow-y-auto p-1.5 space-y-1 min-h-0">
+          {unscheduled.map(task => {
+            const pri = PRIORITY_CONFIG[task.priority];
+            return (
+              <div
+                key={task.id}
+                draggable
+                onDragStart={e => handleTaskDragStart(e, task.id)}
+                className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] cursor-grab active:cursor-grabbing transition-all"
+              >
+                <div className={`w-1.5 h-1.5 rounded-full ${pri.dot} shrink-0`} />
+                <div className="min-w-0 flex-1">
+                  <div className="text-[10px] text-white/60 truncate">{task.title}</div>
+                  {task.channel && (
+                    <div className="text-[8px] text-teal-400/40">{task.channel}</div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+          {unscheduled.length === 0 && (
+            <div className="text-[9px] text-white/15 text-center py-4">All tasks scheduled</div>
+          )}
+        </div>
       </div>
     </div>
   );

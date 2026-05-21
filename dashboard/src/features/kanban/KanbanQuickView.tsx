@@ -9,6 +9,7 @@ import { ArrowRight } from 'lucide-react';
 import type { KanbanTask, TaskStatus } from './types';
 import { COLUMN_LABELS } from './types';
 import { useKanban } from './hooks/useKanban';
+import { useMediaSuiteTasks } from './hooks/useMediaSuiteTasks';
 import { getTaskPriorityTone, getTaskStatusTone } from './tone';
 
 /* ── Statuses shown in quick view ── */
@@ -78,15 +79,27 @@ function StatusSection({
 
 export function KanbanQuickView({ onOpenBoard, onOpenTask }: KanbanQuickViewProps) {
   const { tasksByStatus, statusCounts, loading, error } = useKanban();
+  const { tasks: mediaSuiteTasks, available: msAvailable } = useMediaSuiteTasks();
 
+  // Merge native + Media Suite tasks for each status
   const sections = useMemo(() => {
-    return QUICK_STATUSES.map(s => ({
-      status: s,
-      tasks: tasksByStatus(s),
-    }));
-  }, [tasksByStatus]);
+    return QUICK_STATUSES.map(s => {
+      const native = tasksByStatus(s);
+      const ms = msAvailable ? mediaSuiteTasks.filter(t => t.status === s) : [];
+      return { status: s, tasks: [...native, ...ms] };
+    });
+  }, [tasksByStatus, mediaSuiteTasks, msAvailable]);
 
-  const totalActive = (statusCounts.todo || 0) + (statusCounts['in-progress'] || 0) + (statusCounts.review || 0);
+  // Include Media Suite tasks in the active count
+  const msActiveCounts = useMemo(() => {
+    if (!msAvailable) return { todo: 0, 'in-progress': 0, review: 0 };
+    const counts: Record<string, number> = {};
+    for (const t of mediaSuiteTasks) counts[t.status] = (counts[t.status] || 0) + 1;
+    return counts;
+  }, [mediaSuiteTasks, msAvailable]);
+
+  const totalActive = (statusCounts.todo || 0) + (statusCounts['in-progress'] || 0) + (statusCounts.review || 0)
+    + (msActiveCounts.todo || 0) + (msActiveCounts['in-progress'] || 0) + (msActiveCounts.review || 0);
   const allEmpty = totalActive === 0;
 
   return (

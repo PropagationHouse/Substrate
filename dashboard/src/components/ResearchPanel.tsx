@@ -1448,6 +1448,68 @@ export function ResearchPanel({
     });
   }, []);
 
+  // ─── Periodic DB sync from Media Suite ──────────────────────────
+  // Pulls all Media Suite articles into the Hub feed (tagged by workspace).
+  // The Hub sees everything; Media Suite channels are fine-tuned for their own scope.
+  useEffect(() => {
+    let cancelled = false;
+    const doSync = async () => {
+      try {
+        const resp = await fetch('/api/local/research-sync');
+        if (!resp.ok || cancelled) return;
+        const data = await resp.json();
+        if (data.ok && data.synced > 0) {
+          // Reload feed to pick up newly synced items
+          const feedResp = await fetch('/api/local/research-feed');
+          if (feedResp.ok && !cancelled) {
+            const feed = await feedResp.json();
+            if (feed.items) setFeedItems(feed.items);
+          }
+        }
+      } catch { /* Media Suite offline — that's fine */ }
+    };
+    doSync(); // sync on mount
+    const interval = setInterval(doSync, 30_000); // then every 30s
+    return () => { cancelled = true; clearInterval(interval); };
+  }, []);
+
+  // ─── Real-time sync from Media Suite search (postMessage) ──────
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (!detail?.query || !detail?.summary) return;
+      const sources = (detail.sources || []) as { title: string; url: string; source: string; summary: string }[];
+      // Build full sections: AI summary first, then each source with its content
+      const allSections: { heading: string; body: string }[] = [];
+      if (detail.summary) allSections.push({ heading: 'Research Summary', body: detail.summary });
+      for (const s of sources) {
+        if (s.title || s.summary) allSections.push({ heading: s.title || s.source || 'Source', body: s.summary || '' });
+      }
+      const newItem: FeedItem = {
+        id: `ms-search-${Date.now()}`,
+        type: 'research',
+        title: detail.query,
+        summary: detail.summary,
+        content: detail.summary,
+        topics: ['media-suite'],
+        timestamp: Date.now(),
+        saved: false,
+        pending: false,
+        sourceUrls: sources.filter(s => s.url?.startsWith('http')).map(s => ({ url: s.url, label: s.source || s.title })),
+        sections: allSections.length > 0 ? allSections : undefined,
+      };
+      setFeedItems(prev => {
+        const recent = prev.find(i => i.title === detail.query && Date.now() - i.timestamp < 300000);
+        if (recent) return prev;
+        const updated = [newItem, ...prev];
+        fetch('/api/local/research-feed', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: updated }) }).catch(() => {});
+        return updated;
+      });
+    };
+    window.addEventListener('substrate:media-suite-research', handler);
+    return () => window.removeEventListener('substrate:media-suite-research', handler);
+  }, []);
+
   // ─── Derived ────────────────────────────────────────────────────
   const filteredItems = activeFilter ? feedItems.filter(item => item.topics.some(t => t.toLowerCase().includes(activeFilter.toLowerCase()))) : feedItems;
   const presentationSlides = useMemo(() => {
@@ -1553,7 +1615,7 @@ export function ResearchPanel({
           ))}
         </div>
         {isPending && (
-          <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] bg-indigo-500/15 text-indigo-300/70 border border-indigo-400/10">
+          <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] bg-white/[0.06] text-white/50 border border-white/[0.06]">
             <Loader2 size={9} className="animate-spin" /> Working
           </span>
         )}
@@ -1562,10 +1624,10 @@ export function ResearchPanel({
       {/* ─── Feed View ──────────────────────────────────────────────── */}
       <div className={`flex-1 flex flex-col overflow-hidden ${view !== 'feed' ? 'hidden' : ''}`}>
           <div className="flex items-center gap-2 px-4 py-2 border-b border-white/[0.03] shrink-0">
-            <button onClick={requestBrief} disabled={isPending} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/15 text-amber-300/80 text-[10px] font-medium hover:bg-amber-500/20 transition-all disabled:opacity-40">
+            <button onClick={requestBrief} disabled={isPending} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.06] text-white/50 text-[10px] font-medium hover:bg-white/[0.08] hover:text-white/70 transition-all disabled:opacity-40">
               <Newspaper size={11} /> Daily Brief
             </button>
-            <button onClick={() => setView('research')} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-500/10 border border-indigo-500/15 text-indigo-300/80 text-[10px] font-medium hover:bg-indigo-500/20 transition-all">
+            <button onClick={() => setView('research')} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.06] text-white/50 text-[10px] font-medium hover:bg-white/[0.08] hover:text-white/70 transition-all">
               <Search size={11} /> Research
             </button>
             <div className="flex-1 flex items-center gap-1 overflow-x-auto ml-1">
@@ -1614,7 +1676,7 @@ export function ResearchPanel({
               <button
                 onClick={addTopic}
                 disabled={!newTopic.trim()}
-                className="w-7 h-7 rounded-lg flex items-center justify-center bg-indigo-500/15 border border-indigo-400/15 text-indigo-300/70 hover:bg-indigo-500/25 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                className="w-7 h-7 rounded-lg flex items-center justify-center bg-white/[0.06] border border-white/[0.08] text-white/50 hover:bg-white/[0.10] transition-all disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 <Plus size={13} />
               </button>
@@ -1659,7 +1721,7 @@ export function ResearchPanel({
                 <button
                   onClick={() => doResearch(topic.label)}
                   disabled={isPending}
-                  className="w-6 h-6 rounded-md flex items-center justify-center text-white/20 hover:text-indigo-300 hover:bg-indigo-500/10 transition-all disabled:opacity-30"
+                  className="w-6 h-6 rounded-md flex items-center justify-center text-white/20 hover:text-white/60 hover:bg-white/[0.06] transition-all disabled:opacity-30"
                   title="Research this topic"
                 >
                   <Search size={11} />
@@ -1690,7 +1752,7 @@ export function ResearchPanel({
                 </button>
               )}
               <div className={`flex-1 flex items-center gap-1.5 bg-white/[0.04] border rounded-xl px-3 py-2 transition-all ${
-                researchMode === 'deep' ? 'border-violet-400/20 focus-within:border-violet-400/35' : 'border-white/[0.06] focus-within:border-indigo-400/25'
+                researchMode === 'deep' ? 'border-white/[0.10] focus-within:border-white/20' : 'border-white/[0.06] focus-within:border-white/15'
               }`}>
                 <Search size={12} className="text-white/25 shrink-0" />
                 <input value={researchQuery} onChange={e => setResearchQuery(e.target.value)}
@@ -1703,7 +1765,7 @@ export function ResearchPanel({
                 onClick={() => setResearchMode(m => m === 'quick' ? 'deep' : 'quick')}
                 className={`px-2.5 py-2 rounded-xl border text-[10px] font-semibold transition-all shrink-0 ${
                   researchMode === 'deep'
-                    ? 'bg-violet-500/20 border-violet-400/25 text-violet-300'
+                    ? 'bg-white/[0.08] border-white/15 text-white/70'
                     : 'bg-white/[0.03] border-white/[0.06] text-white/40 hover:text-white/60 hover:bg-white/[0.06]'
                 }`}
                 title={researchMode === 'deep' ? 'Deep Research: Gemini with Google Search grounding (slower, more thorough)' : 'Quick Research: Agent pipeline (faster)'}
@@ -1711,11 +1773,7 @@ export function ResearchPanel({
                 {researchMode === 'deep' ? '◉ Deep' : '○ Quick'}
               </button>
               <button onClick={() => doResearch(researchQuery)} disabled={!researchQuery.trim() || isPending || deepResearchLoading}
-                className={`px-4 py-2 rounded-xl border text-[11px] font-medium transition-all disabled:opacity-30 ${
-                  researchMode === 'deep'
-                    ? 'bg-violet-500/15 border-violet-400/15 text-violet-300/80 hover:bg-violet-500/25'
-                    : 'bg-indigo-500/15 border-indigo-400/15 text-indigo-300/80 hover:bg-indigo-500/25'
-                }`}>
+                className="px-4 py-2 rounded-xl border text-[11px] font-medium transition-all disabled:opacity-30 bg-white/[0.06] border-white/[0.08] text-white/60 hover:bg-white/[0.10] hover:text-white/80">
                 {(isPending || deepResearchLoading) ? <Loader2 size={12} className="animate-spin" /> : <ArrowRight size={12} />}
               </button>
             </div>
@@ -1723,9 +1781,9 @@ export function ResearchPanel({
               <div className="flex items-center gap-1.5 mt-2 flex-wrap">
                 {contextualSuggestions.map((s, i) => {
                   const kindStyles: Record<string, string> = {
-                    deepen: 'border-indigo-400/15 text-indigo-300/50 hover:text-indigo-300/80 hover:bg-indigo-500/10',
-                    cross: 'border-cyan-400/15 text-cyan-300/50 hover:text-cyan-300/80 hover:bg-cyan-500/10',
-                    trend: 'border-amber-400/15 text-amber-300/50 hover:text-amber-300/80 hover:bg-amber-500/10',
+                    deepen: 'border-white/[0.06] text-white/35 hover:text-white/60 hover:bg-white/[0.04]',
+                    cross: 'border-white/[0.06] text-white/35 hover:text-white/60 hover:bg-white/[0.04]',
+                    trend: 'border-white/[0.06] text-white/35 hover:text-white/60 hover:bg-white/[0.04]',
                     topic: 'border-white/[0.05] text-white/35 hover:text-white/60 hover:bg-white/[0.04]',
                   };
                   const kindPrefix: Record<string, string> = { deepen: '↓ ', cross: '⇄ ', trend: '→ ', topic: '' };
@@ -1757,35 +1815,34 @@ export function ResearchPanel({
                   );
                 }
                 const typeIcons: Record<FeedItemType, ReactNode> = {
-                  article: <Newspaper size={12} className="text-cyan-400/70" />,
-                  brief: <Sparkles size={12} className="text-amber-400/70" />,
-                  slide: <Layers size={12} className="text-pink-400/70" />,
-                  research: <Search size={12} className="text-indigo-400/70" />,
-                  social: <Share2 size={12} className="text-green-400/70" />,
+                  article: <Newspaper size={12} className="text-white/40" />,
+                  brief: <Sparkles size={12} className="text-white/40" />,
+                  slide: <Layers size={12} className="text-white/40" />,
+                  research: <Search size={12} className="text-white/40" />,
+                  social: <Share2 size={12} className="text-white/40" />,
                 };
                 const typeBg: Record<FeedItemType, string> = {
-                  article: 'bg-cyan-500/10 border-cyan-500/15',
-                  brief: 'bg-amber-500/10 border-amber-500/15',
-                  slide: 'bg-pink-500/10 border-pink-500/15',
-                  research: 'bg-indigo-500/10 border-indigo-500/15',
-                  social: 'bg-green-500/10 border-green-500/15',
+                  article: 'bg-white/[0.04] border-white/[0.06]',
+                  brief: 'bg-white/[0.04] border-white/[0.06]',
+                  slide: 'bg-white/[0.04] border-white/[0.06]',
+                  research: 'bg-white/[0.04] border-white/[0.06]',
+                  social: 'bg-white/[0.04] border-white/[0.06]',
                 };
                 return (
                   <div className="p-3 grid grid-cols-2 gap-2.5">
                     {completed.map(item => {
                       const sectionCount = item.sections?.length ?? 0;
                       const slideCount = sectionCount + 2; // title + sections + sources/actions
-                      const accentIdx = completed.indexOf(item) % SLIDE_ACCENT_COLORS.length;
-                      const accent = SLIDE_ACCENT_COLORS[accentIdx];
                       const designedCount = item.sections?.filter(s => s.html)?.length ?? 0;
                       const isFullyDesigned = sectionCount > 0 && designedCount === sectionCount;
                       const isPartialDesigned = designedCount > 0 && designedCount < sectionCount;
                       return (
                         <div key={item.id} onClick={() => { setSelectedItemId(item.id); setSlideIndex(0); }}
-                          className={`group relative text-left rounded-xl border ${accent.border} bg-gradient-to-br ${accent.bg} to-white/[0.01] p-3.5 hover:border-white/20 hover:scale-[1.02] transition-all duration-200 overflow-hidden cursor-pointer`}>
-                          {/* Corner glow */}
-                          <div className="absolute -top-8 -right-8 w-20 h-20 rounded-full opacity-[0.06] pointer-events-none"
-                            style={{ background: `radial-gradient(circle, ${accent.glow}, transparent)` }} />
+                          className="group relative text-left rounded-xl border border-white/[0.06] p-3.5 hover:border-white/15 hover:scale-[1.02] transition-all duration-200 overflow-hidden cursor-pointer"
+                          style={{ background: 'linear-gradient(150deg, rgba(255,255,255,0.03) 0%, rgba(14,14,22,0.95) 100%)' }}>
+                          {/* Subtle top glow */}
+                          <div className="absolute -top-10 left-1/2 -translate-x-1/2 w-24 h-16 rounded-full opacity-[0.04] pointer-events-none"
+                            style={{ background: 'radial-gradient(ellipse, rgba(255,255,255,0.5), transparent)' }} />
                           {/* Delete button */}
                           <button onClick={(e) => { e.stopPropagation(); deleteFeedItem(item.id); }}
                             className="absolute top-2 right-2 w-5 h-5 rounded-md flex items-center justify-center text-white/0 group-hover:text-white/25 hover:!text-red-400/70 hover:!bg-red-500/10 transition-all z-10" title="Delete">
@@ -1796,12 +1853,12 @@ export function ResearchPanel({
                             <span className={`w-5 h-5 rounded-md flex items-center justify-center border ${typeBg[item.type]}`}>{typeIcons[item.type]}</span>
                             <span className="text-[8px] text-white/25 uppercase tracking-wider font-semibold">{item.type}</span>
                             {isFullyDesigned && (
-                              <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[7px] font-bold uppercase tracking-wider bg-emerald-500/10 border border-emerald-500/15 text-emerald-400/60">
+                              <span className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[7px] font-bold uppercase tracking-wider bg-white/[0.04] border border-white/[0.06] text-white/30">
                                 <Check size={7} /> Designed
                               </span>
                             )}
                             {isPartialDesigned && (
-                              <span className="text-[7px] font-bold uppercase tracking-wider text-amber-400/40">{designedCount}/{sectionCount}</span>
+                              <span className="text-[7px] font-bold uppercase tracking-wider text-white/25">{designedCount}/{sectionCount}</span>
                             )}
                             {item.saved && <Bookmark size={8} className="text-amber-400/60 ml-auto" />}
                           </div>
@@ -1858,26 +1915,24 @@ export function ResearchPanel({
                   {/* Thumbnail strip */}
                   <div className="flex items-center gap-1.5 px-3 py-2 overflow-x-auto shrink-0 border-b border-white/[0.02]" style={{ scrollbarWidth: 'none' }}>
                     {presentationSlides.map((s, i) => {
-                      const thumbAccent = SLIDE_ACCENT_COLORS[(s.sectionIndex ?? i) % SLIDE_ACCENT_COLORS.length];
                       const isActive = i === slideIndex;
                       const isSection = s.kind === 'section';
                       const hasHtml = isSection && s.sectionIndex != null && s.feedItem.sections?.[s.sectionIndex]?.html;
                       return (
                         <button key={i} onClick={() => setSlideIndex(i)}
-                          className={`shrink-0 rounded-lg transition-all duration-200 flex flex-col items-center justify-center gap-0.5 ${isActive ? 'ring-1 scale-105' : 'opacity-50 hover:opacity-80'}`}
+                          className={`shrink-0 rounded-lg transition-all duration-200 flex flex-col items-center justify-center gap-0.5 ${isActive ? 'ring-1 ring-white/20 scale-105' : 'opacity-50 hover:opacity-80'}`}
                           style={{
                             width: 52, height: 36,
-                            background: isActive ? `linear-gradient(135deg, ${thumbAccent.glow}15, ${thumbAccent.glow}05)` : 'rgba(255,255,255,0.02)',
-                            border: `1px solid ${isActive ? thumbAccent.glow + '40' : 'rgba(255,255,255,0.04)'}`,
-                            boxShadow: isActive ? `0 0 0 1px ${thumbAccent.glow}50` : undefined,
+                            background: isActive ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.02)',
+                            border: `1px solid ${isActive ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.04)'}`,
                           }}>
                           <span className="text-[6px] font-bold uppercase tracking-wider truncate max-w-[46px] px-0.5"
-                            style={{ color: isActive ? `${thumbAccent.glow}cc` : 'rgba(255,255,255,0.25)' }}>
+                            style={{ color: isActive ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.25)' }}>
                             {s.kind === 'title' ? 'Title' : s.kind === 'sources' ? 'Src' : s.kind === 'actions' ? 'More' : `${(s.sectionIndex ?? 0) + 1}`}
                           </span>
                           {isSection && (
                             <div className="w-4 h-[2px] rounded-full" style={{
-                              background: hasHtml ? `${thumbAccent.glow}60` : 'rgba(255,255,255,0.08)',
+                              background: hasHtml ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.08)',
                             }} />
                           )}
                         </button>
@@ -1945,17 +2000,17 @@ export function ResearchPanel({
 
 function StreamingCard({ query, text }: { query: string; text: string }) {
   return (
-    <div className="rounded-xl border border-indigo-500/15 bg-indigo-500/[0.03] p-3">
+    <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3">
       <div className="flex items-center gap-2 mb-2">
-        <Loader2 size={10} className="text-indigo-400 animate-spin" />
-        <span className="text-[10px] font-semibold text-indigo-300/70">{query}</span>
+        <Loader2 size={10} className="text-white/40 animate-spin" />
+        <span className="text-[10px] font-semibold text-white/50">{query}</span>
       </div>
       <div className="text-[10px] text-white/40 leading-relaxed max-h-32 overflow-hidden">
-        {text ? (<>{text.slice(0, 500)}{text.length > 500 && '...'}<span className="inline-block w-1 h-3 bg-indigo-400/50 ml-0.5 animate-pulse rounded-sm" /></>) : (
+        {text ? (<>{text.slice(0, 500)}{text.length > 500 && '...'}<span className="inline-block w-1 h-3 bg-white/25 ml-0.5 animate-pulse rounded-sm" /></>) : (
           <div className="flex gap-1">
-            <div className="w-1.5 h-1.5 rounded-full bg-indigo-400/40 animate-bounce [animation-delay:0ms]" />
-            <div className="w-1.5 h-1.5 rounded-full bg-indigo-400/40 animate-bounce [animation-delay:150ms]" />
-            <div className="w-1.5 h-1.5 rounded-full bg-indigo-400/40 animate-bounce [animation-delay:300ms]" />
+            <div className="w-1.5 h-1.5 rounded-full bg-white/25 animate-bounce" />
+            <div className="w-1.5 h-1.5 rounded-full bg-white/25 animate-bounce [animation-delay:150ms]" />
+            <div className="w-1.5 h-1.5 rounded-full bg-white/25 animate-bounce [animation-delay:300ms]" />
           </div>
         )}
       </div>
@@ -1987,18 +2042,18 @@ function FeedCard({ item, onSave, onDelete, onDigDeeper, onExport, onCopy, onFol
   const [outputCounts, setOutputCounts] = useState<Record<OutputFormat, number>>({ article: 1, linkedin: 3, x: 5, instagram: 5, slides: 8 });
 
   const typeIcon: Record<FeedItemType, ReactNode> = {
-    article: <Newspaper size={10} className="text-cyan-400/70" />,
-    brief: <Sparkles size={10} className="text-amber-400/70" />,
-    slide: <Layers size={10} className="text-pink-400/70" />,
-    research: <Search size={10} className="text-indigo-400/70" />,
-    social: <Share2 size={10} className="text-green-400/70" />,
+    article: <Newspaper size={10} className="text-white/40" />,
+    brief: <Sparkles size={10} className="text-white/40" />,
+    slide: <Layers size={10} className="text-white/40" />,
+    research: <Search size={10} className="text-white/40" />,
+    social: <Share2 size={10} className="text-white/40" />,
   };
   const typeBg: Record<FeedItemType, string> = {
-    article: 'border-cyan-500/10 hover:border-cyan-500/20',
-    brief: 'border-amber-500/10 hover:border-amber-500/20',
-    slide: 'border-pink-500/10 hover:border-pink-500/20',
-    research: 'border-indigo-500/10 hover:border-indigo-500/20',
-    social: 'border-green-500/10 hover:border-green-500/20',
+    article: 'border-white/[0.06] hover:border-white/[0.12]',
+    brief: 'border-white/[0.06] hover:border-white/[0.12]',
+    slide: 'border-white/[0.06] hover:border-white/[0.12]',
+    research: 'border-white/[0.06] hover:border-white/[0.12]',
+    social: 'border-white/[0.06] hover:border-white/[0.12]',
   };
   const followUpQuestions = (item as FeedItem & { followUpQuestions?: string[] }).followUpQuestions;
 
@@ -2018,7 +2073,7 @@ function FeedCard({ item, onSave, onDelete, onDigDeeper, onExport, onCopy, onFol
       <div className="text-[10px] text-white/50 leading-relaxed mb-1.5">{item.summary}</div>
       {item.sections && item.sections.length > 0 && (
         <>
-          <button onClick={() => setExpanded(!expanded)} className="text-[9px] text-indigo-300/50 hover:text-indigo-300/80 transition-colors mb-1">
+          <button onClick={() => setExpanded(!expanded)} className="text-[9px] text-white/35 hover:text-white/60 transition-colors mb-1">
             {expanded ? '▾ Collapse' : `▸ ${item.sections.length} sections`}
           </button>
           {expanded && (<div className="space-y-2 mt-1.5">{item.sections.map((s, i) => (
@@ -2032,7 +2087,7 @@ function FeedCard({ item, onSave, onDelete, onDigDeeper, onExport, onCopy, onFol
       {item.sourceUrls && item.sourceUrls.length > 0 && (
         <div className="flex items-center gap-2 mt-1.5 flex-wrap">
           {item.sourceUrls.slice(0, 4).map((s, i) => (
-            <a key={i} href={s.url} target="_blank" rel="noopener noreferrer" className="text-[8px] text-cyan-300/40 hover:text-cyan-300/70 flex items-center gap-0.5 transition-colors">
+            <a key={i} href={s.url} target="_blank" rel="noopener noreferrer" className="text-[8px] text-white/30 hover:text-white/55 flex items-center gap-0.5 transition-colors">
               <ExternalLink size={7} /> {s.label}
             </a>
           ))}
@@ -2049,7 +2104,7 @@ function FeedCard({ item, onSave, onDelete, onDigDeeper, onExport, onCopy, onFol
           <div className="text-[8px] text-white/25 uppercase tracking-wider font-semibold">Follow up</div>
           {followUpQuestions.map((q, i) => (
             <button key={i} onClick={() => !isPending && onFollowUp(q)} disabled={isPending}
-              className="block w-full text-left text-[9px] text-indigo-300/50 hover:text-indigo-300/80 hover:bg-indigo-500/5 rounded px-2 py-1 transition-all disabled:opacity-30">→ {q}</button>
+              className="block w-full text-left text-[9px] text-white/35 hover:text-white/60 hover:bg-white/[0.04] rounded px-2 py-1 transition-all disabled:opacity-30">→ {q}</button>
           ))}
         </div>
       )}
@@ -2063,22 +2118,22 @@ function FeedCard({ item, onSave, onDelete, onDigDeeper, onExport, onCopy, onFol
             className="flex-1 bg-transparent text-[9px] text-white/60 placeholder:text-white/15 outline-none disabled:opacity-40" />
         </div>
         <button onClick={() => onFollowUp(followUpValue)} disabled={!followUpValue.trim() || isPending}
-          className="w-6 h-6 rounded-md flex items-center justify-center text-indigo-300/50 hover:text-indigo-300 hover:bg-indigo-500/10 transition-all disabled:opacity-20"><Send size={9} /></button>
+          className="w-6 h-6 rounded-md flex items-center justify-center text-white/30 hover:text-white/60 hover:bg-white/[0.06] transition-all disabled:opacity-20"><Send size={9} /></button>
       </div>
       {/* Actions */}
       <div className="flex items-center gap-1 mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
-        <button onClick={onOpenSlides} className="flex items-center gap-1 px-2 py-1 rounded-md text-[9px] text-pink-300/60 hover:text-pink-300 hover:bg-pink-500/10 transition-all"><Layers size={9} /> Slides</button>
-        <button onClick={onDigDeeper} disabled={isPending} className="flex items-center gap-1 px-2 py-1 rounded-md text-[9px] text-indigo-300/60 hover:text-indigo-300 hover:bg-indigo-500/10 transition-all disabled:opacity-30"><RefreshCw size={9} /> Dig deeper</button>
-        <button onClick={() => setShowPipeline(!showPipeline)} className="flex items-center gap-1 px-2 py-1 rounded-md text-[9px] text-purple-300/60 hover:text-purple-300 hover:bg-purple-500/10 transition-all"><PenTool size={9} /> Create</button>
+        <button onClick={onOpenSlides} className="flex items-center gap-1 px-2 py-1 rounded-md text-[9px] text-white/30 hover:text-white/60 hover:bg-white/[0.06] transition-all"><Layers size={9} /> Slides</button>
+        <button onClick={onDigDeeper} disabled={isPending} className="flex items-center gap-1 px-2 py-1 rounded-md text-[9px] text-white/30 hover:text-white/60 hover:bg-white/[0.06] transition-all disabled:opacity-30"><RefreshCw size={9} /> Dig deeper</button>
+        <button onClick={() => setShowPipeline(!showPipeline)} className="flex items-center gap-1 px-2 py-1 rounded-md text-[9px] text-white/30 hover:text-white/60 hover:bg-white/[0.06] transition-all"><PenTool size={9} /> Create</button>
         <button onClick={onCopy} className="flex items-center gap-1 px-2 py-1 rounded-md text-[9px] text-white/25 hover:text-white/60 hover:bg-white/[0.06] transition-all"><Copy size={9} /></button>
-        <button onClick={onSave} className={`flex items-center gap-1 px-2 py-1 rounded-md text-[9px] transition-all ${item.saved ? 'text-amber-300' : 'text-white/25 hover:text-amber-300/60'}`}><Bookmark size={9} /></button>
-        <button onClick={() => onExport(cardRef.current)} className="flex items-center gap-1 px-2 py-1 rounded-md text-[9px] text-white/25 hover:text-green-300/60 hover:bg-green-500/10 transition-all"><Download size={9} /></button>
+        <button onClick={onSave} className={`flex items-center gap-1 px-2 py-1 rounded-md text-[9px] transition-all ${item.saved ? 'text-white/70' : 'text-white/25 hover:text-white/50'}`}><Bookmark size={9} /></button>
+        <button onClick={() => onExport(cardRef.current)} className="flex items-center gap-1 px-2 py-1 rounded-md text-[9px] text-white/25 hover:text-white/60 hover:bg-white/[0.06] transition-all"><Download size={9} /></button>
         <button onClick={onDelete} className="flex items-center gap-1 px-2 py-1 rounded-md text-[9px] text-white/15 hover:text-red-400/60 hover:bg-red-500/10 transition-all ml-auto"><Trash2 size={9} /></button>
       </div>
       {/* Pipeline -- generate outputs */}
       {showPipeline && (
-        <div className="mt-2 p-2.5 rounded-lg border border-purple-500/10 bg-purple-500/[0.03] space-y-2">
-          <div className="text-[9px] font-semibold text-purple-300/60 uppercase tracking-wider">Generate from this research</div>
+        <div className="mt-2 p-2.5 rounded-lg border border-white/[0.06] bg-white/[0.02] space-y-2">
+          <div className="text-[9px] font-semibold text-white/35 uppercase tracking-wider">Generate from this research</div>
           {OUTPUT_FORMATS.map(fmt => (
             <div key={fmt.key} className="flex items-center gap-2">
               <fmt.icon size={10} className="text-white/30 shrink-0" />
@@ -2088,7 +2143,7 @@ function FeedCard({ item, onSave, onDelete, onDigDeeper, onExport, onCopy, onFol
                 className="w-12 px-1.5 py-0.5 rounded bg-white/[0.05] border border-white/[0.08] text-[9px] text-white/60 text-center outline-none" />
               <span className="text-[8px] text-white/25">{fmt.key === 'article' ? 'article' : fmt.key === 'slides' ? 'slides' : 'posts'}</span>
               <button onClick={() => { onGenerate(fmt.key, outputCounts[fmt.key]); setShowPipeline(false); }} disabled={isPending}
-                className="ml-auto px-2.5 py-1 rounded-md text-[9px] font-medium bg-purple-500/15 text-purple-300/70 hover:bg-purple-500/25 transition-all disabled:opacity-30">Generate</button>
+                className="ml-auto px-2.5 py-1 rounded-md text-[9px] font-medium bg-white/[0.06] text-white/50 hover:bg-white/[0.10] transition-all disabled:opacity-30">Generate</button>
             </div>
           ))}
         </div>
@@ -2942,7 +2997,7 @@ interface SlideCardProps {
 
 function SlideCard({ slide, onExport, onDigDeeper, onSave, onCopy, onFollowUp, onGenerate, onEditItem, onDesignSlides, onEditSlide, onRedesignSlide, isDesigning, designProgress, isPending }: SlideCardProps) {
   const { kind, feedItem: item, slideNumber, totalSlides, sectionIndex } = slide;
-  const accent = SLIDE_ACCENT_COLORS[(sectionIndex ?? 0) % SLIDE_ACCENT_COLORS.length];
+  // accent colors no longer used — uniform glassmorphic style
   const slideCardRef = useRef<HTMLDivElement>(null);
   const [followUp, setFollowUp] = useState('');
   const [showGen, setShowGen] = useState(false);
@@ -2977,48 +3032,29 @@ function SlideCard({ slide, onExport, onDigDeeper, onSave, onCopy, onFollowUp, o
     setEditing(false);
   };
 
-  // Shared slide shell -- cinematic glassmorphic card
-  const Shell = ({ children, accentColor, accentColor2 }: { children: ReactNode; accentColor?: string; accentColor2?: string }) => {
-    const clr = accentColor || '#818cf8';
-    const clr2 = accentColor2 || clr;
+  // Shared slide shell -- clean uniform glassmorphic card
+  const Shell = ({ children }: { children: ReactNode; accentColor?: string; accentColor2?: string }) => {
     return (
-      <div className="relative rounded-[22px] shadow-2xl overflow-hidden flex flex-col"
+      <div className="relative rounded-[18px] overflow-hidden flex flex-col"
         style={{
           minHeight: 280,
-          border: `1px solid ${clr}14`,
-          background: `linear-gradient(150deg, ${clr}07 0%, rgba(8,8,18,0.96) 35%, rgba(8,8,18,0.98) 65%, ${clr2}04 100%)`,
-          boxShadow: `0 25px 60px -15px rgba(0,0,0,0.5), 0 0 0 1px ${clr}08 inset`,
+          border: '1px solid rgba(255,255,255,0.06)',
+          background: 'linear-gradient(150deg, rgba(255,255,255,0.04) 0%, rgba(18,18,28,0.92) 35%, rgba(14,14,22,0.95) 100%)',
+          boxShadow: '0 20px 50px -12px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.04)',
+          backdropFilter: 'blur(20px)',
         }}>
-        {/* Top accent bar -- vivid gradient edge */}
-        <div className="absolute top-0 left-0 right-0 h-[1.5px]"
-          style={{ background: `linear-gradient(90deg, transparent 5%, ${clr}80 25%, ${clr2}60 75%, transparent 95%)` }} />
-        {/* Bottom accent bar -- subtle mirror of top */}
-        <div className="absolute bottom-0 left-0 right-0 h-px"
-          style={{ background: `linear-gradient(90deg, transparent 15%, ${clr}10 40%, ${clr2}08 60%, transparent 85%)` }} />
-        {/* Left accent strip */}
-        <div className="absolute top-0 left-0 bottom-0 w-px"
-          style={{ background: `linear-gradient(180deg, ${clr}28 0%, ${clr}08 30%, transparent 60%, ${clr2}0a 100%)` }} />
-        {/* Right accent strip -- very subtle */}
-        <div className="absolute top-0 right-0 bottom-0 w-px"
-          style={{ background: `linear-gradient(180deg, ${clr}0a 0%, transparent 40%, transparent 60%, ${clr2}08 100%)` }} />
-        {/* Primary glow -- top right, large and diffuse */}
-        <div className="absolute -top-28 -right-28 w-80 h-80 rounded-full pointer-events-none"
-          style={{ background: `radial-gradient(circle, ${clr}10 0%, ${clr}04 35%, transparent 65%)` }} />
-        {/* Secondary glow -- bottom left, warm complementary tone */}
-        <div className="absolute -bottom-24 -left-24 w-72 h-72 rounded-full pointer-events-none"
-          style={{ background: `radial-gradient(circle, ${clr2}08 0%, ${clr2}02 40%, transparent 70%)` }} />
-        {/* Center mesh glow -- subtle mid-card luminosity */}
-        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/3 w-96 h-48 rounded-full pointer-events-none"
-          style={{ background: `radial-gradient(ellipse, ${clr}05 0%, transparent 55%)` }} />
-        {/* Fine noise texture overlay for depth */}
-        <div className="absolute inset-0 opacity-[0.02] pointer-events-none mix-blend-overlay"
-          style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E")` }} />
+        {/* Top edge highlight */}
+        <div className="absolute top-0 left-0 right-0 h-px"
+          style={{ background: 'linear-gradient(90deg, transparent 10%, rgba(255,255,255,0.08) 50%, transparent 90%)' }} />
+        {/* Subtle inner glow */}
+        <div className="absolute -top-20 left-1/2 -translate-x-1/2 w-80 h-40 rounded-full pointer-events-none"
+          style={{ background: 'radial-gradient(ellipse, rgba(255,255,255,0.03) 0%, transparent 60%)' }} />
         {/* Inner padding container */}
         <div className="relative flex-1 p-7 flex flex-col">
           {/* Slide header -- title + number + edit toggle */}
           <div className="flex items-center justify-between mb-2.5 shrink-0">
             <div className="flex items-center gap-2.5">
-              <div className="w-[3px] h-3 rounded-full" style={{ background: `linear-gradient(180deg, ${clr}cc, ${clr2}50)` }} />
+              <div className="w-[3px] h-3 rounded-full" style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.25), rgba(255,255,255,0.08))' }} />
               <span className="text-[7.5px] font-bold text-white/25 uppercase tracking-[0.25em] leading-none">{slide.slideTitle}</span>
             </div>
             <div className="flex items-center gap-2">
@@ -3042,13 +3078,12 @@ function SlideCard({ slide, onExport, onDigDeeper, onSave, onCopy, onFollowUp, o
           <div className="flex-1 flex flex-col min-h-0">
             {children}
           </div>
-          {/* Bottom bar -- elegant gradient rule + brand */}
+          {/* Bottom bar -- clean separator + brand */}
           <div className="flex items-center gap-3 mt-3 shrink-0">
-            <div className="h-px flex-1" style={{ background: `linear-gradient(90deg, ${clr}18, ${clr2}0a, transparent)` }} />
+            <div className="h-px flex-1" style={{ background: 'linear-gradient(90deg, rgba(255,255,255,0.06), transparent)' }} />
             <div className="flex items-center gap-2">
-              <div className="w-[3px] h-[3px] rounded-full" style={{ backgroundColor: `${clr}20`, boxShadow: `0 0 4px ${clr}10` }} />
-              <span className="text-[6.5px] font-bold tracking-[0.35em] uppercase bg-clip-text text-transparent"
-                style={{ backgroundImage: `linear-gradient(90deg, rgba(255,255,255,0.08), rgba(255,255,255,0.04))` }}>substrate</span>
+              <div className="w-[3px] h-[3px] rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.12)' }} />
+              <span className="text-[6.5px] font-bold tracking-[0.35em] uppercase text-white/[0.06]">substrate</span>
             </div>
           </div>
         </div>
@@ -3061,20 +3096,20 @@ function SlideCard({ slide, onExport, onDigDeeper, onSave, onCopy, onFollowUp, o
     const sectionCount = item.sections?.length || 0;
     return (
       <div ref={slideCardRef}>
-      <Shell accentColor="#818cf8" accentColor2="#6366f1">
+      <Shell>
         {/* Decorative geometric accents */}
-        <div className="absolute top-6 right-7 pointer-events-none" style={{ opacity: 0.04 }}>
+        <div className="absolute top-6 right-7 pointer-events-none" style={{ opacity: 0.03 }}>
           <svg width="120" height="120" viewBox="0 0 120 120" fill="none">
-            <circle cx="60" cy="60" r="55" stroke="#818cf8" strokeWidth="0.5" strokeDasharray="4 6" />
-            <circle cx="60" cy="60" r="35" stroke="#a78bfa" strokeWidth="0.5" strokeDasharray="2 4" />
-            <line x1="5" y1="60" x2="115" y2="60" stroke="#818cf8" strokeWidth="0.3" />
-            <line x1="60" y1="5" x2="60" y2="115" stroke="#818cf8" strokeWidth="0.3" />
+            <circle cx="60" cy="60" r="55" stroke="rgba(255,255,255,0.3)" strokeWidth="0.5" strokeDasharray="4 6" />
+            <circle cx="60" cy="60" r="35" stroke="rgba(255,255,255,0.2)" strokeWidth="0.5" strokeDasharray="2 4" />
+            <line x1="5" y1="60" x2="115" y2="60" stroke="rgba(255,255,255,0.2)" strokeWidth="0.3" />
+            <line x1="60" y1="5" x2="60" y2="115" stroke="rgba(255,255,255,0.2)" strokeWidth="0.3" />
           </svg>
         </div>
-        <div className="absolute bottom-8 left-6 pointer-events-none" style={{ opacity: 0.035 }}>
+        <div className="absolute bottom-8 left-6 pointer-events-none" style={{ opacity: 0.025 }}>
           <svg width="80" height="80" viewBox="0 0 80 80" fill="none">
-            <rect x="5" y="5" width="70" height="70" rx="4" stroke="#6366f1" strokeWidth="0.5" />
-            <rect x="15" y="15" width="50" height="50" rx="3" stroke="#818cf8" strokeWidth="0.4" strokeDasharray="3 5" />
+            <rect x="5" y="5" width="70" height="70" rx="4" stroke="rgba(255,255,255,0.3)" strokeWidth="0.5" />
+            <rect x="15" y="15" width="50" height="50" rx="3" stroke="rgba(255,255,255,0.2)" strokeWidth="0.4" strokeDasharray="3 5" />
           </svg>
         </div>
         <div className="flex flex-col justify-center flex-1 py-4">
@@ -3082,17 +3117,16 @@ function SlideCard({ slide, onExport, onDigDeeper, onSave, onCopy, onFollowUp, o
           <div className="flex items-center gap-3 mb-6">
             <div className="flex items-center gap-2.5">
               <div className="relative">
-                <div className="w-[6px] h-[6px] rounded-full" style={{ backgroundColor: '#818cf8', boxShadow: '0 0 12px rgba(129,140,248,0.4), 0 0 24px rgba(129,140,248,0.15)' }} />
+                <div className="w-[6px] h-[6px] rounded-full" style={{ backgroundColor: 'rgba(255,255,255,0.35)', boxShadow: '0 0 12px rgba(255,255,255,0.15)' }} />
               </div>
-              <span className="text-[8px] font-black uppercase tracking-[0.3em] bg-clip-text text-transparent"
-                style={{ backgroundImage: 'linear-gradient(135deg, rgba(165,180,252,0.7), rgba(129,140,248,0.45))' }}>{item.type || 'RESEARCH'}</span>
+              <span className="text-[8px] font-black uppercase tracking-[0.3em] text-white/30">{item.type || 'RESEARCH'}</span>
             </div>
-            <div className="h-px flex-1" style={{ background: 'linear-gradient(90deg, rgba(129,140,248,0.12), transparent 60%)' }} />
+            <div className="h-px flex-1" style={{ background: 'linear-gradient(90deg, rgba(255,255,255,0.06), transparent 60%)' }} />
             {sectionCount > 0 && (
               <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg"
-                style={{ backgroundColor: 'rgba(129,140,248,0.05)', border: '1px solid rgba(129,140,248,0.08)' }}>
-                <Layers size={8} style={{ color: 'rgba(165,180,252,0.35)' }} />
-                <span className="text-[7.5px] font-bold tabular-nums" style={{ color: 'rgba(165,180,252,0.3)' }}>{sectionCount} slides</span>
+                style={{ backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+                <Layers size={8} style={{ color: 'rgba(255,255,255,0.25)' }} />
+                <span className="text-[7.5px] font-bold tabular-nums" style={{ color: 'rgba(255,255,255,0.25)' }}>{sectionCount} slides</span>
               </div>
             )}
             <span className="text-[7.5px] text-white/12 font-mono tabular-nums tracking-wide">{timeAgo(item.timestamp)}</span>
@@ -3100,29 +3134,27 @@ function SlideCard({ slide, onExport, onDigDeeper, onSave, onCopy, onFollowUp, o
           {/* Large cinematic title -- dramatic gradient text */}
           {editing ? (
             <input value={editTitle} onChange={e => setEditTitle(e.target.value)}
-              className="text-[28px] font-extrabold text-white/90 leading-[1.12] mb-5 tracking-[-0.03em] bg-transparent border-b border-indigo-400/25 outline-none w-full"
+              className="text-[28px] font-extrabold text-white/90 leading-[1.12] mb-5 tracking-[-0.03em] bg-transparent border-b border-white/10 outline-none w-full"
               autoFocus />
           ) : (
             <h2 className="text-[28px] font-extrabold leading-[1.12] mb-5 tracking-[-0.035em] bg-clip-text text-transparent"
-              style={{ backgroundImage: 'linear-gradient(160deg, rgba(255,255,255,0.95) 10%, rgba(255,255,255,0.72) 50%, rgba(129,140,248,0.55) 100%)' }}>
+              style={{ backgroundImage: 'linear-gradient(160deg, rgba(255,255,255,0.92) 10%, rgba(255,255,255,0.65) 60%, rgba(255,255,255,0.35) 100%)' }}>
               {item.title}
             </h2>
           )}
           {/* Accent divider -- wide cinematic gradient bar with layered glow */}
-          <div className="relative mb-6" style={{ height: 3 }}>
-            <div className="absolute left-0 top-0 rounded-full" style={{ width: '40%', height: '100%', background: 'linear-gradient(90deg, #818cf8cc, #6366f180, #a78bfa40, transparent)' }} />
-            <div className="absolute left-0 top-0 rounded-full blur-sm" style={{ width: '35%', height: 4, top: -0.5, background: 'linear-gradient(90deg, rgba(129,140,248,0.4), transparent)' }} />
-            <div className="absolute left-0 top-0 rounded-full blur-md" style={{ width: '25%', height: 6, top: -1.5, background: 'linear-gradient(90deg, rgba(129,140,248,0.2), transparent)' }} />
+          <div className="relative mb-6" style={{ height: 2 }}>
+            <div className="absolute left-0 top-0 rounded-full" style={{ width: '35%', height: '100%', background: 'linear-gradient(90deg, rgba(255,255,255,0.2), rgba(255,255,255,0.05), transparent)' }} />
           </div>
           {/* Summary -- elegant subtitle with left accent */}
           {editing ? (
             <textarea value={editSummary} onChange={e => setEditSummary(e.target.value)} rows={3}
               className="text-[12.5px] text-white/35 leading-[1.8] font-light mb-5 max-w-[90%] bg-transparent rounded-xl p-3 outline-none resize-y w-full"
-              style={{ border: '1px solid rgba(129,140,248,0.10)', backgroundColor: 'rgba(129,140,248,0.02)' }} />
+              style={{ border: '1px solid rgba(255,255,255,0.06)', backgroundColor: 'rgba(255,255,255,0.02)' }} />
           ) : (
             item.summary && (
               <div className="flex gap-3 mb-5 max-w-[92%]">
-                <div className="w-[2px] rounded-full shrink-0 mt-0.5" style={{ background: 'linear-gradient(180deg, rgba(129,140,248,0.25), rgba(129,140,248,0.05), transparent)', minHeight: 20 }} />
+                <div className="w-[2px] rounded-full shrink-0 mt-0.5" style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.15), rgba(255,255,255,0.04), transparent)', minHeight: 20 }} />
                 <p className="text-[12px] text-white/38 leading-[1.85] font-light">{item.summary}</p>
               </div>
             )
@@ -3130,18 +3162,18 @@ function SlideCard({ slide, onExport, onDigDeeper, onSave, onCopy, onFollowUp, o
           {/* Image (if available) */}
           {item.imageUrl && (
             <div className="w-full h-28 rounded-2xl overflow-hidden mb-4 bg-black/30"
-              style={{ border: '1px solid rgba(129,140,248,0.06)' }}>
+              style={{ border: '1px solid rgba(255,255,255,0.05)' }}>
               <img src={item.imageUrl} alt="" className="w-full h-full object-cover" />
             </div>
           )}
           {/* Design progress on title slide */}
           {isDesigning && designProgress && designProgress.total > 0 && (
             <div className="flex items-center gap-2.5 mb-4 w-full max-w-[85%]">
-              <div className="flex-1 h-[2px] rounded-full overflow-hidden" style={{ backgroundColor: 'rgba(129,140,248,0.1)' }}>
+              <div className="flex-1 h-[2px] rounded-full overflow-hidden" style={{ backgroundColor: 'rgba(255,255,255,0.06)' }}>
                 <div className="h-full rounded-full transition-all duration-700"
-                  style={{ width: `${(designProgress.done / designProgress.total) * 100}%`, background: 'linear-gradient(90deg, #818cf8cc, #a78bfa80)' }} />
+                  style={{ width: `${(designProgress.done / designProgress.total) * 100}%`, background: 'linear-gradient(90deg, rgba(255,255,255,0.4), rgba(255,255,255,0.15))' }} />
               </div>
-              <span className="text-[8px] font-bold tabular-nums shrink-0" style={{ color: 'rgba(129,140,248,0.45)' }}>
+              <span className="text-[8px] font-bold tabular-nums shrink-0" style={{ color: 'rgba(255,255,255,0.3)' }}>
                 Designing {designProgress.done}/{designProgress.total}
               </span>
             </div>
@@ -3153,9 +3185,9 @@ function SlideCard({ slide, onExport, onDigDeeper, onSave, onCopy, onFollowUp, o
                 {item.topics.slice(0, 5).map((t, i) => (
                   <span key={i} className="px-3 py-[4px] rounded-lg text-[7px] font-bold uppercase tracking-[0.12em] transition-colors"
                     style={{
-                      backgroundColor: `rgba(129,140,248,${0.04 + i * 0.01})`,
-                      color: `rgba(165,180,252,${0.45 - i * 0.04})`,
-                      border: `1px solid rgba(129,140,248,${0.08 - i * 0.01})`,
+                      backgroundColor: 'rgba(255,255,255,0.04)',
+                      color: 'rgba(255,255,255,0.3)',
+                      border: '1px solid rgba(255,255,255,0.06)',
                     }}>{t}</span>
                 ))}
               </div>
@@ -3164,9 +3196,9 @@ function SlideCard({ slide, onExport, onDigDeeper, onSave, onCopy, onFollowUp, o
             {sectionCount > 0 && !isDesigning && onDesignSlides && (
               <button onClick={() => onDesignSlides()}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[8px] font-bold uppercase tracking-[0.08em] transition-all shrink-0"
-                style={{ backgroundColor: 'rgba(129,140,248,0.06)', color: 'rgba(165,180,252,0.4)', border: '1px solid rgba(129,140,248,0.10)' }}
-                onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(129,140,248,0.12)'; e.currentTarget.style.color = 'rgba(165,180,252,0.7)'; }}
-                onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'rgba(129,140,248,0.06)'; e.currentTarget.style.color = 'rgba(165,180,252,0.4)'; }}>
+                style={{ backgroundColor: 'rgba(255,255,255,0.04)', color: 'rgba(255,255,255,0.3)', border: '1px solid rgba(255,255,255,0.06)' }}
+                onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.08)'; e.currentTarget.style.color = 'rgba(255,255,255,0.5)'; }}
+                onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.04)'; e.currentTarget.style.color = 'rgba(255,255,255,0.3)'; }}>
                 <Sparkles size={9} /> Design All
               </button>
             )}
@@ -3182,32 +3214,27 @@ function SlideCard({ slide, onExport, onDigDeeper, onSave, onCopy, onFollowUp, o
     const section = item.sections[sectionIndex];
     return (
       <div ref={slideCardRef}>
-      <Shell accentColor={accent.glow} accentColor2={accent.glow2}>
+      <Shell>
         <div className="flex flex-col flex-1">
           {/* Section heading -- premium with gradient number + accent line */}
           <div className="flex items-start gap-3.5 mb-4 mt-0.5">
             {/* Gradient number badge + vertical accent */}
             <div className="flex flex-col items-center gap-1.5 pt-0.5 shrink-0">
               <div className="relative">
-                <span className="text-[10px] font-black tabular-nums bg-clip-text text-transparent"
-                  style={{ backgroundImage: `linear-gradient(160deg, ${accent.glow}cc, ${accent.glow}60)` }}>
+                <span className="text-[10px] font-black tabular-nums text-white/30">
                   {String(sectionIndex + 1).padStart(2, '0')}
                 </span>
-                <div className="absolute -inset-2 rounded-full opacity-[0.06] blur-sm pointer-events-none"
-                  style={{ backgroundColor: accent.glow }} />
               </div>
               <div className="w-[1.5px] h-5 rounded-full"
-                style={{ background: `linear-gradient(180deg, ${accent.glow}35, ${accent.glow}08, transparent)` }} />
+                style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.18), rgba(255,255,255,0.04), transparent)' }} />
             </div>
             <div className="flex-1 min-w-0">
               {editing ? (
                 <input value={editHeading} onChange={e => setEditHeading(e.target.value)}
-                  className="text-[16px] font-bold text-white/90 leading-[1.3] tracking-[-0.015em] bg-transparent border-b outline-none w-full"
-                  style={{ borderColor: `${accent.glow}30` }}
+                  className="text-[16px] font-bold text-white/90 leading-[1.3] tracking-[-0.015em] bg-transparent border-b border-white/10 outline-none w-full"
                   autoFocus />
               ) : (
-                <h3 className="text-[16px] font-bold leading-[1.3] tracking-[-0.015em] bg-clip-text text-transparent"
-                  style={{ backgroundImage: `linear-gradient(160deg, rgba(255,255,255,0.88) 30%, ${accent.glow}90 120%)` }}>
+                <h3 className="text-[16px] font-bold leading-[1.3] tracking-[-0.015em] text-white/85">
                   {section.heading}
                 </h3>
               )}
@@ -3215,7 +3242,7 @@ function SlideCard({ slide, onExport, onDigDeeper, onSave, onCopy, onFollowUp, o
               {!section.html && (
                 <LayoutPicker
                   current={section.layout || 'default'}
-                  accentColor={accent.glow}
+                  accentColor="rgba(255,255,255,0.3)"
                   onChange={(newLayout) => {
                     if (sectionIndex == null || !item.sections) return;
                     const newSections = [...item.sections];
@@ -3230,7 +3257,7 @@ function SlideCard({ slide, onExport, onDigDeeper, onSave, onCopy, onFollowUp, o
           {editing ? (
             <textarea value={editBody} onChange={e => setEditBody(e.target.value)}
               className="text-[11px] text-white/55 leading-[1.7] whitespace-pre-wrap flex-1 overflow-y-auto glass-scroll pr-1 bg-transparent rounded-xl p-3 outline-none resize-y w-full min-h-[120px]"
-              style={{ border: `1px solid ${accent.glow}10`, backgroundColor: `${accent.glow}03` }} />
+              style={{ border: '1px solid rgba(255,255,255,0.06)', backgroundColor: 'rgba(255,255,255,0.02)' }} />
           ) : section.html ? (
             <AgentHtmlSlide
               html={section.html}
@@ -3243,7 +3270,7 @@ function SlideCard({ slide, onExport, onDigDeeper, onSave, onCopy, onFollowUp, o
             />
           ) : (
             <div className="flex-1 overflow-y-auto glass-scroll pr-1">
-              <LayoutRenderer section={section} accentColor={accent.glow} />
+              <LayoutRenderer section={section} accentColor="rgba(255,255,255,0.3)" />
             </div>
           )}
           {/* Per-slide design + edit controls */}
@@ -3251,20 +3278,20 @@ function SlideCard({ slide, onExport, onDigDeeper, onSave, onCopy, onFollowUp, o
             {/* Designing progress indicator */}
             {isDesigning && designProgress && (
               <div className="flex items-center gap-2 mb-2 px-1">
-                <div className="flex-1 h-[2px] rounded-full overflow-hidden" style={{ backgroundColor: `${accent.glow}10` }}>
+                <div className="flex-1 h-[2px] rounded-full overflow-hidden" style={{ backgroundColor: 'rgba(255,255,255,0.06)' }}>
                   <div className="h-full rounded-full transition-all duration-700"
-                    style={{ width: `${designProgress.total > 0 ? (designProgress.done / designProgress.total) * 100 : 0}%`, background: `linear-gradient(90deg, ${accent.glow}cc, ${accent.glow}60)` }} />
+                    style={{ width: `${designProgress.total > 0 ? (designProgress.done / designProgress.total) * 100 : 0}%`, background: 'linear-gradient(90deg, rgba(255,255,255,0.4), rgba(255,255,255,0.15))' }} />
                 </div>
-                <span className="text-[8px] font-bold tabular-nums" style={{ color: `${accent.glow}60` }}>
+                <span className="text-[8px] font-bold tabular-nums" style={{ color: 'rgba(255,255,255,0.3)' }}>
                   Designing {designProgress.done}/{designProgress.total}
                 </span>
               </div>
             )}
             {showSlideEdit ? (
               <div className="flex items-center gap-1.5 p-1 rounded-xl"
-                style={{ backgroundColor: `${accent.glow}04`, border: `1px solid ${accent.glow}0c` }}>
+                style={{ backgroundColor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)' }}>
                 <div className="flex-1 flex items-center gap-2 px-2.5 py-1.5">
-                  <Wand2 size={10} style={{ color: `${accent.glow}50` }} className="shrink-0" />
+                  <Wand2 size={10} style={{ color: 'rgba(255,255,255,0.3)' }} className="shrink-0" />
                   <input value={slideEditInput} onChange={e => setSlideEditInput(e.target.value)}
                     onKeyDown={e => {
                       if (e.key === 'Enter' && slideEditInput.trim() && onEditSlide) { onEditSlide(sectionIndex!, slideEditInput); setSlideEditInput(''); setShowSlideEdit(false); }
@@ -3278,7 +3305,7 @@ function SlideCard({ slide, onExport, onDigDeeper, onSave, onCopy, onFollowUp, o
                 <button onClick={() => { if (slideEditInput.trim() && onEditSlide) { onEditSlide(sectionIndex!, slideEditInput); setSlideEditInput(''); setShowSlideEdit(false); } }}
                   disabled={!slideEditInput.trim() || isPending || isDesigning}
                   className="w-7 h-7 rounded-lg flex items-center justify-center transition-all disabled:opacity-15"
-                  style={{ backgroundColor: `${accent.glow}10`, color: `${accent.glow}70` }}>
+                  style={{ backgroundColor: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.5)' }}>
                   <Send size={10} />
                 </button>
                 <button onClick={() => setShowSlideEdit(false)}
@@ -3292,9 +3319,9 @@ function SlideCard({ slide, onExport, onDigDeeper, onSave, onCopy, onFollowUp, o
                 {onRedesignSlide && sectionIndex != null && (
                   <button onClick={() => onRedesignSlide(sectionIndex)}
                     className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[9px] font-medium transition-all"
-                    style={{ color: `${accent.glow}50`, backgroundColor: `${accent.glow}04`, border: `1px solid ${accent.glow}0a` }}
-                    onMouseEnter={e => { e.currentTarget.style.backgroundColor = `${accent.glow}10`; e.currentTarget.style.color = `${accent.glow}90`; }}
-                    onMouseLeave={e => { e.currentTarget.style.backgroundColor = `${accent.glow}04`; e.currentTarget.style.color = `${accent.glow}50`; }}
+                    style={{ color: 'rgba(255,255,255,0.3)', backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}
+                    onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.06)'; e.currentTarget.style.color = 'rgba(255,255,255,0.5)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.03)'; e.currentTarget.style.color = 'rgba(255,255,255,0.3)'; }}
                     disabled={isDesigning}>
                     <Sparkles size={9} /> Auto-design
                   </button>
@@ -3303,9 +3330,9 @@ function SlideCard({ slide, onExport, onDigDeeper, onSave, onCopy, onFollowUp, o
                 {onEditSlide && (
                   <button onClick={() => setShowSlideEdit(true)}
                     className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[9px] font-medium transition-all"
-                    style={{ color: `${accent.glow}35` }}
-                    onMouseEnter={e => { e.currentTarget.style.backgroundColor = `${accent.glow}06`; e.currentTarget.style.color = `${accent.glow}70`; }}
-                    onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = `${accent.glow}35`; }}
+                    style={{ color: 'rgba(255,255,255,0.2)' }}
+                    onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.04)'; e.currentTarget.style.color = 'rgba(255,255,255,0.45)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = 'rgba(255,255,255,0.2)'; }}
                     disabled={isDesigning}>
                     <Wand2 size={9} /> Edit with prompt
                   </button>
@@ -3323,17 +3350,15 @@ function SlideCard({ slide, onExport, onDigDeeper, onSave, onCopy, onFollowUp, o
   if (kind === 'sources') {
     return (
       <div ref={slideCardRef}>
-      <Shell accentColor="#22d3ee" accentColor2="#06b6d4">
+      <Shell>
         <div className="flex flex-col flex-1">
           <div className="flex items-center gap-3 mb-4 mt-1">
             <div className="w-8 h-8 rounded-xl flex items-center justify-center relative"
-              style={{ backgroundColor: '#22d3ee08', border: '1px solid #22d3ee12' }}>
-              <ExternalLink size={13} className="text-cyan-400/60" />
-              <div className="absolute -inset-1 rounded-xl opacity-[0.06] blur-md pointer-events-none" style={{ backgroundColor: '#22d3ee' }} />
+              style={{ backgroundColor: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
+              <ExternalLink size={13} className="text-white/40" />
             </div>
             <div>
-              <h3 className="text-[14px] font-bold tracking-[-0.01em] bg-clip-text text-transparent"
-                style={{ backgroundImage: 'linear-gradient(135deg, rgba(165,243,252,0.9), rgba(34,211,238,0.7))' }}>
+              <h3 className="text-[14px] font-bold tracking-[-0.01em] text-white/80">
                 {slide.slideTitle}
               </h3>
               <span className="text-[8px] text-white/18 font-medium">{item.sourceUrls?.length || 0} verified sources</span>
@@ -3343,28 +3368,27 @@ function SlideCard({ slide, onExport, onDigDeeper, onSave, onCopy, onFollowUp, o
             {item.sourceUrls?.map((s, i) => (
               <a key={i} href={s.url} target="_blank" rel="noopener noreferrer"
                 className="flex items-center gap-3 p-2.5 rounded-xl transition-all group"
-                style={{ backgroundColor: 'rgba(34,211,238,0.015)', border: '1px solid rgba(34,211,238,0.04)' }}
-                onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(34,211,238,0.04)'; e.currentTarget.style.borderColor = 'rgba(34,211,238,0.12)'; }}
-                onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'rgba(34,211,238,0.015)'; e.currentTarget.style.borderColor = 'rgba(34,211,238,0.04)'; }}>
-                <span className="text-[9px] font-bold tabular-nums w-5 text-center shrink-0 bg-clip-text text-transparent"
-                  style={{ backgroundImage: 'linear-gradient(180deg, rgba(34,211,238,0.5), rgba(34,211,238,0.25))' }}>
+                style={{ backgroundColor: 'rgba(255,255,255,0.015)', border: '1px solid rgba(255,255,255,0.04)' }}
+                onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.04)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; }}
+                onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.015)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.04)'; }}>
+                <span className="text-[9px] font-bold tabular-nums w-5 text-center shrink-0 text-white/25">
                   {String(i + 1).padStart(2, '0')}
                 </span>
-                <div className="w-px h-5 shrink-0" style={{ background: 'linear-gradient(180deg, rgba(34,211,238,0.12), transparent)' }} />
+                <div className="w-px h-5 shrink-0" style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.08), transparent)' }} />
                 <div className="flex-1 min-w-0">
-                  <div className="text-[10.5px] font-semibold text-white/50 group-hover:text-cyan-200/80 transition-colors truncate">{s.label}</div>
+                  <div className="text-[10.5px] font-semibold text-white/50 group-hover:text-white/80 transition-colors truncate">{s.label}</div>
                   <div className="text-[7.5px] text-white/12 truncate mt-0.5 font-mono">{s.url}</div>
                 </div>
-                <ExternalLink size={10} className="text-white/8 group-hover:text-cyan-300/40 transition-colors shrink-0" />
+                <ExternalLink size={10} className="text-white/8 group-hover:text-white/30 transition-colors shrink-0" />
               </a>
             ))}
           </div>
           {/* Quick actions row */}
-          <div className="flex items-center gap-2 mt-3 pt-3" style={{ borderTop: '1px solid rgba(34,211,238,0.06)' }}>
+          <div className="flex items-center gap-2 mt-3 pt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}>
             <div className="relative">
-              <button onClick={() => setShowExportMenu(v => !v)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[9px] font-medium transition-all hover:bg-emerald-500/10" style={{ color: '#34d39970', border: '1px solid #34d39912' }}><Download size={9} /> Export</button>
+              <button onClick={() => setShowExportMenu(v => !v)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[9px] font-medium transition-all hover:bg-white/[0.06]" style={{ color: 'rgba(255,255,255,0.3)', border: '1px solid rgba(255,255,255,0.06)' }}><Download size={9} /> Export</button>
               {showExportMenu && (
-                <div className="absolute bottom-full left-0 mb-1.5 rounded-xl overflow-hidden shadow-2xl z-50" style={{ backgroundColor: 'rgba(12,12,20,0.92)', backdropFilter: 'blur(16px)', border: '1px solid rgba(34,211,238,0.12)', minWidth: 150 }}>
+                <div className="absolute bottom-full left-0 mb-1.5 rounded-xl overflow-hidden shadow-2xl z-50" style={{ backgroundColor: 'rgba(12,12,20,0.95)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255,255,255,0.08)', minWidth: 150 }}>
                   <button onClick={() => { onExport(slideCardRef.current); setShowExportMenu(false); }} className="w-full flex items-center gap-2 px-3.5 py-2.5 text-[9.5px] font-medium text-white/50 hover:text-white/80 hover:bg-white/[0.04] transition-all"><Download size={10} /> With Background</button>
                   <button onClick={() => { onExport(slideCardRef.current, true); setShowExportMenu(false); }} className="w-full flex items-center gap-2 px-3.5 py-2.5 text-[9.5px] font-medium text-white/50 hover:text-white/80 hover:bg-white/[0.04] transition-all" style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}><Download size={10} /> Transparent</button>
                 </div>
@@ -3382,16 +3406,14 @@ function SlideCard({ slide, onExport, onDigDeeper, onSave, onCopy, onFollowUp, o
   // ── Actions Slide (follow-up + generate) ─────
   return (
     <div ref={slideCardRef}>
-    <Shell accentColor="#a78bfa" accentColor2="#7c3aed">
+    <Shell>
       <div className="flex flex-col flex-1">
         <div className="flex items-center gap-3 mb-4 mt-1">
           <div className="w-8 h-8 rounded-xl flex items-center justify-center relative"
-            style={{ backgroundColor: '#a78bfa08', border: '1px solid #a78bfa12' }}>
-            <Sparkles size={13} className="text-violet-400/60" />
-            <div className="absolute -inset-1 rounded-xl opacity-[0.06] blur-md pointer-events-none" style={{ backgroundColor: '#a78bfa' }} />
+            style={{ backgroundColor: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
+            <Sparkles size={13} className="text-white/40" />
           </div>
-          <h3 className="text-[14px] font-bold tracking-[-0.01em] bg-clip-text text-transparent"
-            style={{ backgroundImage: 'linear-gradient(135deg, rgba(221,214,254,0.9), rgba(167,139,250,0.7))' }}>
+          <h3 className="text-[14px] font-bold tracking-[-0.01em] text-white/80">
             {slide.slideTitle}
           </h3>
         </div>
@@ -3400,17 +3422,17 @@ function SlideCard({ slide, onExport, onDigDeeper, onSave, onCopy, onFollowUp, o
         {slide.followUpQuestions && slide.followUpQuestions.length > 0 && (
           <div className="mb-4">
             <div className="flex items-center gap-2 mb-2.5">
-              <div className="w-3 h-[1px] rounded-full" style={{ background: 'linear-gradient(90deg, rgba(167,139,250,0.3), transparent)' }} />
+              <div className="w-3 h-[1px] rounded-full" style={{ background: 'linear-gradient(90deg, rgba(255,255,255,0.15), transparent)' }} />
               <div className="text-[7.5px] text-white/22 uppercase tracking-[0.2em] font-bold">Continue exploring</div>
             </div>
             <div className="space-y-1.5">
               {slide.followUpQuestions.map((q, i) => (
                 <button key={i} onClick={() => !isPending && onFollowUp(q)} disabled={isPending}
                   className="block w-full text-left text-[10px] text-white/35 rounded-xl px-3.5 py-2.5 transition-all disabled:opacity-30"
-                  style={{ backgroundColor: 'rgba(167,139,250,0.02)', border: '1px solid rgba(167,139,250,0.05)' }}
-                  onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(167,139,250,0.05)'; e.currentTarget.style.borderColor = 'rgba(167,139,250,0.12)'; e.currentTarget.style.color = 'rgba(221,214,254,0.7)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'rgba(167,139,250,0.02)'; e.currentTarget.style.borderColor = 'rgba(167,139,250,0.05)'; e.currentTarget.style.color = 'rgba(255,255,255,0.35)'; }}>
-                  <span className="text-violet-400/25 mr-2 text-[8px]">&#9656;</span>{q}
+                  style={{ backgroundColor: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.04)' }}
+                  onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.04)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; e.currentTarget.style.color = 'rgba(255,255,255,0.6)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.02)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.04)'; e.currentTarget.style.color = 'rgba(255,255,255,0.35)'; }}>
+                  <span className="text-white/20 mr-2 text-[8px]">&#9656;</span>{q}
                 </button>
               ))}
             </div>
@@ -3420,8 +3442,8 @@ function SlideCard({ slide, onExport, onDigDeeper, onSave, onCopy, onFollowUp, o
         {/* Custom follow-up input */}
         <div className="flex items-center gap-1.5 mb-4">
           <div className="flex-1 flex items-center gap-2 rounded-xl px-3.5 py-2.5"
-            style={{ backgroundColor: 'rgba(167,139,250,0.04)', border: '1px solid rgba(167,139,250,0.08)' }}>
-            <MessageSquare size={11} className="text-violet-400/25 shrink-0" />
+            style={{ backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>
+            <MessageSquare size={11} className="text-white/20 shrink-0" />
             <input value={followUp} onChange={e => setFollowUp(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter' && followUp.trim()) { onFollowUp(followUp); setFollowUp(''); } }}
               placeholder="Ask a follow-up question..." disabled={isPending}
@@ -3429,17 +3451,17 @@ function SlideCard({ slide, onExport, onDigDeeper, onSave, onCopy, onFollowUp, o
           </div>
           <button onClick={() => { if (followUp.trim()) { onFollowUp(followUp); setFollowUp(''); } }} disabled={!followUp.trim() || isPending}
             className="w-8 h-8 rounded-xl flex items-center justify-center transition-all disabled:opacity-15"
-            style={{ backgroundColor: 'rgba(167,139,250,0.1)', color: 'rgba(167,139,250,0.6)', border: '1px solid rgba(167,139,250,0.1)' }}><Send size={11} /></button>
+            style={{ backgroundColor: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.4)', border: '1px solid rgba(255,255,255,0.06)' }}><Send size={11} /></button>
         </div>
 
         {/* Design progress bar */}
         {isDesigning && designProgress && (
           <div className="flex items-center gap-2 mb-3 px-1">
-            <div className="flex-1 h-[3px] rounded-full overflow-hidden" style={{ backgroundColor: 'rgba(167,139,250,0.1)' }}>
+            <div className="flex-1 h-[3px] rounded-full overflow-hidden" style={{ backgroundColor: 'rgba(255,255,255,0.06)' }}>
               <div className="h-full rounded-full transition-all duration-700"
-                style={{ width: `${designProgress.total > 0 ? (designProgress.done / designProgress.total) * 100 : 0}%`, background: 'linear-gradient(90deg, #a78bfa, #ec4899)' }} />
+                style={{ width: `${designProgress.total > 0 ? (designProgress.done / designProgress.total) * 100 : 0}%`, background: 'linear-gradient(90deg, rgba(255,255,255,0.4), rgba(255,255,255,0.15))' }} />
             </div>
-            <span className="text-[9px] font-bold tabular-nums text-violet-300/60">
+            <span className="text-[9px] font-bold tabular-nums text-white/30">
               Designing {designProgress.done}/{designProgress.total}
             </span>
           </div>
@@ -3451,22 +3473,22 @@ function SlideCard({ slide, onExport, onDigDeeper, onSave, onCopy, onFollowUp, o
             <button onClick={() => onDesignSlides()} disabled={isPending || isDesigning}
               className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-[10px] font-semibold transition-all disabled:opacity-30 relative overflow-hidden"
               style={{
-                background: 'linear-gradient(135deg, rgba(167,139,250,0.12), rgba(236,72,153,0.08))',
-                border: '1px solid rgba(167,139,250,0.18)',
-                color: 'rgba(221,214,254,0.85)',
-                boxShadow: '0 4px 24px rgba(139,92,246,0.06), 0 0 0 1px rgba(167,139,250,0.05) inset',
+                background: 'rgba(255,255,255,0.05)',
+                border: '1px solid rgba(255,255,255,0.08)',
+                color: 'rgba(255,255,255,0.7)',
+                boxShadow: '0 4px 24px rgba(0,0,0,0.1)',
               }}>
               <Wand2 size={11} /> {isDesigning ? 'Designing...' : 'Design All Slides'}
             </button>
           )}
           <button onClick={onDigDeeper} disabled={isPending}
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[10px] font-medium transition-all disabled:opacity-30"
-            style={{ backgroundColor: 'rgba(129,140,248,0.06)', border: '1px solid rgba(129,140,248,0.08)', color: 'rgba(165,180,252,0.5)' }}>
+            style={{ backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.35)' }}>
             <RefreshCw size={10} /> Dig Deeper
           </button>
           <button onClick={() => setShowGen(!showGen)}
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[10px] font-medium transition-all"
-            style={{ backgroundColor: 'rgba(167,139,250,0.05)', border: '1px solid rgba(167,139,250,0.07)', color: 'rgba(196,181,253,0.45)' }}>
+            style={{ backgroundColor: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.3)' }}>
             <PenTool size={10} /> Create Content
           </button>
         </div>
@@ -3474,9 +3496,9 @@ function SlideCard({ slide, onExport, onDigDeeper, onSave, onCopy, onFollowUp, o
         {/* Export + Save row */}
         <div className="flex items-center gap-2 flex-wrap mb-3">
           <div className="relative">
-            <button onClick={() => setShowExportMenu(v => !v)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[9px] font-medium transition-all hover:bg-emerald-500/10" style={{ color: '#34d39970', border: '1px solid #34d39912' }}><Download size={9} /> Export</button>
+            <button onClick={() => setShowExportMenu(v => !v)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[9px] font-medium transition-all hover:bg-white/[0.06]" style={{ color: 'rgba(255,255,255,0.3)', border: '1px solid rgba(255,255,255,0.06)' }}><Download size={9} /> Export</button>
             {showExportMenu && (
-              <div className="absolute bottom-full left-0 mb-1.5 rounded-xl overflow-hidden shadow-2xl z-50" style={{ backgroundColor: 'rgba(12,12,20,0.92)', backdropFilter: 'blur(16px)', border: '1px solid rgba(167,139,250,0.12)', minWidth: 150 }}>
+              <div className="absolute bottom-full left-0 mb-1.5 rounded-xl overflow-hidden shadow-2xl z-50" style={{ backgroundColor: 'rgba(12,12,20,0.95)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255,255,255,0.08)', minWidth: 150 }}>
                 <button onClick={() => { onExport(slideCardRef.current); setShowExportMenu(false); }} className="w-full flex items-center gap-2 px-3.5 py-2.5 text-[9.5px] font-medium text-white/50 hover:text-white/80 hover:bg-white/[0.04] transition-all"><Download size={10} /> With Background</button>
                 <button onClick={() => { onExport(slideCardRef.current, true); setShowExportMenu(false); }} className="w-full flex items-center gap-2 px-3.5 py-2.5 text-[9.5px] font-medium text-white/50 hover:text-white/80 hover:bg-white/[0.04] transition-all" style={{ borderTop: '1px solid rgba(255,255,255,0.04)' }}><Download size={10} /> Transparent</button>
               </div>

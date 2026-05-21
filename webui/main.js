@@ -1906,6 +1906,11 @@
             if (msg.status === 'speaking' || msg.status === 'start') voiceActive = true;
             if (msg.status === 'stopped' || msg.status === 'end') voiceActive = false;
             window.postMessage({ type: 'voice-status', status: msg.status }, '*');
+            // Sync emotion GIFs
+            if (window.wuiShowEmotion) {
+              if (msg.status === 'speaking' || msg.status === 'start') window.wuiShowEmotion('speaking');
+              else if (msg.status === 'stopped' || msg.status === 'end') window.wuiShowEmotion('idle');
+            }
           } catch(e){ console.warn('voice status forwarding error', e); }
           continue;
         }
@@ -1918,6 +1923,11 @@
               if (msg.state === 'thinking') avatar.setState && avatar.setState('thinking');
               else if (msg.state === 'talking') avatar.setState && avatar.setState('talking');
               else avatar.setState && avatar.setState('idle');
+            }
+            // Sync emotion GIFs
+            if (window.wuiShowEmotion) {
+              const emoMap = { thinking: 'searching', talking: 'speaking', idle: 'idle', happy: 'speaking', angry: 'angry', sleepy: 'sleeping', surprised: 'yelling' };
+              window.wuiShowEmotion(emoMap[msg.state] || 'idle');
             }
           }
           continue;

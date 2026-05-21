@@ -1,8 +1,10 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
-import type { KanbanTask } from './types';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
+import type { KanbanTask, TaskStatus } from './types';
 import { useKanban } from './hooks/useKanban';
+import { useMediaSuiteTasks } from './hooks/useMediaSuiteTasks';
+import { useCircuitsTasks } from './hooks/useCircuitsTasks';
 import { useProposals } from './hooks/useProposals';
-import { KanbanHeader } from './KanbanHeader';
+import { KanbanHeader, type TaskSourceFilter } from './KanbanHeader';
 import { KanbanBoard } from './KanbanBoard';
 import { CreateTaskDialog } from './CreateTaskDialog';
 import { TaskDetailDrawer } from './TaskDetailDrawer';
@@ -30,8 +32,6 @@ export function KanbanPanel({ initialTaskId, onInitialTaskConsumed }: KanbanPane
     updateTask,
     deleteTask,
     reorderTask,
-    tasksByStatus,
-    statusCounts,
     boardColumns,
     executeTask,
     approveTask,
@@ -45,6 +45,43 @@ export function KanbanPanel({ initialTaskId, onInitialTaskConsumed }: KanbanPane
     approveProposal,
     rejectProposal,
   } = useProposals();
+
+  // Media Suite external tasks (merged into the board)
+  const { tasks: mediaSuiteTasks, available: mediaSuiteAvailable, projectName: msProjectName } = useMediaSuiteTasks();
+
+  // Circuit tasks (agent-automated scheduled tasks)
+  const { tasks: circuitTasks, available: circuitsAvailable } = useCircuitsTasks();
+
+  // Source filter state
+  const [sourceFilter, setSourceFilter] = useState<TaskSourceFilter>('all');
+
+  // Merge all task sources: native + media suite + circuits
+  const allTasks = useMemo(() => [
+    ...tasks,
+    ...(mediaSuiteAvailable ? mediaSuiteTasks : []),
+    ...(circuitsAvailable ? circuitTasks : []),
+  ], [tasks, mediaSuiteTasks, mediaSuiteAvailable, circuitTasks, circuitsAvailable]);
+
+  // Filter by source
+  const filteredTasks = useMemo(() => {
+    if (sourceFilter === 'all') return allTasks;
+    if (sourceFilter === 'media-suite') return allTasks.filter(t => t.id.startsWith('ms:'));
+    if (sourceFilter === 'agent') return allTasks.filter(t => t.createdBy?.startsWith('agent:') || t.assignee?.startsWith('agent:'));
+    // human = native tasks created by operator (not agent, not media suite)
+    return allTasks.filter(t => !t.id.startsWith('ms:') && t.createdBy === 'operator' && !t.assignee?.startsWith('agent:'));
+  }, [allTasks, sourceFilter]);
+
+  // Combined tasksByStatus that includes Media Suite items
+  const mergedTasksByStatus = useCallback((status: TaskStatus): KanbanTask[] => {
+    return filteredTasks.filter(t => t.status === status).sort((a, b) => a.columnOrder - b.columnOrder);
+  }, [filteredTasks]);
+
+  // Combined status counts
+  const mergedStatusCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const t of filteredTasks) counts[t.status] = (counts[t.status] || 0) + 1;
+    return counts;
+  }, [filteredTasks]);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<KanbanTask | null>(null);
@@ -100,23 +137,26 @@ export function KanbanPanel({ initialTaskId, onInitialTaskConsumed }: KanbanPane
       <KanbanHeader
         filters={filters}
         onFiltersChange={setFilters}
-        statusCounts={statusCounts}
+        statusCounts={mergedStatusCounts}
         onCreateTask={openCreateDialog}
         proposals={proposals}
         pendingProposalCount={pendingProposalCount}
         onApproveProposal={async (id) => { await approveProposal(id); await fetchTasks(); }}
         onRejectProposal={async (id) => { await rejectProposal(id); }}
+        sourceFilter={sourceFilter}
+        onSourceFilterChange={setSourceFilter}
+        mediaSuiteLabel={msProjectName}
       />
 
       {/* Board body */}
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden px-4 pb-4">
         <KanbanBoard
-          tasksByStatus={tasksByStatus}
+          tasksByStatus={mergedTasksByStatus}
           onCardClick={handleCardClick}
           loading={loading}
           error={error}
           onRetry={() => fetchTasks()}
-          hasAnyTasks={tasks.length > 0}
+          hasAnyTasks={filteredTasks.length > 0}
           onCreateTask={openCreateDialog}
           reorderTask={reorderTask}
           boardColumns={boardColumns}

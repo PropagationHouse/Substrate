@@ -45,134 +45,242 @@
       letter-spacing: -0.01em;
     }
 
-    /* Futuristic emissive hero panel */
-    .hero {
-      position:relative; width:100%; max-width: 980px; margin: 18px auto 6px auto; aspect-ratio: 1 / 1;
-      border-radius: 18px; overflow:hidden; border:1px solid rgba(255,255,255,0.18);
-      background: radial-gradient(120% 120% at 50% 15%, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.06) 28%, rgba(0,0,0,0.06) 80%), var(--avatar-body-color);
-      box-shadow:
-        0 10px 24px rgba(0,0,0,0.25),
-        0 0 36px 8px rgba(255,255,255,0.24),
-        inset 0 0 0 1px rgba(255,255,255,0.08);
-      transition: background-color 400ms ease, border-color 300ms ease, box-shadow 300ms ease, filter 300ms ease;
-      backdrop-filter: saturate(1.3) blur(10px);
-      -webkit-backdrop-filter: saturate(1.3) blur(10px);
-      isolation: isolate; /* allow stacking contexts for haze */
-    }
-    /* Outer bloom haze */
-    .hero::before {
-      content:""; position:absolute; inset:-6%; border-radius:24px; z-index:0;
-      background: radial-gradient(60% 60% at 50% 40%, var(--glow-soft), transparent 60%),
-                  radial-gradient(80% 80% at 50% 50%, var(--glow-warm), transparent 70%);
-      filter: blur(18px);
-      opacity: .35;
-      pointer-events:none;
-      animation: glowPulse 6s ease-in-out infinite;
-    }
-    /* Inner neon rim */
-    .hero::after {
-      content:""; position:absolute; inset:0; border-radius:18px; z-index:1; pointer-events:none;
-      box-shadow:
-        inset 0 0 22px 2px color-mix(in srgb, var(--accent) 60%, transparent),
-        inset 0 0 2px 1px rgba(255,255,255,0.25);
-      background:
-        linear-gradient(120deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.10) 22%, rgba(255,255,255,0.0) 40%),
-        radial-gradient(120% 120% at 20% 0%, rgba(255,255,255,0.12), transparent 40%),
-        radial-gradient(120% 120% at 80% 100%, rgba(255,255,255,0.10), transparent 45%);
-      mix-blend-mode: screen;
-      opacity: .70;
-    }
-    /* subtle glass grain */
-    .hero .grain, .chatdock .grain, .charbar .grain { position:absolute; inset:0; pointer-events:none; z-index:1; opacity:.08; background:
-      repeating-linear-gradient(0deg, rgba(255,255,255,0.55) 0, rgba(255,255,255,0.55) 0.5px, transparent 0.5px, transparent 2px),
-      repeating-linear-gradient(90deg, rgba(255,255,255,0.45) 0, rgba(255,255,255,0.45) 0.5px, transparent 0.5px, transparent 2px);
-      filter: blur(0.3px);
-    }
-    #avatarContainer { position:absolute; inset:0; z-index:2; display:flex; align-items:center; justify-content:center; overflow:hidden; filter: drop-shadow(0 6px 18px rgba(0,0,0,0.25)) drop-shadow(0 0 24px var(--glow-soft)); perspective: 900px; }
-    /* Scale avatar to fill hero and center */
-    #avatarContainer .animated-avatar {
-      position: relative; /* relative keeps flex centering AND acts as containing block for ::before face plate */
-      /* Use viewport-min to scale uniformly and avoid off-center transforms */
-      width: min(92vmin, 860px) !important;
-      height: min(92vmin, 860px) !important;
-      z-index: 3;
-      animation: none; /* steady */
-      background: transparent;
-      box-shadow: none;
-      border-radius: 16px;
-      margin: 0 auto; /* double ensure center in flex */
-      /* lock inner face panel size to match main proportions */
-      --face-width: 82%;
-      --face-height: 55%;
-      left: auto !important;
-      top: auto !important;
-      right: auto !important;
-      bottom: auto !important;
-      transform-style: preserve-3d;
-      will-change: transform;
+    /* ─── WebUI Widget Shell ─── */
+    /* Centers the nh widget in a column, with expansion panel + chat below */
+    .gb-shell {
+      max-width: 520px; width: 96%; margin: 0 auto; padding: 24px 0 0;
+      display: flex; flex-direction: column; align-items: center; gap: 0;
+      min-height: 100vh; min-height: 100dvh;
     }
 
-    /* Hero face — all sizing comes from face-config / face editor. No defaults here. */
-    /* Hide arms in hero; keep cheeks as defined by avatar.css so they scale with the group */
-    #avatarContainer .arm { display: none !important; }
-    /* Tweak inner face panel (::before) to fill square nicely */
-    #avatarContainer .animated-avatar::before {
-      width: var(--face-width);
-      height: var(--face-height);
-      top: 30% !important;
-      left: 50% !important;
-      transform: translate(-50%, -50%) !important;
-      border-radius: 16px; border-width: 2px;
-      background-color: var(--avatar-face-color, #a8e4f3) !important; /* force visible */
+    /* ─── Integrated Face Screen (inside widget, expands as part of the device) ─── */
+    .gb-face-screen {
+      width: calc(100% - 16px); aspect-ratio: 1 / 1; margin: 0 auto;
+      max-height: 0; opacity: 0; pointer-events: none; overflow: hidden;
+      border-radius: 14px;
+      background: color-mix(in srgb, var(--avatar-body-color) 88%, black 12%);
       box-shadow:
-        0 0 22px 6px rgba(255,255,255,0.45),
-        0 0 44px 10px rgba(255,255,255,0.35),
-        inset 0 0 0 1px rgba(255,255,255,0.35);
+        inset 3px 3px 8px rgba(0,0,0,0.18),
+        inset -2px -2px 6px rgba(255,255,255,0.08);
+      transition: max-height 0.5s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.35s ease, margin 0.35s ease, padding 0.35s ease;
+      padding: 0;
     }
-    /* Subtle avatar aura layer */
+    .gb-face-screen.visible {
+      max-height: 520px; opacity: 1; pointer-events: auto;
+      margin: 8px auto 4px;
+      padding: 6px;
+    }
+
+    /* Hero internals — the face viewport, recessed into the widget */
+    .hero {
+      position: relative; width: 100%; height: 100%;
+      border-radius: 10px; overflow: hidden;
+      background: color-mix(in srgb, var(--avatar-body-color) 92%, black 8%);
+      isolation: isolate;
+    }
+    /* Inset screen bezel glow — matches neumorphic depth */
+    .hero::before {
+      content:""; position:absolute; inset:0; border-radius:10px; z-index:0;
+      background: transparent;
+      box-shadow: inset 2px 2px 6px rgba(0,0,0,0.15), inset -1px -1px 4px rgba(255,255,255,0.06);
+      pointer-events:none;
+    }
+    .hero::after {
+      content:""; position:absolute; inset:0; border-radius:10px; z-index:1; pointer-events:none;
+      box-shadow: inset 0 0 8px 1px rgba(255,255,255,0.06);
+      background: linear-gradient(135deg, rgba(255,255,255,0.06) 0%, transparent 35%);
+      mix-blend-mode: screen; opacity: .6;
+    }
+    /* Emotion GIF overlay in face screen (mirrors miniview) */
+    #heroEmotionGif {
+      position: absolute; inset: 0; z-index: 5;
+      width: 100%; height: 100%;
+      object-fit: cover; border-radius: 10px;
+      display: none; pointer-events: none;
+    }
+    #avatarContainer {
+      position:absolute; inset:0; z-index:2;
+      display:flex; align-items:center; justify-content:center; overflow:hidden;
+      filter: drop-shadow(0 2px 8px rgba(0,0,0,0.15)) drop-shadow(0 0 10px var(--glow-soft));
+      perspective: 900px;
+    }
+    #avatarContainer .animated-avatar {
+      position: relative;
+      width: min(82vmin, 420px) !important; height: min(82vmin, 420px) !important;
+      z-index: 3; animation: none; background: transparent; box-shadow: none;
+      border-radius: 10px; margin: 0 auto;
+      --face-width: 82%; --face-height: 55%;
+      left: auto !important; top: auto !important; right: auto !important; bottom: auto !important;
+      transform-style: preserve-3d; will-change: transform;
+    }
+    #avatarContainer .arm { display: none !important; }
+    #avatarContainer .animated-avatar::before {
+      width: var(--face-width); height: var(--face-height);
+      top: 30% !important; left: 50% !important; transform: translate(-50%, -50%) !important;
+      border-radius: 10px; border-width: 2px;
+      background-color: var(--avatar-face-color, #a8e4f3) !important;
+      box-shadow: 0 0 12px 3px rgba(255,255,255,0.25), inset 0 0 0 1px rgba(255,255,255,0.15);
+    }
     #avatarContainer .animated-avatar::after {
-      content:""; position:absolute; inset:0; border-radius:16px; z-index:-1; pointer-events:none;
+      content:""; position:absolute; inset:0; border-radius:10px; z-index:-1; pointer-events:none;
       background: radial-gradient(45% 45% at 50% 55%, var(--glow-strong), transparent 70%);
-      filter: blur(18px) saturate(1.05);
-      opacity: .40;
-      mix-blend-mode: screen;
+      filter: blur(16px); opacity: .25; mix-blend-mode: screen;
       animation: glowPulse 8s ease-in-out infinite;
     }
-
-    /* Background square suggesting body */
     #bodyBg { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; z-index:1; }
-    #bodyBg .bgSquare { width: 92%; height: 92%; background: var(--avatar-body-color, #5bbfdd); border-radius: 16px; box-shadow: inset 0 0 0 2px rgba(0,0,0,0.08); transition: background-color 400ms ease; }
-
-    /* Camera video layer — sits behind avatar face, inside hero */
+    #bodyBg .bgSquare { width: 100%; height: 100%; background: color-mix(in srgb, var(--avatar-body-color, #5bbfdd) 95%, black 5%); border-radius: 10px; box-shadow: none; transition: background-color 400ms ease; }
     #cameraVideo {
-      position: absolute; inset: 0; z-index: 1; /* behind avatarContainer (z:2) */
-      width: 100%; height: 100%; object-fit: cover; border-radius: 18px;
-      opacity: 0; transition: opacity 0.6s ease;
-      pointer-events: none;
+      position: absolute; inset: 0; z-index: 1;
+      width: 100%; height: 100%; object-fit: cover; border-radius: 10px;
+      opacity: 0; transition: opacity 0.6s ease; pointer-events: none;
     }
     #cameraVideo.active { opacity: 0.35; }
-    /* When camera is on, dim the body bg square so video shows through */
-    .hero.camera-on #bodyBg .bgSquare { opacity: 0.25; transition: opacity 0.6s ease; }
-    /* Make the face panel semi-transparent so camera bleeds through subtly */
+    .hero.camera-on #bodyBg .bgSquare { opacity: 0.25; }
     .hero.camera-on #avatarContainer .animated-avatar::before { opacity: 0.75; }
+    #visionToggle { font-size: 14px; line-height: 1; flex-shrink: 0; }
+    #editFaceBtn {
+      position:absolute; top:8px; right:8px; z-index:4;
+      background: rgba(0,0,0,0.06); color: rgba(255,255,255,0.5);
+      border: 1px solid rgba(255,255,255,0.10); border-radius: 6px;
+      padding: 5px 7px; font-size: 11px; cursor: pointer;
+      box-shadow: 1px 1px 3px rgba(0,0,0,0.08), -1px -1px 3px rgba(255,255,255,0.04);
+      transition: all 0.2s;
+    }
+    #editFaceBtn:hover { background: rgba(0,0,0,0.12); color: rgba(255,255,255,0.8); }
 
-    /* ꕥ vision toggle button — lives in charbar (right side) */
-    #visionToggle {
-      background: rgba(255,255,255,0.18); color: rgba(255,255,255,0.7); border: 1px solid rgba(255,255,255,0.22);
-      border-radius: 10px; padding: 12px 12px; font-size: 16px; cursor: pointer;
-      transition: background 0.3s, border-color 0.3s, box-shadow 0.3s, color 0.3s;
-      line-height: 1; flex-shrink: 0;
+    /* ─── Override widget .nh for WebUI (not fixed, flow in page) ─── */
+    .gb-shell .nh {
+      position: relative !important;
+      z-index: auto !important;
+      transform: none !important;
+      transform-origin: center !important;
+      width: 100% !important;
+      opacity: 1 !important;
+      margin-bottom: 10px;
     }
-    #visionToggle:hover {
-      background: rgba(255,255,255,0.28); color: rgba(255,255,255,0.9);
+    /* Make the screen larger in WebUI context */
+    .gb-shell .nh-screen {
+      max-width: 180px;
+      aspect-ratio: 1;
     }
-    #visionToggle.active {
-      background: rgba(255,255,255,0.35); border-color: rgba(255,255,255,0.45); color: #fff;
-      box-shadow: 0 0 10px rgba(255,255,255,0.25);
+    /* Render animated avatar inside the widget screen */
+    .gb-shell .nh-screen-inner {
+      opacity: 1;
+      background: var(--avatar-body-color, #5bbfdd);
+      cursor: pointer;
+    }
+    .gb-shell .nh-screen-inner .animated-avatar {
+      width: 100% !important; height: 100% !important;
+      position: absolute; inset: 0;
+      border-radius: 14px;
+      background: transparent; box-shadow: none;
+      z-index: 1;
+    }
+    .gb-shell .nh-screen-inner .animated-avatar .arm { display: none !important; }
+    .gb-shell .nh-screen-inner .animated-avatar::before {
+      width: 75%; height: 50%;
+      top: 30% !important; left: 50% !important; transform: translate(-50%, -50%) !important;
+      border-radius: 12px;
+      background-color: var(--avatar-face-color, #a8e4f3) !important;
+    }
+    /* Hide the ＋ hover overlay on the screen in webui */
+    .gb-shell .nh-screen-inner:hover::after { display: none; }
+
+    /* ─── nh-bottom: chat pill + radial hub in WebUI ─── */
+    .gb-shell .nh-bottom {
+      display: flex; align-items: center; gap: 8px;
+      width: 100%; padding: 0 4px; box-sizing: border-box;
+    }
+    .gb-shell .nh-chat-pill {
+      flex: 1; min-width: 0;
+      display: flex; align-items: center; gap: 6px;
+      padding: 6px 10px;
+      background: var(--nh-card-bg, rgba(0,0,0,0.06));
+      border-radius: 20px;
+      box-shadow: var(--nh-shadow-sm, 0 1px 3px rgba(0,0,0,0.1));
+    }
+    .gb-shell .nh-chat-pill .nh-chat-input {
+      flex: 1; min-width: 0;
+      background: transparent; border: none; outline: none;
+      color: var(--nh-text, #fff); font-size: 13px;
+      padding: 4px 0;
+    }
+    .gb-shell .nh-chat-pill .nh-chat-input::placeholder {
+      color: var(--nh-text-muted, rgba(255,255,255,0.45));
+    }
+    .gb-shell .nh-mode-selector {
+      display: flex; gap: 2px; flex-shrink: 0;
+    }
+    .gb-shell .nh-mode-btn {
+      width: 26px; height: 26px; border-radius: 50%; border: none;
+      background: rgba(255,255,255,0.08); color: var(--nh-text-muted, rgba(255,255,255,0.5));
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; transition: background 0.2s, color 0.2s;
+      padding: 0; flex-shrink: 0;
+    }
+    .gb-shell .nh-mode-btn svg { width: 13px; height: 13px; }
+    .gb-shell .nh-mode-btn.active {
+      background: rgba(255,255,255,0.2); color: #fff;
+    }
+    .gb-shell .nh-mode-btn:hover { background: rgba(255,255,255,0.15); }
+    .gb-shell .nh-mic-btn {
+      width: 28px; height: 28px; border-radius: 50%; border: none;
+      background: rgba(255,255,255,0.1); color: var(--nh-text, #fff);
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; font-size: 14px; flex-shrink: 0;
+      transition: background 0.2s;
+    }
+    .gb-shell .nh-mic-btn:hover { background: rgba(255,255,255,0.2); }
+
+    /* Radial hub in WebUI */
+    .gb-shell .nh-radial-hub { position: relative; flex-shrink: 0; }
+    .gb-shell .nh-circle-btn {
+      width: 36px; height: 36px; border-radius: 50%; border: none;
+      background: var(--nh-card-bg, rgba(0,0,0,0.06));
+      color: var(--nh-text, #fff);
+      box-shadow: var(--nh-shadow-sm, 0 1px 3px rgba(0,0,0,0.1));
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; transition: background 0.2s;
+    }
+    .gb-shell .nh-circle-btn:hover { background: rgba(255,255,255,0.15); }
+    .gb-shell .nh-radial-ring {
+      position: absolute; bottom: 44px; right: 0;
+      display: flex; flex-direction: column; gap: 6px;
+      opacity: 0; pointer-events: none; transform: translateY(8px);
+      transition: opacity 0.25s ease, transform 0.25s ease;
+    }
+    .gb-shell .nh-radial-hub.expanded .nh-radial-ring {
+      opacity: 1; pointer-events: auto; transform: translateY(0);
+    }
+    .gb-shell .nh-radial-item {
+      width: 36px; height: 36px; border-radius: 50%;
+      border: 1px solid rgba(255,255,255,0.15);
+      background: var(--nh-card-bg, rgba(0,0,0,0.25));
+      color: var(--nh-text, #fff);
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; font-size: 12px;
+      backdrop-filter: blur(8px);
+      transition: background 0.2s, transform 0.15s;
+    }
+    .gb-shell .nh-radial-item:hover {
+      background: rgba(255,255,255,0.2); transform: scale(1.1);
     }
 
-    /* Edit button overlay */
-    #editFaceBtn { position:absolute; top:10px; right:10px; z-index:4; background: rgba(0,0,0,0.10); color:#fff; border:1px solid rgba(255,255,255,0.18); border-radius:8px; padding:6px 8px; font-size:12px; cursor:pointer; }
+    /* ─── Override nh-top, nh-bar, nh-middle for WebUI sizing ─── */
+    .gb-shell .nh-card.nh-top { width: 100%; }
+    .gb-shell .nh-bar { width: 100%; }
+    .gb-shell .nh-middle {
+      width: 100%;
+      display: flex; align-items: center; justify-content: center; gap: 12px;
+      flex-wrap: wrap; padding: 8px 0;
+    }
+    .gb-shell .nh-brand-card {
+      display: flex; flex-direction: column; align-items: center; gap: 6px;
+    }
+    .gb-shell .nh-brand-name {
+      font-size: 11px; color: var(--nh-text-muted, rgba(255,255,255,0.5));
+      text-transform: uppercase; letter-spacing: 1px;
+    }
 
     /* Face Editor Panel */
     .face-editor-panel {
@@ -213,21 +321,120 @@
     #feResetBtn { background: rgba(255,255,255,0.08); color: #ccc; }
     #feResetBtn:hover { background: rgba(255,255,255,0.15); }
 
-    /* Char bar below hero (pushes down as chat grows) */
-    .charbar { max-width: 980px; width: 96%; margin: 8px auto 16px auto; display:flex; gap:8px; align-items:center; background: rgba(0,0,0,0.15); border:1px solid rgba(255,255,255,0.10); border-radius:16px; padding:10px 12px; backdrop-filter: saturate(1.1) blur(16px); -webkit-backdrop-filter: saturate(1.1) blur(16px); box-shadow: 0 4px 16px rgba(0,0,0,0.15); position: relative; overflow: hidden; }
-    .charbar::after { content:""; position:absolute; inset:0; pointer-events:none; background: linear-gradient(110deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 28%, rgba(255,255,255,0.0) 48%); }
-    .charbar input[type="text"] { flex:1; padding:12px 14px; border-radius:12px; border:1px solid rgba(255,255,255,0.10); background: rgba(255,255,255,0.06); color:#ffffff; outline:none; font-family: inherit; font-size: 13.5px; transition: border-color 0.2s, background 0.2s; }
-    .charbar input[type="text"]:focus { border-color: rgba(255,255,255,0.22); background: rgba(255,255,255,0.10); }
-    .charbar input::placeholder { color: rgba(255,255,255,0.35); }
-    .charbar button { padding:12px 14px; border:none; border-radius:12px; background: rgba(255,255,255,0.12); color: rgba(255,255,255,0.75); cursor:pointer; border:1px solid rgba(255,255,255,0.10); font-family: inherit; font-weight: 500; font-size: 13px; transition: all 0.2s; }
-    .charbar button:hover { background: rgba(255,255,255,0.20); color: #fff; }
+    /* Old charbar — hidden, replaced by gb-chatbar */
+    .charbar { display: none !important; }
 
-    /* Chat dock below hero (messages appear above input) */
-    .chatdock { max-width: 980px; width: 96%; margin: 8px auto 0 auto; border-radius: 16px; background: rgba(0,0,0,0.12); border: 1px solid rgba(255,255,255,0.08); backdrop-filter: saturate(1.1) blur(16px); -webkit-backdrop-filter: saturate(1.1) blur(16px); box-shadow: 0 4px 20px rgba(0,0,0,0.15); overflow: hidden; position: relative; }
-    .chatdock::after { content:""; position:absolute; inset: -2px; border-radius:18px; pointer-events:none; box-shadow: 0 0 20px 4px rgba(255,255,255,0.04); mix-blend-mode: screen; opacity:.3; }
-    .chatdock::before { content:""; position:absolute; inset:0; pointer-events:none; background: linear-gradient(115deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.01) 26%, rgba(255,255,255,0.0) 46%); }
-    .chatdock .chat { max-height: clamp(180px, 35vh, 420px); overflow-y: auto; padding: 12px 14px; background: transparent; border: none; scroll-behavior: smooth; }
-    .chatdock .msg { backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); }
+    /* ─── Inline Chat (inside the widget body) ─── */
+    .nh-chat-area {
+      width: 100%;
+      max-height: 0; opacity: 0;
+      overflow: hidden;
+      border-radius: 12px;
+      transition: max-height 0.4s ease, opacity 0.3s ease, padding 0.3s ease;
+      padding: 0;
+    }
+    .nh-chat-area.open {
+      max-height: clamp(200px, 45vh, 500px); opacity: 1;
+      padding: 0;
+    }
+    .nh-chat-area .chat {
+      max-height: clamp(180px, 42vh, 480px); overflow-y: auto;
+      padding: 8px 10px; background: transparent; border: none; scroll-behavior: smooth;
+      border-radius: 12px;
+      background: rgba(0,0,0,0.04);
+      box-shadow: inset 2px 2px 4px rgba(0,0,0,0.06), inset -2px -2px 4px rgba(255,255,255,0.15);
+    }
+    .nh-chat-area .msg { backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); }
+    /* Chat toggle tab (inside widget) */
+    .nh-chat-toggle {
+      width: 100%; text-align: center; padding: 5px 0;
+      background: rgba(0,0,0,0.04); border: none;
+      border-radius: 10px; color: rgba(255,255,255,0.35);
+      font-size: 9px; cursor: pointer; letter-spacing: 0.5px;
+      transition: all 0.2s;
+      box-shadow: inset 1px 1px 3px rgba(0,0,0,0.05), inset -1px -1px 3px rgba(255,255,255,0.12);
+    }
+    .nh-chat-toggle:hover { background: rgba(0,0,0,0.08); color: rgba(255,255,255,0.6); }
+
+    /* ─── Bottom Chat Bar (always visible) ─── */
+    .gb-chatbar {
+      width: 100%; display: flex; align-items: center; gap: 6px;
+      padding-bottom: max(10px, env(safe-area-inset-bottom));
+    }
+    .gb-chatbar-inner {
+      flex: 1; display: flex; align-items: center; gap: 5px;
+      padding: 7px 12px;
+      background: rgba(255,255,255,0.10);
+      border: 1.5px solid rgba(255,255,255,0.15);
+      border-radius: 999px;
+      backdrop-filter: blur(14px) saturate(1.2); -webkit-backdrop-filter: blur(14px) saturate(1.2);
+      box-shadow: 3px 3px 10px rgba(0,0,0,0.10), -3px -3px 10px rgba(255,255,255,0.05);
+      position: relative; overflow: hidden;
+    }
+    .gb-chatbar-inner::after {
+      content: ""; position: absolute; inset: 0; pointer-events: none;
+      background: linear-gradient(110deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.02) 30%, transparent 50%);
+    }
+    .gb-chatbar-inner input[type="text"] {
+      flex: 1; padding: 9px 10px; border-radius: 999px;
+      border: none; background: rgba(255,255,255,0.08);
+      color: #fff; font-size: 13px; outline: none; font-family: inherit;
+      transition: background 0.2s; min-width: 0;
+    }
+    .gb-chatbar-inner input:focus { background: rgba(255,255,255,0.14); }
+    .gb-chatbar-inner input::placeholder { color: rgba(255,255,255,0.4); }
+
+    /* Mode selector */
+    .gb-mode-selector { display: flex; align-items: center; gap: 1px; margin-right: 2px; }
+    .gb-mode-btn {
+      position: relative; padding: 4px 5px; border: none; background: transparent;
+      color: rgba(255,255,255,0.25); cursor: pointer; line-height: 0;
+      display: flex; align-items: center; transition: color 0.15s;
+    }
+    .gb-mode-btn svg { width: 14px; height: 14px; }
+    .gb-mode-btn:hover { color: rgba(255,255,255,0.6); }
+    .gb-mode-btn.active { color: rgba(255,255,255,0.9); }
+    .gb-mode-btn::after {
+      content: attr(data-tooltip); position: absolute;
+      bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+      padding: 3px 7px; background: rgba(40,40,40,0.85); color: #fff;
+      font-size: 10px; border-radius: 4px; white-space: nowrap;
+      opacity: 0; pointer-events: none; transition: opacity 0.2s;
+    }
+    .gb-mode-btn:hover::after { opacity: 1; }
+
+    /* Buttons inside chatbar (mic, vision, image — injected by main.js) */
+    .gb-chatbar-inner button:not(.gb-mode-btn),
+    .gb-chatbar-inner #micBtn,
+    .gb-chatbar-inner #imageBtn,
+    .gb-chatbar-inner #visionToggle {
+      background: rgba(255,255,255,0.10) !important; border: 1px solid rgba(255,255,255,0.14) !important;
+      border-radius: 10px !important; padding: 7px !important; cursor: pointer;
+      color: rgba(255,255,255,0.55) !important; line-height: 0;
+      transition: all 0.2s; flex-shrink: 0; font-size: 13px;
+    }
+    .gb-chatbar-inner button:not(.gb-mode-btn):hover,
+    .gb-chatbar-inner #micBtn:hover,
+    .gb-chatbar-inner #imageBtn:hover,
+    .gb-chatbar-inner #visionToggle:hover {
+      background: rgba(255,255,255,0.22) !important; color: rgba(255,255,255,0.9) !important;
+    }
+    .gb-chatbar-inner #micBtn.active { background: rgba(255,80,80,0.35) !important; color: #fff !important; border-color: rgba(255,100,100,0.5) !important; }
+    .gb-chatbar-inner #visionToggle.active { background: rgba(255,255,255,0.35) !important; color: #fff !important; }
+
+    /* Dashboard button — separate pill next to chatbar */
+    .gb-dash-btn {
+      flex-shrink: 0; width: 36px; height: 36px; border-radius: 50%;
+      background: rgba(255,255,255,0.10); border: 1.5px solid rgba(255,255,255,0.15);
+      color: rgba(255,255,255,0.55); cursor: pointer;
+      display: flex; align-items: center; justify-content: center; line-height: 0;
+      box-shadow: 2px 2px 6px rgba(0,0,0,0.10), -2px -2px 6px rgba(255,255,255,0.04);
+      transition: all 0.2s;
+    }
+    .gb-dash-btn:hover { background: rgba(255,255,255,0.22); color: #fff; }
+
+    /* Hide old chatdock — replaced by gb-chat-dock */
+    .chatdock { display: none !important; }
 
     .container { position:relative; max-width: 900px; margin: 0 auto; padding: 0 16px 24px 16px; height:calc(100% - 200px); display:flex; flex-direction:column; }
     .card { background:var(--card-bg); backdrop-filter: blur(6px); border:1px solid var(--border); border-radius: 16px; padding:16px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); height:100%; display:flex; flex-direction:column; transition: background-color 400ms ease, border-color 300ms ease, box-shadow 300ms ease; }
@@ -296,8 +503,8 @@
     .msg.assistant { box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
     .msg::after { content:""; position:absolute; inset:0; pointer-events:none; background: linear-gradient(120deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 28%, rgba(255,255,255,0.0) 48%); opacity:.5; }
     .input-row { display:flex; gap:8px; margin-top:12px; }
-    input[type="text"] { flex:1; padding:12px; border-radius:10px; border:1px solid var(--border); background:rgba(0,0,0,0.35); color:#eee; }
-    button { padding:12px 14px; border:none; border-radius:10px; background:#4CAF50; color:white; cursor:pointer; }
+    .container input[type="text"], .auth-card input[type="text"] { flex:1; padding:12px; border-radius:10px; border:1px solid var(--border); background:rgba(0,0,0,0.35); color:#eee; }
+    .container button, .card button { padding:12px 14px; border:none; border-radius:10px; background:#4CAF50; color:white; cursor:pointer; }
     /* Plus button glow */
     #imageBtn, #micBtn { background: rgba(255,255,255,0.18); color: rgba(255,255,255,0.7); border:1px solid rgba(255,255,255,0.22); box-shadow: none; }
     #imageBtn:hover, #micBtn:hover { background: rgba(255,255,255,0.28); color: rgba(255,255,255,0.9); box-shadow: 0 0 10px rgba(255,255,255,0.15); }
@@ -320,30 +527,14 @@
     }
 
     /* ===== Small square screens (Galaxy Z Flip 6 cover display ~260x260) ===== */
-    /* Maximize space: kill margins, fill viewport */
     @media (max-height: 400px) and (max-width: 400px) {
-      .hero {
-        margin: 0 !important;
-        border-radius: 0 !important;
-        border: none !important;
-        width: 100vw !important;
-        height: 100vh !important;
-        max-width: none !important;
-        aspect-ratio: auto !important;
+      .gb-shell { max-width: none; width: 100%; padding: 0; }
+      .gb-face-screen { display: none !important; }
+      .gb-shell .nh {
+        border-radius: 0 !important; width: 100vw !important;
+        padding: 4px !important; margin: 0 !important;
       }
-      .hero::before { inset: 0; border-radius: 0; }
-      .hero::after { border-radius: 0; }
-      #avatarContainer { border-radius: 0; }
-      #avatarContainer .animated-avatar {
-        width: 96vmin !important;
-        height: 96vmin !important;
-        border-radius: 8px;
-      }
-      #avatarContainer .animated-avatar::before {
-        border-radius: 8px;
-      }
-      /* Hide chat/charbar — cover display is face-only */
-      .chatdock, .charbar, .container { display: none !important; }
+      .nh-chat-area, .nh-chat-toggle, .container { display: none !important; }
       body { overflow: hidden; }
     }
 
@@ -409,6 +600,7 @@
       font-size: 12px; color: #ff8a8a; margin-top: 8px; min-height: 16px;
     }
   </style>
+  <link rel="stylesheet" href="/dashboard/clock_widget.css?v=20260216" />
   <link rel="stylesheet" href="/static/css/avatar.css?v=20260215f" />
 </head>
 <body>
@@ -435,50 +627,116 @@
     </div>
   </div>
 
-  <div class="hero" id="heroPanel">
-    <div id="bodyBg"><div class="bgSquare"></div></div>
-    <video id="cameraVideo" autoplay playsinline muted></video>
-    <button id="editFaceBtn" title="Edit face layout">Edit Face</button>
-    <!-- Desktop avatar container overlay -->
-    <div id="avatarContainer"></div>
+  <div class="gb-shell">
+
+    <!-- ─── Neumorphic Widget (unified device shell) ─── -->
+    <div class="nh" id="wuiWidget">
+      <!-- Integrated Face Screen (expands inside the widget frame) -->
+      <div class="gb-face-screen" id="gbFaceScreen">
+        <div class="hero" id="heroPanel">
+          <div id="bodyBg"><div class="bgSquare"></div></div>
+          <video id="cameraVideo" autoplay playsinline muted></video>
+          <img id="heroEmotionGif" src="" alt="">
+          <button id="editFaceBtn" title="Edit face layout">Edit Face</button>
+          <div id="avatarContainer"></div>
+        </div>
+      </div>
+      <div class="nh-card nh-top">
+        <div class="nh-top-row">
+          <div class="nh-datetime">
+            <div class="nh-date" id="wuiDate"></div>
+            <div class="nh-time" id="wuiTime"></div>
+          </div>
+          <div class="nh-top-icons">
+            <button class="nh-icon-btn" id="wuiDashBtn" title="Dashboard">⊞</button>
+          </div>
+        </div>
+      </div>
+      <div id="wuiBody">
+        <div class="nh-bar">
+          <div class="nh-bar-text">
+            <span class="nh-bar-label">Active workspace</span>
+            <span class="nh-bar-value">Substrate</span>
+          </div>
+          <div class="nh-bar-icons">
+            <button class="nh-bar-icon" id="wuiTimerBtn" title="Timer"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2"/><path d="M5 3L2 6"/><path d="M22 6l-3-3"/><line x1="12" y1="1" x2="12" y2="3"/></svg></button>
+          </div>
+        </div>
+        <div class="nh-middle" id="wuiMiddle">
+          <div class="nh-clock-wrap"><canvas id="wuiAnalog" width="320" height="320" style="width:160px;height:160px;"></canvas></div>
+          <div class="nh-brand-card">
+            <div class="nh-screen" id="wuiScreen">
+              <div class="nh-screen-inner" id="wuiScreenInner">
+                <img id="wuiEmotionGif" src="" style="width:100%;height:100%;object-fit:cover;border-radius:14px;display:none;">
+                <span id="wuiEmotionPlaceholder" style="font-size:2rem;">🎯</span>
+                <div id="wuiScreenAvatar"></div>
+              </div>
+            </div>
+            <div class="nh-brand-name">Substrate</div>
+          </div>
+        </div>
+        <!-- Chat history (inside widget) -->
+        <button class="nh-chat-toggle" id="nhChatToggle">&#x25B2; chat &#x25B2;</button>
+        <div class="nh-chat-area" id="nhChatArea">
+          <div id="chat" class="chat"></div>
+        </div>
+        <div class="nh-bottom">
+          <div class="nh-chat-pill">
+            <div class="nh-mode-selector" id="gbModeSelector">
+              <button class="nh-mode-btn" data-mode="code" data-tooltip="Code"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></button>
+              <button class="nh-mode-btn active" data-mode="ask" data-tooltip="Ask"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></button>
+              <button class="nh-mode-btn" data-mode="plan" data-tooltip="Plan"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></button>
+            </div>
+            <input type="text" id="message" class="nh-chat-input" placeholder="ask anything..." autocomplete="off">
+            <!-- micBtn injected dynamically by main.js -->
+            <button id="visionToggle" class="nh-mic-btn" title="Toggle vision">ꕥ</button>
+          </div>
+          <div class="nh-radial-hub" id="wuiRadialHub">
+            <button class="nh-circle-btn nh-radial-trigger" id="wuiRadialTrigger" title="More actions"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg></button>
+            <div class="nh-radial-ring" id="wuiRadialRing">
+              <button class="nh-radial-item" data-idx="0" id="wuiMuteBtn" title="Mute Microphone">၊၊||၊</button>
+              <button class="nh-radial-item" data-idx="1" id="wuiCallBtn" title="ElevenLabs Call"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg></button>
+              <button class="nh-radial-item" data-idx="2" id="wuiWidgetToggle" title="Toggle Desktop Widget"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></button>
+              <button class="nh-radial-item" data-idx="3" id="wuiConfigBtn" title="Settings">⚙</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
   </div>
 
-  <!-- Face Editor Panel (face elements only) -->
+  <!-- Face Editor Panel (outside shell, fixed position) -->
   <div id="faceEditorPanel" class="face-editor-panel" style="display:none;">
     <div class="fe-header">
       <span>Face Editor</span>
       <button id="feCloseBtn" class="fe-close">&times;</button>
     </div>
     <div class="fe-body">
-      <!-- Faceplate -->
       <div class="fe-section">
         <div class="fe-label">Faceplate</div>
         <div class="fe-row"><span>Top</span><input type="range" id="fe-face-top" min="0" max="100" step="1"><span class="fe-val" id="fe-face-top-val"></span></div>
         <div class="fe-row"><span>Width</span><input type="range" id="fe-face-w" min="0" max="100" step="1"><span class="fe-val" id="fe-face-w-val"></span></div>
         <div class="fe-row"><span>Height</span><input type="range" id="fe-face-h" min="0" max="100" step="1"><span class="fe-val" id="fe-face-h-val"></span></div>
       </div>
-      <!-- Eyes -->
       <div class="fe-section">
         <div class="fe-label">Eyes</div>
         <div class="fe-row"><span>Top</span><input type="range" id="fe-eye-top" min="0" max="100" step="1"><span class="fe-val" id="fe-eye-top-val"></span></div>
         <div class="fe-row"><span>Spread</span><input type="range" id="fe-eye-spread" min="0" max="50" step="1"><span class="fe-val" id="fe-eye-spread-val"></span></div>
         <div class="fe-row"><span>Size</span><input type="range" id="fe-eye-size" min="1" max="500" step="1"><span class="fe-val" id="fe-eye-size-val"></span></div>
       </div>
-      <!-- Mouth -->
       <div class="fe-section">
         <div class="fe-label">Mouth</div>
         <div class="fe-row"><span>Top</span><input type="range" id="fe-mouth-top" min="0" max="100" step="1"><span class="fe-val" id="fe-mouth-top-val"></span></div>
         <div class="fe-row"><span>Width</span><input type="range" id="fe-mouth-w" min="1" max="500" step="1"><span class="fe-val" id="fe-mouth-w-val"></span></div>
         <div class="fe-row"><span>Height</span><input type="range" id="fe-mouth-h" min="1" max="500" step="1"><span class="fe-val" id="fe-mouth-h-val"></span></div>
       </div>
-      <!-- Cheeks -->
       <div class="fe-section">
         <div class="fe-label">Cheeks</div>
         <div class="fe-row"><span>Top</span><input type="range" id="fe-cheek-top" min="0" max="100" step="1"><span class="fe-val" id="fe-cheek-top-val"></span></div>
         <div class="fe-row"><span>Spread</span><input type="range" id="fe-cheek-spread" min="0" max="50" step="1"><span class="fe-val" id="fe-cheek-spread-val"></span></div>
         <div class="fe-row"><span>Size</span><input type="range" id="fe-cheek-size" min="1" max="500" step="1"><span class="fe-val" id="fe-cheek-size-val"></span></div>
       </div>
-      <!-- Colors -->
       <div class="fe-section">
         <div class="fe-label">Colors</div>
         <div class="fe-row"><span>Body</span><input type="color" id="fe-color-body" value="#5bbfdd"></div>
@@ -490,16 +748,8 @@
       </div>
     </div>
   </div>
-  <!-- Chat dock below hero that expands the layout -->
-  <div class="chatdock">
-    <div id="chat" class="chat"></div>
-  </div>
-  <!-- Chat bar below chat dock (always under messages) -->
-  <div class="charbar">
-    <input id="message" type="text" placeholder="Type your message..." />
-    <button id="sendBtn">Send</button>
-    <button id="visionToggle" title="Toggle vision">ꕥ</button>
-  </div>
+
+  <!-- Hidden legacy container for main.js compatibility -->
   <div class="container" style="display:none;">
     <div class="card" style="display:none">
       <div class="header">
@@ -520,5 +770,343 @@
     }
   </script>
   <script src="/ui/main.js?v=20260216b"></script>
+  <script>
+  // ─── WebUI Widget Components ───
+  (function() {
+    // ── Digital clock (top card) ──
+    function tickClock() {
+      const now = new Date();
+      const h = now.getHours(), m = String(now.getMinutes()).padStart(2,'0');
+      const h12 = h % 12 || 12, ap = h >= 12 ? 'PM' : 'AM';
+      const dateEl = document.getElementById('wuiDate');
+      const timeEl = document.getElementById('wuiTime');
+      if (dateEl) dateEl.textContent = (now.getMonth()+1) + '/' + String(now.getDate()).padStart(2,'0');
+      if (timeEl) timeEl.textContent = h12 + ':' + m + ' ' + ap;
+    }
+    tickClock();
+    setInterval(tickClock, 1000);
+
+    // ── Analog clock (canvas) ──
+    function drawClock() {
+      const c = document.getElementById('wuiAnalog');
+      if (!c) return;
+      const dpr = window.devicePixelRatio || 1;
+      const logicalW = 160, logicalH = 160;
+      if (c.width !== logicalW * dpr || c.height !== logicalH * dpr) {
+        c.width = logicalW * dpr; c.height = logicalH * dpr;
+        c.style.width = logicalW + 'px'; c.style.height = logicalH + 'px';
+      }
+      const ctx = c.getContext('2d');
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const w=logicalW, h=logicalH, cx=w/2, cy=h/2, r=Math.min(cx,cy)-10;
+      const bg = getComputedStyle(document.getElementById('wuiWidget')).getPropertyValue('--nh-bg').trim() || '#9fbecb';
+      const isDark = luma(bg) <= 0.5;
+      ctx.clearRect(0,0,w,h);
+      ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2);
+      ctx.fillStyle = bg; ctx.fill();
+      const grad = ctx.createRadialGradient(cx-r*0.3, cy-r*0.3, r*0.1, cx, cy, r);
+      grad.addColorStop(0, isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.6)');
+      grad.addColorStop(1, isDark ? 'rgba(0,0,0,0.15)' : 'rgba(0,0,0,0.05)');
+      ctx.fillStyle = grad; ctx.fill();
+      for (let i=0;i<12;i++) {
+        const a=(i*30-90)*Math.PI/180, main=i%3===0;
+        const i1=r-(main?14:9), o1=r-3;
+        ctx.beginPath();
+        ctx.moveTo(cx+i1*Math.cos(a), cy+i1*Math.sin(a));
+        ctx.lineTo(cx+o1*Math.cos(a), cy+o1*Math.sin(a));
+        ctx.strokeStyle = main ? (isDark?'rgba(255,255,255,0.4)':'#888') : (isDark?'rgba(255,255,255,0.15)':'#bbb');
+        ctx.lineWidth = main ? 2 : 1; ctx.stroke();
+      }
+      const now=new Date(), hrs=now.getHours()%12, mins=now.getMinutes(), secs=now.getSeconds();
+      const accent = getComputedStyle(document.getElementById('wuiWidget')).getPropertyValue('--nh-accent').trim() || '#ababab';
+      const ha=((hrs+mins/60)*30-90)*Math.PI/180;
+      ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(cx+(r*0.48)*Math.cos(ha), cy+(r*0.48)*Math.sin(ha));
+      ctx.strokeStyle = isDark ? 'rgba(255,255,255,0.75)' : '#333'; ctx.lineWidth=3; ctx.lineCap='round'; ctx.stroke();
+      const ma=((mins+secs/60)*6-90)*Math.PI/180;
+      ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(cx+(r*0.68)*Math.cos(ma), cy+(r*0.68)*Math.sin(ma));
+      ctx.strokeStyle = isDark ? 'rgba(255,255,255,0.55)' : '#555'; ctx.lineWidth=2; ctx.stroke();
+      const sa=(secs*6-90)*Math.PI/180;
+      ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(cx+(r*0.72)*Math.cos(sa), cy+(r*0.72)*Math.sin(sa));
+      ctx.strokeStyle = accent; ctx.lineWidth=1; ctx.stroke();
+      ctx.beginPath(); ctx.arc(cx,cy,3,0,Math.PI*2);
+      ctx.fillStyle = isDark ? 'rgba(255,255,255,0.5)' : '#555'; ctx.fill();
+      requestAnimationFrame(drawClock);
+    }
+    function luma(hex) {
+      const c = hex.replace('#','');
+      const r = parseInt(c.substr(0,2),16), g = parseInt(c.substr(2,2),16), b = parseInt(c.substr(4,2),16);
+      return (0.299*r + 0.587*g + 0.114*b) / 255;
+    }
+    drawClock();
+
+    // ── Screen click → toggle expanded face screen ──
+    const screenInner = document.getElementById('wuiScreenInner');
+    const faceScreen = document.getElementById('gbFaceScreen');
+    if (screenInner && faceScreen) {
+      screenInner.addEventListener('click', function(e) {
+        e.stopPropagation();
+        faceScreen.classList.toggle('visible');
+      });
+    }
+
+    // ── Spawn mini animated avatar in the widget screen ──
+    function spawnScreenAvatar() {
+      if (!window.AnimatedAvatar) { setTimeout(spawnScreenAvatar, 500); return; }
+      const container = document.getElementById('wuiScreenAvatar');
+      if (!container) return;
+      container.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:2;';
+      const miniAvatar = new AnimatedAvatar(container, { scale: 0.4 });
+      window._wuiScreenAvatar = miniAvatar;
+      // Sync emotions from main avatar
+      setInterval(function() {
+        if (!window.avatar || !window.avatar.emotion) return;
+        if (miniAvatar.emotion !== window.avatar.emotion) {
+          miniAvatar.setEmotion(window.avatar.emotion);
+        }
+      }, 500);
+      // Hide the placeholder once avatar renders
+      const ph = document.getElementById('wuiEmotionPlaceholder');
+      if (ph) ph.style.display = 'none';
+    }
+    setTimeout(spawnScreenAvatar, 1000);
+
+    // ── Chat toggle (expand/collapse inside widget) ──
+    const chatToggle = document.getElementById('nhChatToggle');
+    const chatArea = document.getElementById('nhChatArea');
+    if (chatToggle && chatArea) {
+      chatToggle.addEventListener('click', function() {
+        const isOpen = chatArea.classList.toggle('open');
+        chatToggle.innerHTML = isOpen ? '&#x25BC; chat &#x25BC;' : '&#x25B2; chat &#x25B2;';
+        if (isOpen) {
+          const chatEl = document.getElementById('chat');
+          if (chatEl) setTimeout(function(){ chatEl.scrollTop = chatEl.scrollHeight; }, 100);
+        }
+      });
+      // Auto-open chat when a new message arrives
+      const chatEl = document.getElementById('chat');
+      if (chatEl) {
+        const observer = new MutationObserver(function() {
+          if (!chatArea.classList.contains('open')) {
+            chatArea.classList.add('open');
+            chatToggle.innerHTML = '&#x25BC; chat &#x25BC;';
+          }
+          chatEl.scrollTop = chatEl.scrollHeight;
+        });
+        observer.observe(chatEl, { childList: true });
+      }
+    }
+
+    // ── Also open chat when user focuses input ──
+    const inputEl = document.getElementById('message');
+    if (inputEl && chatArea) {
+      inputEl.addEventListener('focus', function() {
+        if (!chatArea.classList.contains('open')) {
+          chatArea.classList.add('open');
+          if (chatToggle) chatToggle.innerHTML = '&#x25BC; chat &#x25BC;';
+        }
+      });
+    }
+
+    // ── Sync emotion GIFs to face screen popout ──
+    // Mirror whatever the miniview GIF shows into the large hero panel
+    const heroGif = document.getElementById('heroEmotionGif');
+    const miniGif = document.getElementById('wuiEmotionGif');
+    if (heroGif && miniGif) {
+      const syncHeroGif = new MutationObserver(function() {
+        const src = miniGif.src;
+        const visible = miniGif.style.display !== 'none' && src;
+        if (visible && src) {
+          heroGif.src = src;
+          heroGif.style.display = 'block';
+        } else {
+          heroGif.style.display = 'none';
+        }
+      });
+      syncHeroGif.observe(miniGif, { attributes: true, attributeFilter: ['src', 'style'] });
+    }
+
+    // ── Mode selector (nh-mode-btn) ──
+    const modeSelector = document.getElementById('gbModeSelector');
+    if (modeSelector) {
+      modeSelector.addEventListener('click', function(e) {
+        const btn = e.target.closest('.nh-mode-btn');
+        if (!btn) return;
+        modeSelector.querySelectorAll('.nh-mode-btn').forEach(function(b){ b.classList.remove('active'); });
+        btn.classList.add('active');
+        const mode = btn.dataset.mode;
+        if (inputEl) {
+          const placeholders = { code: 'write code...', ask: 'ask anything...', plan: 'plan a task...' };
+          inputEl.placeholder = placeholders[mode] || 'ask anything...';
+        }
+        if (window.wuiSetMode) window.wuiSetMode(mode);
+      });
+    }
+
+    // ── Dashboard button ──
+    const dashBtn = document.getElementById('wuiDashBtn');
+    if (dashBtn) {
+      dashBtn.addEventListener('click', function() { window.open('/dashboard', '_blank'); });
+    }
+
+    // ── Radial hub hover logic ──
+    const radialHub = document.getElementById('wuiRadialHub');
+    const radialTrigger = document.getElementById('wuiRadialTrigger');
+    const radialRing = document.getElementById('wuiRadialRing');
+    let _radialTimeout;
+    if (radialHub && radialTrigger && radialRing) {
+      radialTrigger.addEventListener('mouseenter', function() {
+        clearTimeout(_radialTimeout);
+        radialHub.classList.add('expanded');
+      });
+      radialRing.addEventListener('mouseenter', function() { clearTimeout(_radialTimeout); });
+      [radialTrigger, radialRing].forEach(function(target) {
+        target.addEventListener('mouseleave', function() {
+          _radialTimeout = setTimeout(function() {
+            if (!radialRing.matches(':hover') && !radialTrigger.matches(':hover')) {
+              radialHub.classList.remove('expanded');
+            }
+          }, 400);
+        });
+      });
+    }
+
+    // ── Mute button ──
+    let wuiMuted = false;
+    const muteBtn = document.getElementById('wuiMuteBtn');
+    if (muteBtn) {
+      muteBtn.addEventListener('click', function() {
+        wuiMuted = !wuiMuted;
+        muteBtn.textContent = wuiMuted ? '🕨' : '၊၊||၊';
+        muteBtn.title = wuiMuted ? 'Unmute' : 'Mute';
+        fetch('/api/voice/' + (wuiMuted ? 'mute' : 'unmute'), { method: 'POST' }).catch(function(){});
+      });
+    }
+
+    // ── ElevenLabs call button ──
+    const callBtn = document.getElementById('wuiCallBtn');
+    if (callBtn) {
+      callBtn.addEventListener('click', function() {
+        fetch('/api/voice/call', { method: 'POST' }).catch(function(){});
+      });
+    }
+
+    // ── Widget toggle button ──
+    const widgetToggle = document.getElementById('wuiWidgetToggle');
+    if (widgetToggle) {
+      let widgetEnabled = false;
+      fetch('/api/config').then(function(r){ return r.json(); }).then(function(cfg) {
+        if (cfg && cfg.desktop_widget_enabled) {
+          widgetEnabled = true;
+          widgetToggle.style.background = 'rgba(100,255,100,0.25)';
+          widgetToggle.style.borderColor = 'rgba(100,255,100,0.4)';
+        }
+      }).catch(function(){});
+      widgetToggle.addEventListener('click', function() {
+        widgetEnabled = !widgetEnabled;
+        widgetToggle.style.background = widgetEnabled ? 'rgba(100,255,100,0.25)' : '';
+        widgetToggle.style.borderColor = widgetEnabled ? 'rgba(100,255,100,0.4)' : '';
+        fetch('/api/widget-mode', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enabled: widgetEnabled })
+        }).catch(function(){});
+      });
+    }
+
+    // ── Emotion GIF system (WebUI) ──
+    // Load emotion GIFs from localStorage (shared with desktop widget) or server
+    let _wuiEmotionGifs = {};
+    let _wuiCurrentEmotion = 'idle';
+    let _wuiGifCycleInterval = null;
+    let _wuiGifCycleIdx = 0;
+
+    // Try to load saved emotion GIFs from desktop widget style (localStorage first, then server)
+    try {
+      const saved = localStorage.getItem('deskWidgetStyle');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.emotionGifs) _wuiEmotionGifs = parsed.emotionGifs;
+      }
+    } catch(e) {}
+    // Fallback: fetch from server (for remote browsers without Electron localStorage)
+    if (!Object.keys(_wuiEmotionGifs).some(function(k) { return (_wuiEmotionGifs[k] || []).some(function(u) { return u && u.trim(); }); })) {
+      fetch('/ui/widget-style').then(function(r) { return r.json(); }).then(function(data) {
+        if (data && data.emotionGifs) {
+          _wuiEmotionGifs = data.emotionGifs;
+          _wuiShowEmotion(_wuiCurrentEmotion);
+        }
+      }).catch(function() {});
+    }
+
+    function _wuiApplyGif(url) {
+      const gifEl = document.getElementById('wuiEmotionGif');
+      const placeholder = document.getElementById('wuiEmotionPlaceholder');
+      if (!gifEl) return;
+      if (url) {
+        gifEl.src = url;
+        gifEl.style.display = 'block';
+        if (placeholder) placeholder.style.display = 'none';
+      } else {
+        gifEl.src = '';
+        gifEl.style.display = 'none';
+        if (placeholder) placeholder.style.display = '';
+      }
+    }
+
+    function _wuiStartGifCycle(list) {
+      _wuiGifCycleIdx = 0;
+      _wuiGifCycleInterval = setInterval(function() {
+        _wuiGifCycleIdx = (_wuiGifCycleIdx + 1) % list.length;
+        _wuiApplyGif(list[_wuiGifCycleIdx]);
+      }, 4000);
+    }
+
+    function _wuiShowEmotion(emotion) {
+      if (_wuiGifCycleInterval) { clearInterval(_wuiGifCycleInterval); _wuiGifCycleInterval = null; }
+      _wuiCurrentEmotion = emotion;
+
+      var gifs = _wuiEmotionGifs[emotion] || [];
+      var available = gifs.filter(function(u) { return u && u.trim(); });
+
+      if (available.length === 0 && emotion !== 'idle') {
+        var idleGifs = (_wuiEmotionGifs.idle || []).filter(function(u) { return u && u.trim(); });
+        if (idleGifs.length > 0) {
+          _wuiApplyGif(idleGifs[0]);
+          if (idleGifs.length > 1) _wuiStartGifCycle(idleGifs);
+          return;
+        }
+      }
+
+      if (available.length === 0) {
+        _wuiApplyGif(null);
+        // Fallback: show emoji placeholder
+        var placeholder = document.getElementById('wuiEmotionPlaceholder');
+        if (placeholder) {
+          var icons = { idle: '😐', speaking: '🗣️', laughing: '😂', angry: '😡', sleeping: '😴', yelling: '😱', searching: '🔍' };
+          placeholder.textContent = icons[emotion] || '🎯';
+          placeholder.style.display = '';
+        }
+        return;
+      }
+
+      _wuiApplyGif(available[0]);
+      if (available.length > 1) _wuiStartGifCycle(available);
+    }
+
+    // Expose for external updates (e.g. from WebSocket messages)
+    window.wuiShowEmotion = _wuiShowEmotion;
+    _wuiShowEmotion('idle');
+
+    // Poll avatar state to sync emotions
+    setInterval(function() {
+      if (!window.avatar) return;
+      var state = window.avatar.state;
+      if (!state) return;
+      var map = { idle: 'idle', talking: 'speaking', thinking: 'searching', happy: 'speaking', angry: 'angry', sleepy: 'sleeping', surprised: 'yelling' };
+      var mapped = map[state] || 'idle';
+      if (mapped !== _wuiCurrentEmotion) _wuiShowEmotion(mapped);
+    }, 2000);
+  })();
+  </script>
 </body>
 </html>

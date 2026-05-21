@@ -273,25 +273,8 @@ function createWindow() {
             appIcon = nativeImage.createFromPath(appIconPath);
         }
 
-        // --- Parent window trick for transparent windows on Windows ---
-        // A tiny non-transparent parent window owns the taskbar slot.
-        // The real transparent UI window is its child via `parent`.
-        // When the parent minimizes/restores, we hide/show the child.
-        hostWindow = new BrowserWindow({
-            width: 1,
-            height: 1,
-            x: -100,
-            y: -100,
-            frame: false,
-            transparent: false,
-            skipTaskbar: false,
-            icon: appIcon || undefined,
-            show: false,
-            title: 'Substrate',
-            webPreferences: { nodeIntegration: false }
-        });
-        hostWindow.showInactive(); // puts it on the taskbar without stealing focus
-
+        // --- Transparent frameless window (no parent trick — avoids white bar on blur) ---
+        // The main window IS the taskbar entry. No parent/child relationship needed.
         mainWindow = new BrowserWindow({
             width: windowWidth,
             height: windowHeight,
@@ -300,8 +283,7 @@ function createWindow() {
             frame: false,
             transparent: true,
             icon: appIcon || undefined,
-            parent: hostWindow,
-            skipTaskbar: true, // child hides from taskbar; parent owns it
+            skipTaskbar: false,
             webPreferences: {
                 nodeIntegration: false,
                 contextIsolation: true,
@@ -310,44 +292,18 @@ function createWindow() {
                 preload: path.join(__dirname, 'preload.js'),
                 spellcheck: false // Disable spellcheck to avoid clipboard interference
             },
-            alwaysOnTop: false, // Change to false to prevent clipboard interference
+            alwaysOnTop: false,
             hasShadow: false,
             focusable: true,
             enableLargerThanScreen: false,
-            disableHtmlFullscreenWindowResize: true
+            disableHtmlFullscreenWindowResize: true,
+            title: 'Substrate',
+            backgroundColor: '#00000000'
         });
 
-        // When parent (taskbar icon) is minimized → hide the transparent child
-        hostWindow.on('minimize', () => {
-            if (mainWindow && !mainWindow.isDestroyed()) {
-                mainWindow.hide();
-            }
-        });
-
-        // When parent is restored from taskbar → show the transparent child
-        hostWindow.on('restore', () => {
-            if (mainWindow && !mainWindow.isDestroyed()) {
-                mainWindow.show();
-                mainWindow.focus();
-            }
-        });
-
-        // Clicking the taskbar icon when host is not minimized → focus the child
-        hostWindow.on('focus', () => {
-            if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
-                mainWindow.show();
-            }
-            if (mainWindow && !mainWindow.isDestroyed()) {
-                mainWindow.focus();
-            }
-        });
-
-        // If someone closes the host, close everything
-        hostWindow.on('closed', () => {
-            if (mainWindow && !mainWindow.isDestroyed()) {
-                mainWindow.close();
-            }
-        });
+        // hostWindow is no longer needed as a parent, but keep the reference
+        // in case other code references it (minimize/restore shortcuts, tray, etc.)
+        hostWindow = mainWindow;
 
         remote.enable(mainWindow.webContents);
         
@@ -390,10 +346,7 @@ function createWindow() {
             }
             
             mainWindow = null;
-            // Also close the host window
-            if (hostWindow && !hostWindow.isDestroyed()) {
-                hostWindow.close();
-            }
+            hostWindow = null;
         });
 
         // Ctrl+Shift+T as backup restore shortcut

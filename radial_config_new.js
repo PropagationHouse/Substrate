@@ -614,6 +614,27 @@
               }
             }
             
+            // Enable Widget toggle button (desktop widget — same window context)
+            const widgetBtn = document.getElementById('enable-widget-radial');
+            if (widgetBtn) {
+              // Load current state from localStorage (same Electron context)
+              const _dwKey = 'substrate:desktopWidgetEnabled';
+              const _dwOn = JSON.parse(localStorage.getItem(_dwKey) || 'false');
+              widgetBtn.textContent = _dwOn ? '⏱ Disable Widget' : '⏱ Enable Widget';
+              widgetBtn.style.background = _dwOn ? 'rgba(139,92,246,0.15)' : 'rgba(0,0,0,0.3)';
+              widgetBtn.style.borderColor = _dwOn ? 'rgba(139,92,246,0.4)' : 'rgba(79,195,247,0.3)';
+              widgetBtn.dataset.enabled = _dwOn ? '1' : '0';
+              widgetBtn.addEventListener('click', () => {
+                const nowEnabled = widgetBtn.dataset.enabled !== '1';
+                widgetBtn.dataset.enabled = nowEnabled ? '1' : '0';
+                widgetBtn.textContent = nowEnabled ? '⏱ Disable Widget' : '⏱ Enable Widget';
+                widgetBtn.style.background = nowEnabled ? 'rgba(139,92,246,0.15)' : 'rgba(0,0,0,0.3)';
+                widgetBtn.style.borderColor = nowEnabled ? 'rgba(139,92,246,0.4)' : 'rgba(79,195,247,0.3)';
+                localStorage.setItem(_dwKey, JSON.stringify(nowEnabled));
+                window.dispatchEvent(new CustomEvent('substrate:toggle-desktop-widget', { detail: { enabled: nowEnabled } }));
+              });
+            }
+
             // Commands reload button
             const commandsReloadBtn = document.getElementById('commands-reload-btn');
             if (commandsReloadBtn) {
@@ -1014,40 +1035,47 @@
               document.addEventListener('touchend', () => { dragging = false; });
             }
             
-            // Mic device selector — uses browser enumerateDevices() for reliability
+            // Mic device selector — uses backend device list for accuracy
             const micDeviceSelect = document.getElementById('mic-device-select');
             if (micDeviceSelect) {
               console.log('Setting up mic device selector');
-              // Populate dropdown with audio input devices
-              async function populateMicDevices() {
-                try {
-                  // Request mic permission first so labels are visible
-                  try { const s = await navigator.mediaDevices.getUserMedia({audio: true}); s.getTracks().forEach(t => t.stop()); } catch(e) {}
-                  const devices = await navigator.mediaDevices.enumerateDevices();
+              
+              // Request device list from backend
+              if (window.api && window.api.send) {
+                window.api.send('list-mic-devices');
+              }
+
+              // Listen for device list from backend
+              if (window.api && window.api.receive) {
+                window.api.receive('mic-devices', (data) => {
+                  console.log('Received mic devices from backend:', data);
+                  const devices = data.devices || [];
+                  const selectedIdx = data.selected;
                   const savedDevice = localStorage.getItem('substrate_mic_device') || '';
+                  
                   micDeviceSelect.innerHTML = '';
+                  
+                  // System Default option
                   const defaultOpt = document.createElement('option');
                   defaultOpt.value = '';
                   defaultOpt.textContent = 'System Default';
                   micDeviceSelect.appendChild(defaultOpt);
-                  let idx = 0;
+                  
                   devices.forEach(d => {
-                    if (d.kind === 'audioinput') {
-                      const opt = document.createElement('option');
-                      opt.value = String(idx);
-                      opt.textContent = d.label || ('Microphone ' + (idx + 1));
-                      micDeviceSelect.appendChild(opt);
-                      idx++;
-                    }
+                    const opt = document.createElement('option');
+                    opt.value = String(d.index);
+                    opt.textContent = d.name + (d.default ? ' (Default)' : '');
+                    micDeviceSelect.appendChild(opt);
                   });
-                  micDeviceSelect.value = savedDevice;
-                  console.log('Mic devices populated:', idx, 'devices found');
-                } catch(e) {
-                  console.error('Failed to enumerate mic devices:', e);
-                  micDeviceSelect.innerHTML = '<option value="">Could not list devices</option>';
-                }
+                  
+                  // Prefer selected index from backend, fallback to localStorage
+                  if (selectedIdx !== null && selectedIdx !== undefined) {
+                    micDeviceSelect.value = String(selectedIdx);
+                  } else {
+                    micDeviceSelect.value = savedDevice;
+                  }
+                });
               }
-              populateMicDevices();
 
               micDeviceSelect.addEventListener('change', () => {
                 const val = micDeviceSelect.value;
@@ -1355,6 +1383,8 @@
                         <label for="avatar-input-radial">Choose Avatar</label>
                         <div class="config-help">Select an image for the agent (64x64+)</div>
                     </div>
+                    <button id="enable-widget-radial" class="config-button-small" style="margin-top:10px; width:100%; padding:7px 12px; font-size:12px; cursor:pointer; border:1px solid rgba(79,195,247,0.3); border-radius:6px; background:rgba(0,0,0,0.3); color:rgba(255,255,255,0.85); transition:all 0.2s;">⏱ Enable Widget</button>
+                    <div class="config-help">Show the clock/chat widget on desktop. Avatar stays free-moving.</div>
                 </div>
                 <div class="divider"></div>
                 <div class="model-section">

@@ -868,10 +868,15 @@ document.addEventListener('DOMContentLoaded', function() {
             if (el.id !== 'chat-input-container' && 
                 !el.classList.contains('titlebar') &&
                 !el.classList.contains('avatar') && 
+                !el.classList.contains('animated-avatar') &&
+                !el.classList.contains('nh') &&
+                !el.classList.contains('nh-chat-wall') &&
                 !el.id.includes('config') &&
                 !el.id.includes('avatar') &&
                 !el.id.includes('radial') &&
                 !el.id.includes('button-container') &&
+                !el.id.includes('deskWidget') &&
+                !el.id.includes('dwChat') &&
                 !el.querySelector('.message-avatar')) {
                 el.remove();
             }

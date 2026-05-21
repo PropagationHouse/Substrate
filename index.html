@@ -14,6 +14,7 @@
     <link rel="stylesheet" href="radial_panel_fix.css">
     <link rel="stylesheet" href="font_fix.css">
     <link rel="stylesheet" href="static/css/intelligence_feed.css">
+    <link rel="stylesheet" href="dashboard/public/clock_widget.css">
     <script src="auto_save_config.js"></script>
     <script src="static/js/intelligence_feed.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -554,6 +555,26 @@
             color: rgba(255,255,255,0.9);
         }
 
+        #image-preview {
+            display: none !important;
+            visibility: hidden !important;
+            width: 0 !important;
+            height: 0 !important;
+            position: absolute !important;
+            pointer-events: none !important;
+        }
+        /* Kill any broken/empty img elements that show as grey pill */
+        img:not([src]), img[src=""] {
+            display: none !important;
+            visibility: hidden !important;
+            width: 0 !important;
+            height: 0 !important;
+        }
+        /* Also hide the avatar preview when not in config */
+        #avatar-preview {
+            display: none;
+        }
+
         #file-preview {
             position: fixed;
             bottom: 75px;
@@ -566,7 +587,7 @@
             font-size: 11px;
             border-radius: 8px;
             z-index: 11;
-            display: flex;
+            display: none;
             align-items: center;
             gap: 8px;
             backdrop-filter: blur(5px);
@@ -1877,7 +1898,7 @@
             <input type="file" id="file-input" accept="image/*,.pdf,.txt,.md,.csv,.json,.xml,.yaml,.yml,.toml,.ini,.log,.py,.js,.ts,.jsx,.tsx,.html,.css,.scss,.c,.cpp,.h,.hpp,.java,.go,.rs,.rb,.php,.sh,.bat,.ps1,.sql,.r,.swift,.kt,.lua,.pl,.ex,.exs,.zig,.v,.nim,.d,.cs,.fs,.hs,.ml,.clj,.scala,.dart,.vue,.svelte,.astro,.mdx,.rst,.tex,.bib,.env,.gitignore,.dockerfile,.makefile,.cmake,.gradle,.toml,.lock,.cfg" style="display: none;">
             <div id="avatar-container"></div>
         </div>
-        <img id="image-preview">
+        <img id="image-preview" style="display:none!important;visibility:hidden!important;width:0!important;height:0!important;position:absolute!important;">
         <div id="file-preview" style="display:none;"></div>
         <div id="thinking-indicator" class="thinking-indicator hidden">
             <div class="thinking-dots">
@@ -3869,7 +3890,66 @@ REQUIREMENTS:
     <script src="integrated_command_handler.js"></script>
     <script src="static/js/avatar.js?v=3"></script>
     <script src="static/js/avatar-editor.js"></script>
+    <script>
+    // Enable Widget toggle in the config panel
+    document.addEventListener('DOMContentLoaded', function() {
+        const widgetBtn = document.getElementById('enable-widget-toggle');
+        if (!widgetBtn) return;
+        // Use the desktop widget's localStorage key as the single source of truth
+        const _dwKey = 'substrate:desktopWidgetEnabled';
+        let widgetEnabled = JSON.parse(localStorage.getItem(_dwKey) || 'false');
+        function updateBtn() {
+            widgetBtn.textContent = widgetEnabled ? '⏱ Disable Widget' : '⏱ Enable Widget';
+            widgetBtn.style.background = widgetEnabled ? 'rgba(139,92,246,0.15)' : '';
+        }
+        updateBtn();
+        widgetBtn.addEventListener('click', function() {
+            widgetEnabled = !widgetEnabled;
+            localStorage.setItem(_dwKey, JSON.stringify(widgetEnabled));
+            updateBtn();
+            // Dispatch event for the desktop widget
+            window.dispatchEvent(new CustomEvent('substrate:toggle-desktop-widget', { detail: { enabled: widgetEnabled } }));
+            // Also notify the dashboard via the proxy server (it polls this)
+            fetch('/api/widget-mode', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled: widgetEnabled })
+            }).catch(function(){});
+        });
+    });
+    </script>
     <script src="integrated_chat.js"></script>
+    <script>
+    // Grey pill killer — find and hide any small grey pill-shaped element above the chat bar
+    (function greyPillKiller() {
+        function killPill() {
+            const chatBar = document.querySelector('.chat-input-container');
+            if (!chatBar) return;
+            const chatRect = chatBar.getBoundingClientRect();
+            // Scan all elements that could be the grey pill
+            document.querySelectorAll('*').forEach(el => {
+                if (el === chatBar || el.contains(chatBar) || chatBar.contains(el)) return;
+                if (el.id === 'deskWidget' || el.closest('#deskWidget')) return;
+                if (el.id === 'app' || el.id === 'output' || el.id === 'input-container') return;
+                if (el.tagName === 'SCRIPT' || el.tagName === 'STYLE' || el.tagName === 'LINK') return;
+                const rect = el.getBoundingClientRect();
+                // Look for small elements (pill-sized) positioned just above the chat bar and centered
+                if (rect.width > 20 && rect.width < 120 && rect.height > 5 && rect.height < 40 &&
+                    rect.bottom > chatRect.top - 40 && rect.bottom <= chatRect.top + 5 &&
+                    rect.left > window.innerWidth * 0.3 && rect.right < window.innerWidth * 0.7) {
+                    const style = getComputedStyle(el);
+                    if (style.display !== 'none' && style.visibility !== 'hidden' && parseFloat(style.opacity) > 0) {
+                        console.log('[PillKiller] Found suspect:', el.tagName, el.id, el.className, rect);
+                        el.style.setProperty('display', 'none', 'important');
+                    }
+                }
+            });
+        }
+        setTimeout(killPill, 2000);
+        setTimeout(killPill, 4000);
+        setInterval(killPill, 5000);
+    })();
+    </script>
     <script src="debug_renderer.js"></script>
     <script src="direct_config_loader.js"></script>
     
@@ -4003,6 +4083,11 @@ REQUIREMENTS:
                 <label for="avatar-input">Choose Avatar</label>
             </div>
             <div class="config-help">Select an image to use as the agent's avatar (recommended: 64x64 or larger)</div>
+            <div class="config-row" style="margin-top:12px;">
+                <label for="enable-widget-toggle">Desktop Widget:</label>
+                <button id="enable-widget-toggle" class="save-button-small" style="min-width:130px;">⏱ Enable Widget</button>
+            </div>
+            <div class="config-help">Show the clock/chat widget on your desktop as an alternate chat interface. The avatar remains free-moving.</div>
         </div>
 
         <div class="section-title">Model Selection</div>
@@ -4265,5 +4350,6 @@ REQUIREMENTS:
         </div>
     </div>
 
+    <script src="desktop_widget.js"></script>
 </body>
 </html>

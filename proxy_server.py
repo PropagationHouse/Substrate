@@ -140,11 +140,130 @@ CORS(app, origins=_cors_origins, supports_credentials=True)
 sock = Sock(app)
 
 # ---------------------------------------------------------------------------
+# Widget mode toggle — bridges Electron main window and dashboard webview
+# ---------------------------------------------------------------------------
+_WIDGET_STATE_FILE = os.path.join(os.path.dirname(__file__), 'data', 'widget_mode.json')
+
+@app.route('/api/widget-mode', methods=['GET', 'POST'])
+def widget_mode():
+    """Get or set widget-mode enabled state (used by Electron ↔ dashboard bridge)."""
+    os.makedirs(os.path.dirname(_WIDGET_STATE_FILE), exist_ok=True)
+    if request.method == 'POST':
+        data = request.get_json(silent=True) or {}
+        enabled = bool(data.get('enabled', False))
+        try:
+            with open(_WIDGET_STATE_FILE, 'w') as f:
+                json.dump({'enabled': enabled}, f)
+        except Exception:
+            pass
+        return jsonify({'enabled': enabled})
+    else:
+        try:
+            with open(_WIDGET_STATE_FILE, 'r') as f:
+                state = json.load(f)
+            return jsonify(state)
+        except Exception:
+            return jsonify({'enabled': False})
+
+# ---------------------------------------------------------------------------
+# Media Suite proxy — forward /api/media-suite/* to Flask on port 5000
+# ---------------------------------------------------------------------------
+MEDIA_SUITE_URL = os.environ.get('MEDIA_SUITE_URL', 'http://localhost:5000')
+
+@app.route('/api/media-suite/<path:subpath>', methods=['GET', 'POST', 'PUT', 'DELETE', 'PATCH'])
+def media_suite_proxy(subpath):
+    """Proxy requests to Media Suite Flask backend."""
+    target = f"{MEDIA_SUITE_URL}/api/{subpath}"
+    # Forward query string
+    if request.query_string:
+        target += f"?{request.query_string.decode()}"
+    try:
+        resp = requests.request(
+            method=request.method,
+            url=target,
+            headers={k: v for k, v in request.headers if k.lower() not in ('host', 'connection')},
+            data=request.get_data(),
+            timeout=15,
+        )
+        return (resp.content, resp.status_code, {'Content-Type': resp.headers.get('Content-Type', 'application/json')})
+    except Exception as e:
+        return jsonify({'error': 'Media Suite unavailable', 'detail': str(e)}), 502
+
+# ---------------------------------------------------------------------------
+# Full Media Suite reverse proxy — serves the entire app under /media-suite/
+# so it works from any device (ZeroTier, WiFi, mobile) without direct :5000
+# ---------------------------------------------------------------------------
+@app.route('/media-suite/api/mood-board/strokes/stream')
+def media_suite_sse_proxy():
+    """Stream SSE from Flask stroke sync endpoint — must NOT buffer."""
+    from flask import Response as FlaskResponse
+    target = f"{MEDIA_SUITE_URL}/api/mood-board/strokes/stream"
+    if request.query_string:
+        target += f"?{request.query_string.decode()}"
+    try:
+        upstream = requests.get(target, stream=True, timeout=(5, None))
+        def generate():
+            try:
+                for chunk in upstream.iter_content(chunk_size=None):
+                    if chunk:
+                        yield chunk
+            except GeneratorExit:
+                upstream.close()
+            finally:
+                upstream.close()
+        return FlaskResponse(generate(), mimetype='text/event-stream',
+                             headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no', 'Connection': 'keep-alive'})
+    except Exception as e:
+        return jsonify({'error': 'SSE upstream unavailable', 'detail': str(e)}), 502
+
+@app.route('/media-suite/')
+@app.route('/media-suite/<path:subpath>', methods=['GET', 'POST', 'PUT', 'DELETE', 'PATCH'])
+def media_suite_full_proxy(subpath=''):
+    """Full reverse proxy for Media Suite — HTML, static, API all go through here."""
+    import re as _re
+    target = f"{MEDIA_SUITE_URL}/{subpath}"
+    if request.query_string:
+        target += f"?{request.query_string.decode()}"
+    try:
+        resp = requests.request(
+            method=request.method,
+            url=target,
+            headers={k: v for k, v in request.headers if k.lower() not in ('host', 'connection')},
+            data=request.get_data(),
+            cookies=request.cookies,
+            timeout=30,
+        )
+        # Build response headers
+        headers = {}
+        for k, v in resp.headers.items():
+            kl = k.lower()
+            if kl in ('content-encoding', 'transfer-encoding', 'connection'):
+                continue
+            headers[k] = v
+        content_type = resp.headers.get('Content-Type', '')
+        # For HTML responses, rewrite root-relative URLs to go through /media-suite/
+        if 'text/html' in content_type:
+            html = resp.text
+            # Rewrite src="/...", href="/...", action="/..." to /media-suite/...
+            html = _re.sub(r'((?:src|href|action)\s*=\s*["\'])/', r'\1/media-suite/', html)
+            # Rewrite fetch('/...) and url('/...') in inline JS/CSS
+            html = html.replace("fetch('/", "fetch('/media-suite/")
+            html = html.replace("fetch(\"/", "fetch(\"/media-suite/")
+            # Rewrite EventSource('/...) to go through proxy
+            html = html.replace("EventSource('/", "EventSource('/media-suite/")
+            html = html.replace("EventSource(\"/", "EventSource(\"/media-suite/")
+            headers['Content-Type'] = 'text/html; charset=utf-8'
+            return (html, resp.status_code, headers)
+        return (resp.content, resp.status_code, headers)
+    except Exception as e:
+        return f"<h2>Media Suite unavailable</h2><p>{e}</p>", 502
+
+# ---------------------------------------------------------------------------
 # Authentication: before_request hook + auth endpoints
 # ---------------------------------------------------------------------------
 # Paths that never require auth (static assets, login, setup, health)
 _AUTH_EXEMPT_PREFIXES = (
-    '/ui', '/dashboard', '/static/', '/sw.js', '/manifest.json', '/certs/',
+    '/ui', '/dashboard', '/media-suite/', '/static/', '/sw.js', '/manifest.json', '/certs/',
     '/audio/', '/uploads/', '/api/auth/login', '/api/auth/setup',
     '/api/auth/login-otp', '/api/auth/electron-login', '/api/auth/status', '/api/test', '/api/debug/',
     '/api/substrate', '/api/circuits', '/api/prime',
@@ -157,6 +276,8 @@ _AUTH_EXEMPT_PREFIXES = (
     '/api/codex-limits', '/api/claude-code-limits',
     '/api/version/check', '/api/crons', '/api/files/',
     '/api/gateway/', '/api/events',
+    '/api/media-suite/',
+    '/api/widget-mode',
 )
 
 def _get_agent_config():
@@ -3718,16 +3839,18 @@ class ChatAgent:
         try:
             logger.info(f"Switching to model: {model_name}")
             
-            if model_name not in SUPPORTED_MODELS:
-                return {
-                    'status': 'error',
-                    'result': f'Unsupported model: {model_name}. Available models: {", ".join(SUPPORTED_MODELS.keys())}',
-                    'clear_thinking': True
-                }
+            # Resolve metadata dynamically — works for SUPPORTED_MODELS entries,
+            # dynamically discovered remote models, AND local Ollama models
+            meta = _resolve_model_metadata(model_name)
+            endpoint = meta.get('endpoint', '') if meta else ''
+            if not endpoint:
+                # Assume Ollama local model
+                ollama_base = self.config.get('api_base', 'http://localhost:11434')
+                endpoint = f"{ollama_base}/api/generate"
             
             # Update config
             self.config['model'] = model_name
-            self.config['api_endpoint'] = SUPPORTED_MODELS[model_name]['endpoint']
+            self.config['api_endpoint'] = endpoint
             
             # Save config
             self.save_config(self.config)
@@ -3986,7 +4109,7 @@ class ChatAgent:
                             'suppress_chat': True
                         }
                 elif command == 'model':
-                    if 'model' in message and message['model'] in SUPPORTED_MODELS:
+                    if 'model' in message and message['model'].strip():
                         logger.info(f"Switching model to {message['model']}")
                         self.process_config_update({'model': message['model']})
                         return {
@@ -10453,12 +10576,28 @@ def api_local_tasks_agent_context():
     agent_tasks = [t for t in tasks if t.get('owner') == 'agent' and t.get('column') != 'done']
     human_tasks = [t for t in tasks if t.get('owner') == 'human' and t.get('column') != 'done']
 
-    fmt = lambda t: {k: t.get(k) for k in ('id', 'title', 'description', 'owner', 'priority', 'schedule', 'column', 'dueDate', 'progress', 'statusNote', 'recurringConfig')}
+    fmt = lambda t: {k: t.get(k) for k in ('id', 'title', 'description', 'owner', 'priority', 'schedule', 'column', 'dueDate', 'progress', 'statusNote', 'recurringConfig', 'channel')}
+
+    # Fetch Media Suite workspaces as available channels
+    channels = []
+    try:
+        import requests as _req
+        ms_url = os.environ.get('MEDIA_SUITE_URL', 'http://localhost:5000')
+        ws_resp = _req.get(f'{ms_url}/api/workspaces', timeout=3)
+        if ws_resp.ok:
+            ws_list = ws_resp.json()
+            channels = [{'id': str(w.get('id')), 'name': w.get('name', ''), 'is_main': w.get('is_main', False)} for w in ws_list]
+    except Exception:
+        pass
+
+    channel_names = [c['name'] for c in channels if c.get('name')]
+    channel_hint = f' Available channels/projects: {", ".join(channel_names)}. When the user asks to add tasks to a specific channel (e.g. "add to MILLET"), set the "channel" field to that name.' if channel_names else ''
 
     hint = (f'There are {len(overdue)} overdue task(s). Consider gently reminding the user.' if overdue
             else f'You have {len(agent_tasks)} task(s) assigned to you. Check if any need attention.' if agent_tasks
             else f'The user has {len(human_tasks)} active task(s). You could offer help if relevant.' if human_tasks
             else 'No active tasks. The board is clear.')
+    hint += channel_hint
 
     return jsonify({
         'ok': True,
@@ -10469,6 +10608,7 @@ def api_local_tasks_agent_context():
         'humanInProgress': [fmt(t) for t in human_tasks if t.get('column') == 'in_progress'],
         'humanBacklog': [fmt(t) for t in human_tasks if t.get('column') == 'backlog'],
         'recentlyCompleted': [fmt(t) for t in done if t.get('completedAt') and (now - t['completedAt']) < 86400000],
+        'channels': channels,
         'hint': hint,
     })
 
@@ -12124,7 +12264,10 @@ DASHBOARD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'dashbo
 def dashboard_index():
     """Serve the Substrate Dashboard SPA."""
     try:
-        return send_from_directory(DASHBOARD_DIR, 'index.html')
+        from flask import make_response
+        resp = make_response(send_from_directory(DASHBOARD_DIR, 'index.html'))
+        resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        return resp
     except Exception as e:
         return f"Dashboard not found at {DASHBOARD_DIR}: {e}", 404
 
@@ -12163,13 +12306,33 @@ def serve_cert():
 @app.route('/ui')
 def ui_index():
     try:
-        return send_from_directory(WEBUI_DIR, 'index.html')
+        from flask import make_response
+        resp = make_response(send_from_directory(WEBUI_DIR, 'index.html'))
+        resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        return resp
     except Exception as e:
         return f"WebUI not found at {WEBUI_DIR}: {e}", 404
 
 @app.route('/ui/<path:filename>')
 def ui_files(filename):
     return send_from_directory(WEBUI_DIR, filename)
+
+_WIDGET_STYLE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'widget_style.json')
+
+@app.route('/ui/widget-style', methods=['GET', 'POST'])
+def ui_widget_style():
+    """Get or set desktop widget style (including emotionGifs) for WebUI sync."""
+    os.makedirs(os.path.dirname(_WIDGET_STYLE_FILE), exist_ok=True)
+    if request.method == 'POST':
+        data = request.get_json(force=True) or {}
+        with open(_WIDGET_STYLE_FILE, 'w', encoding='utf-8') as f:
+            json.dump(data, f)
+        return jsonify({'ok': True})
+    # GET
+    if os.path.isfile(_WIDGET_STYLE_FILE):
+        with open(_WIDGET_STYLE_FILE, 'r', encoding='utf-8') as f:
+            return jsonify(json.load(f))
+    return jsonify({}), 200
 
 @app.route('/ui/avatar')
 def ui_avatar():
@@ -12205,7 +12368,23 @@ def serve_static(filename):
     try:
         base_dir = os.path.dirname(os.path.abspath(__file__))
         static_dir = os.path.join(base_dir, 'static')
-        return send_from_directory(static_dir, filename)
+        local_path = os.path.join(static_dir, filename)
+        if os.path.isfile(local_path):
+            resp = make_response(send_from_directory(static_dir, filename))
+            resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+            resp.headers['Pragma'] = 'no-cache'
+            resp.headers['Expires'] = '0'
+            return resp
+        # Fallback: serve from Media Suite (windsurf-project) static dir
+        ms_static = os.path.join(base_dir, '..', 'CascadeProjects', 'windsurf-project', 'static')
+        ms_path = os.path.join(ms_static, filename)
+        if os.path.isfile(ms_path):
+            resp = make_response(send_from_directory(os.path.abspath(ms_static), filename))
+            resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+            resp.headers['Pragma'] = 'no-cache'
+            resp.headers['Expires'] = '0'
+            return resp
+        return (f"Static not found: {filename}", 404)
     except Exception as e:
         return (f"Static not found: {e}", 404)
 

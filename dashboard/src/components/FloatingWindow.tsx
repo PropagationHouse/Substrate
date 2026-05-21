@@ -111,9 +111,10 @@ export function FloatingWindow({
   // ── Drag (title bar) ──
   const dragStart = useRef<{ mx: number; my: number; sx: number; sy: number } | null>(null);
 
-  const onDragDown = useCallback((e: React.MouseEvent) => {
+  const onDragDown = useCallback((e: React.PointerEvent) => {
     if ((e.target as HTMLElement).closest('button')) return; // don't drag from buttons
     e.preventDefault();
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
     setDragging(true);
     if (maximized) {
       // Un-maximize: restore to saved size, position cursor proportionally on the title bar
@@ -133,15 +134,16 @@ export function FloatingWindow({
   type Edge = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
   const resizeStart = useRef<{ edge: Edge; mx: number; my: number; s: WindowState } | null>(null);
 
-  const onResizeDown = useCallback((edge: Edge, e: React.MouseEvent) => {
+  const onResizeDown = useCallback((edge: Edge, e: React.PointerEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
     resizeStart.current = { edge, mx: e.clientX, my: e.clientY, s: { ...stateRef.current } };
   }, []);
 
-  // ── Global mouse handlers ──
+  // ── Global pointer handlers (unified mouse + touch + pen) ──
   useEffect(() => {
-    const onMove = (e: MouseEvent) => {
+    const onMove = (e: PointerEvent) => {
       if (dragStart.current) {
         const d = dragStart.current;
         const nx = d.sx + (e.clientX - d.mx);
@@ -172,11 +174,11 @@ export function FloatingWindow({
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
     };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
     return () => {
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
     };
   }, [minWidth, minHeight]);
 
@@ -212,9 +214,10 @@ export function FloatingWindow({
       <div className="flex flex-col h-full rounded-2xl border border-white/[0.06] overflow-hidden" style={{ background: 'rgba(12, 12, 22, 0.75)', backdropFilter: 'blur(32px)', WebkitBackdropFilter: 'blur(32px)', boxShadow: '0 16px 48px rgba(0,0,0,0.45), 0 4px 16px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.04)' }}>
         {/* Title bar — draggable */}
         <div
-          onMouseDown={onDragDown}
+          onPointerDown={onDragDown}
           onDoubleClick={toggleMaximize}
           className="flex items-center justify-between px-4 py-2 border-b border-white/[0.05] cursor-grab active:cursor-grabbing select-none shrink-0"
+          style={{ touchAction: 'none' }}
         >
           <div className="flex items-center gap-2 min-w-0">
             {titleIcon}
@@ -245,15 +248,15 @@ export function FloatingWindow({
       {!maximized && !minimized && (
         <>
           {/* Edges */}
-          <div className="absolute top-0 left-[10px] right-[10px] h-[5px] cursor-n-resize" onMouseDown={e => onResizeDown('n', e)} />
-          <div className="absolute bottom-0 left-[10px] right-[10px] h-[5px] cursor-s-resize" onMouseDown={e => onResizeDown('s', e)} />
-          <div className="absolute top-[10px] left-0 bottom-[10px] w-[5px] cursor-w-resize" onMouseDown={e => onResizeDown('w', e)} />
-          <div className="absolute top-[10px] right-0 bottom-[10px] w-[5px] cursor-e-resize" onMouseDown={e => onResizeDown('e', e)} />
+          <div className="absolute top-0 left-[10px] right-[10px] h-[5px] cursor-n-resize" style={{ touchAction: 'none' }} onPointerDown={e => onResizeDown('n', e)} />
+          <div className="absolute bottom-0 left-[10px] right-[10px] h-[5px] cursor-s-resize" style={{ touchAction: 'none' }} onPointerDown={e => onResizeDown('s', e)} />
+          <div className="absolute top-[10px] left-0 bottom-[10px] w-[5px] cursor-w-resize" style={{ touchAction: 'none' }} onPointerDown={e => onResizeDown('w', e)} />
+          <div className="absolute top-[10px] right-0 bottom-[10px] w-[5px] cursor-e-resize" style={{ touchAction: 'none' }} onPointerDown={e => onResizeDown('e', e)} />
           {/* Corners */}
-          <div className="absolute top-0 left-0 w-[10px] h-[10px] cursor-nw-resize" onMouseDown={e => onResizeDown('nw', e)} />
-          <div className="absolute top-0 right-0 w-[10px] h-[10px] cursor-ne-resize" onMouseDown={e => onResizeDown('ne', e)} />
-          <div className="absolute bottom-0 left-0 w-[10px] h-[10px] cursor-sw-resize" onMouseDown={e => onResizeDown('sw', e)} />
-          <div className="absolute bottom-0 right-0 w-[10px] h-[10px] cursor-se-resize" onMouseDown={e => onResizeDown('se', e)} />
+          <div className="absolute top-0 left-0 w-[10px] h-[10px] cursor-nw-resize" style={{ touchAction: 'none' }} onPointerDown={e => onResizeDown('nw', e)} />
+          <div className="absolute top-0 right-0 w-[10px] h-[10px] cursor-ne-resize" style={{ touchAction: 'none' }} onPointerDown={e => onResizeDown('ne', e)} />
+          <div className="absolute bottom-0 left-0 w-[10px] h-[10px] cursor-sw-resize" style={{ touchAction: 'none' }} onPointerDown={e => onResizeDown('sw', e)} />
+          <div className="absolute bottom-0 right-0 w-[10px] h-[10px] cursor-se-resize" style={{ touchAction: 'none' }} onPointerDown={e => onResizeDown('se', e)} />
         </>
       )}
     </div>

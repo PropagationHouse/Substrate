@@ -3,6 +3,7 @@ class AvatarEditor {
   constructor() {
     // Initialize state
     this.editorActive = false;
+    this.widgetEnabled = JSON.parse(localStorage.getItem('substrate:widgetEnabled') || 'false');
     this.selectedElement = null;
     this.isDragging = false;
     this.initialX = 0;
@@ -457,6 +458,7 @@ class AvatarEditor {
           <button id="save-config">Save Configuration</button>
           <button id="reset-config">Reset to Default</button>
           <button id="preview-transition">Preview Color Transition</button>
+          <button id="enable-widget-mode" title="Enable the clock widget on desktop as an alternate chat interface">⏱ Enable Widget</button>
         </div>
         <div class="dimension-controls">
           <label>Body Dimensions:</label>
@@ -1320,6 +1322,12 @@ class AvatarEditor {
     // Preview transition button
     const previewTransitionBtn = document.getElementById('preview-transition');
     previewTransitionBtn.addEventListener('click', () => this.previewColorTransition());
+    
+    // Enable Widget button — shows clock widget on desktop
+    const enableWidgetBtn = document.getElementById('enable-widget-mode');
+    if (enableWidgetBtn) {
+      enableWidgetBtn.addEventListener('click', () => this.toggleWidgetMode(enableWidgetBtn));
+    }
     
     // Color set controls
     const addColorSetBtn = document.getElementById('add-color-set');
@@ -2946,6 +2954,35 @@ class AvatarEditor {
     
     // Save configuration
     this.saveConfig();
+  }
+
+  toggleWidgetMode(btn) {
+    this.widgetEnabled = !this.widgetEnabled;
+    
+    if (this.widgetEnabled) {
+      btn.textContent = '⏱ Disable Widget';
+      btn.style.background = 'rgba(139, 92, 246, 0.15)';
+      btn.style.borderColor = 'rgba(139, 92, 246, 0.3)';
+    } else {
+      btn.textContent = '⏱ Enable Widget';
+      btn.style.background = '';
+      btn.style.borderColor = '';
+    }
+    
+    // Dispatch event to the dashboard/Electron to show or hide the widget
+    // The widget appears on desktop as an alternate chat interface
+    // The avatar agent remains free-moving and visible
+    window.dispatchEvent(new CustomEvent('substrate:toggle-widget-mode', {
+      detail: { enabled: this.widgetEnabled }
+    }));
+    
+    // If Electron IPC is available, also notify the main process
+    if (window.electronAPI && window.electronAPI.send) {
+      window.electronAPI.send('toggle-widget-mode', { enabled: this.widgetEnabled });
+    }
+    
+    // Persist preference
+    localStorage.setItem('substrate:widgetEnabled', JSON.stringify(this.widgetEnabled));
   }
 }
 
