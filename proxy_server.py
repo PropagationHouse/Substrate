@@ -3497,7 +3497,11 @@ class ChatAgent:
         and runs them through chat_with_tools in a background thread.
         """
         try:
-            prime_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'PRIME.md')
+            # Check userData first, then install dir
+            user_data = _get_user_data_dir_proxy()
+            prime_path = os.path.join(user_data, 'PRIME.md') if user_data else None
+            if not prime_path or not os.path.exists(prime_path):
+                prime_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'PRIME.md')
             if not os.path.exists(prime_path):
                 logger.info("No PRIME.md found, skipping startup tasks")
                 return
@@ -10399,9 +10403,17 @@ def api_local_memory():
             config_entries.append({'key': k, 'preview': preview})
 
     md_files = ['PRIME.md', 'CIRCUITS.md', 'SUBSTRATE.md', 'TOOL_PROMPT.md', 'ORIGIN.md', 'README.md', 'CHANGELOG.md']
+    _ud = _get_user_data_dir_proxy()
     system_docs = []
     for f in md_files:
-        full = os.path.join(_PROJECT_ROOT, f)
+        # Check userData first for user-editable files
+        full = None
+        if f in _USER_MD_FILES and _ud:
+            ud_full = os.path.join(_ud, f)
+            if os.path.exists(ud_full):
+                full = ud_full
+        if not full:
+            full = os.path.join(_PROJECT_ROOT, f)
         if os.path.exists(full):
             try:
                 system_docs.append({'name': f, 'path': f, 'size': os.path.getsize(full)})
@@ -13945,32 +13957,54 @@ Feel free to say hello however you wish.
 - Comment out tasks with `<!-- -->` to disable them
 """.strip()
 
+def _get_user_data_dir_proxy():
+    """Get the user data directory (survives updates)."""
+    ud = os.environ.get("SUBSTRATE_USER_DATA")
+    if ud:
+        return ud
+    if os.name == 'nt':
+        base = os.environ.get("APPDATA", os.path.expanduser("~"))
+        return os.path.join(base, "Substrate")
+    return os.path.join(os.path.expanduser("~"), ".substrate")
+
+
+_USER_MD_FILES = {"SUBSTRATE.md", "PRIME.md", "CIRCUITS.md"}
+
+
 def _load_or_create_md(filename, default_content):
     """Load a markdown file, creating it with default content if it doesn't exist.
-    Always returns default_content as fallback even if file creation fails (e.g. read-only dir)."""
+    For user files (SUBSTRATE.md, PRIME.md, CIRCUITS.md), checks userData first.
+    Always returns default_content as fallback even if file creation fails."""
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    cwd = os.getcwd()
-    paths = [
-        os.path.join(script_dir, filename),
-        os.path.join(cwd, filename),
-    ]
+    is_user_file = filename in _USER_MD_FILES
+    user_data = _get_user_data_dir_proxy() if is_user_file else None
+    
+    # Build search paths: userData first for user files
+    paths = []
+    if user_data:
+        paths.append(os.path.join(user_data, filename))
+    paths.append(os.path.join(script_dir, filename))
+    paths.append(os.path.join(os.getcwd(), filename))
+    
     for p in paths:
         if os.path.isfile(p):
             with open(p, 'r', encoding='utf-8') as f:
                 content = f.read()
             logger.info(f"Loaded {filename} from {p} ({len(content)} chars)")
             return content
-    # File not found anywhere — try to create it
-    for try_dir in [script_dir, cwd]:
-        try:
-            create_path = os.path.join(try_dir, filename)
-            with open(create_path, 'w', encoding='utf-8') as f:
-                f.write(default_content)
-            logger.info(f"Created {filename} with default content at {create_path}")
-            return default_content
-        except OSError as e:
-            logger.warning(f"Could not create {filename} in {try_dir}: {e}")
-    # Could not create file anywhere — still return the default content
+    
+    # File not found — create in userData for user files, else script_dir
+    target_dir = user_data if user_data else script_dir
+    try:
+        os.makedirs(target_dir, exist_ok=True)
+        create_path = os.path.join(target_dir, filename)
+        with open(create_path, 'w', encoding='utf-8') as f:
+            f.write(default_content)
+        logger.info(f"Created {filename} with default content at {create_path}")
+        return default_content
+    except OSError as e:
+        logger.warning(f"Could not create {filename} in {target_dir}: {e}")
+    
     logger.warning(f"Returning in-memory default for {filename} (file creation failed)")
     return default_content
 
@@ -13986,25 +14020,15 @@ def api_substrate_get():
 
 @app.route('/api/substrate', methods=['POST'])
 def api_substrate_save():
-    """Save SUBSTRATE.md content."""
+    """Save SUBSTRATE.md content to userData."""
     try:
         data = request.get_json(force=True, silent=True) or {}
         content = data.get('content', '')
         
         from pathlib import Path
-        substrate_paths = [
-            Path.cwd() / "SUBSTRATE.md",
-            Path(__file__).parent / "SUBSTRATE.md",
-        ]
-        
-        substrate_path = None
-        for p in substrate_paths:
-            if p.exists():
-                substrate_path = p
-                break
-        
-        if not substrate_path:
-            substrate_path = Path(__file__).parent / "SUBSTRATE.md"
+        user_data = _get_user_data_dir_proxy()
+        substrate_path = Path(user_data) / "SUBSTRATE.md" if user_data else Path(__file__).parent / "SUBSTRATE.md"
+        substrate_path.parent.mkdir(parents=True, exist_ok=True)
         
         substrate_path.write_text(content, encoding='utf-8')
         logger.info(f"Saved SUBSTRATE.md to {substrate_path}")
@@ -14026,25 +14050,15 @@ def api_circuits_get():
 
 @app.route('/api/circuits', methods=['POST'])
 def api_circuits_save():
-    """Save CIRCUITS.md content."""
+    """Save CIRCUITS.md content to userData."""
     try:
         data = request.get_json(force=True, silent=True) or {}
         content = data.get('content', '')
         
         from pathlib import Path
-        circuits_paths = [
-            Path.cwd() / "CIRCUITS.md",
-            Path(__file__).parent / "CIRCUITS.md",
-        ]
-        
-        circuits_path = None
-        for p in circuits_paths:
-            if p.exists():
-                circuits_path = p
-                break
-        
-        if not circuits_path:
-            circuits_path = Path(__file__).parent / "CIRCUITS.md"
+        user_data = _get_user_data_dir_proxy()
+        circuits_path = Path(user_data) / "CIRCUITS.md" if user_data else Path(__file__).parent / "CIRCUITS.md"
+        circuits_path.parent.mkdir(parents=True, exist_ok=True)
         
         circuits_path.write_text(content, encoding='utf-8')
         logger.info(f"Saved CIRCUITS.md to {circuits_path}")
@@ -14066,25 +14080,15 @@ def api_prime_get():
 
 @app.route('/api/prime', methods=['POST'])
 def api_prime_save():
-    """Save PRIME.md content."""
+    """Save PRIME.md content to userData."""
     try:
         data = request.get_json(force=True, silent=True) or {}
         content = data.get('content', '')
         
         from pathlib import Path
-        prime_paths = [
-            Path.cwd() / "PRIME.md",
-            Path(__file__).parent / "PRIME.md",
-        ]
-        
-        prime_path = None
-        for p in prime_paths:
-            if p.exists():
-                prime_path = p
-                break
-        
-        if not prime_path:
-            prime_path = Path(__file__).parent / "PRIME.md"
+        user_data = _get_user_data_dir_proxy()
+        prime_path = Path(user_data) / "PRIME.md" if user_data else Path(__file__).parent / "PRIME.md"
+        prime_path.parent.mkdir(parents=True, exist_ok=True)
         
         prime_path.write_text(content, encoding='utf-8')
         logger.info(f"Saved PRIME.md to {prime_path}")

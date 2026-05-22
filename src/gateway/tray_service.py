@@ -199,6 +199,25 @@ class CircuitsScheduler:
     # This is a cheap local stat() call, not a model call.
     FILE_CHECK_INTERVAL = 60
     
+    @staticmethod
+    def _resolve_circuits_path() -> Path:
+        """Resolve CIRCUITS.md — userData first, then install dir."""
+        ud = os.environ.get("SUBSTRATE_USER_DATA")
+        if ud:
+            ud_path = Path(ud) / "CIRCUITS.md"
+            if ud_path.exists():
+                return ud_path
+        elif os.name == 'nt':
+            base = os.environ.get("APPDATA", os.path.expanduser("~"))
+            ud_path = Path(base) / "Substrate" / "CIRCUITS.md"
+            if ud_path.exists():
+                return ud_path
+        else:
+            ud_path = Path.home() / ".substrate" / "CIRCUITS.md"
+            if ud_path.exists():
+                return ud_path
+        return Path(__file__).parent.parent.parent / "CIRCUITS.md"
+    
     def __init__(
         self,
         config: GatewayConfig,
@@ -214,7 +233,7 @@ class CircuitsScheduler:
         self._running = False
         self._thread: Optional[threading.Thread] = None
         self._stop_event = threading.Event()
-        self._circuits_path = Path(__file__).parent.parent.parent / "CIRCUITS.md"
+        self._circuits_path = self._resolve_circuits_path()
         self._last_mtime: Optional[float] = None
     
     def is_within_active_hours(self) -> bool:

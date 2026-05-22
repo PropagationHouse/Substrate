@@ -506,19 +506,33 @@ def save_skill_draft(name: str, content: str) -> Dict[str, Any]:
         return {"status": "error", "error": str(e)}
 
 
+def _get_user_skills_dir() -> str:
+    """Get the user skills directory (survives updates)."""
+    ud = os.environ.get("SUBSTRATE_USER_DATA")
+    if not ud:
+        if os.name == 'nt':
+            base = os.environ.get("APPDATA", os.path.expanduser("~"))
+            ud = os.path.join(base, "Substrate")
+        else:
+            ud = os.path.join(os.path.expanduser("~"), ".substrate")
+    return os.path.join(ud, "skills")
+
+
 def promote_skill(draft_path: str) -> Dict[str, Any]:
     """
     Promote a tested skill from workspace/emergent/ to skills/.
     Called after user confirms the skill works.
+    Writes to userData/skills/ so skills survive updates.
     """
     import shutil
 
     if not os.path.isfile(draft_path):
         return {"status": "error", "error": f"Draft not found: {draft_path}"}
 
-    os.makedirs(SKILLS_DIR, exist_ok=True)
+    dest_dir = _get_user_skills_dir()
+    os.makedirs(dest_dir, exist_ok=True)
     filename = os.path.basename(draft_path)
-    dest = os.path.join(SKILLS_DIR, filename)
+    dest = os.path.join(dest_dir, filename)
 
     try:
         shutil.move(draft_path, dest)

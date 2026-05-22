@@ -90,9 +90,15 @@ workspace/recordings/
 # User data files (personal to each machine, never commit)
 # Only ignores root-level copy; installer/templates/ version stays tracked
 /CIRCUITS.md
+/SUBSTRATE.md
+/PRIME.md
 profiles/
 chloe_schedule.md
 dashboard/src/chat_files.txt
+
+# Skills — user-created/customized (templates in installer/templates/skills/)
+skills/*.md
+!skills/.gitkeep
 
 # TLS certs (generated per-machine)
 certs/server.key

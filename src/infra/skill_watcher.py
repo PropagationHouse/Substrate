@@ -13,6 +13,7 @@ Usage:
     start_skill_watcher()  # Call once at startup
 """
 
+import os
 import time
 import logging
 import threading
@@ -22,7 +23,28 @@ from typing import Any, Dict, Optional
 logger = logging.getLogger(__name__)
 
 SOMA = Path(__file__).parent.parent.parent
-SKILLS_DIR = SOMA / "skills"
+
+
+def _resolve_skills_dir() -> Path:
+    """Resolve the skills directory — userData first, then install dir."""
+    ud = os.environ.get("SUBSTRATE_USER_DATA")
+    if ud:
+        ud_skills = Path(ud) / "skills"
+        if ud_skills.is_dir():
+            return ud_skills
+    elif os.name == 'nt':
+        base = os.environ.get("APPDATA", os.path.expanduser("~"))
+        ud_skills = Path(base) / "Substrate" / "skills"
+        if ud_skills.is_dir():
+            return ud_skills
+    else:
+        ud_skills = Path.home() / ".substrate" / "skills"
+        if ud_skills.is_dir():
+            return ud_skills
+    return SOMA / "skills"
+
+
+SKILLS_DIR = _resolve_skills_dir()
 
 # Try to import watchdog for real-time fs watching
 try:

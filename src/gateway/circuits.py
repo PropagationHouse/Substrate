@@ -46,23 +46,66 @@ class CircuitsConfig:
     skip_when_empty: bool = True
 
 
+def _get_user_data_dir() -> Optional[Path]:
+    """Get the user data directory (survives updates)."""
+    ud = os.environ.get("SUBSTRATE_USER_DATA")
+    if ud:
+        return Path(ud)
+    if os.name == 'nt':
+        base = os.environ.get("APPDATA", os.path.expanduser("~"))
+        return Path(base) / "Substrate"
+    return Path.home() / ".substrate"
+
+
 def resolve_circuits_file(workspace: Optional[str] = None) -> Path:
-    """Resolve the path to CIRCUITS.md file."""
+    """Resolve the path to CIRCUITS.md file.
+    
+    Priority: userData > workspace > install dir > template copy-on-first-use.
+    """
     if workspace:
-        return Path(workspace) / "CIRCUITS.md"
+        wp = Path(workspace) / "CIRCUITS.md"
+        if wp.exists():
+            return wp
     
-    # Default to current directory or project root
-    cwd = Path.cwd()
-    if (cwd / "CIRCUITS.md").exists():
-        return cwd / "CIRCUITS.md"
+    # Check userData first (survives updates)
+    user_data = _get_user_data_dir()
+    if user_data:
+        ud_path = user_data / "CIRCUITS.md"
+        if ud_path.exists():
+            return ud_path
     
-    # Check parent directories up to 3 levels
-    for parent in [cwd.parent, cwd.parent.parent, cwd.parent.parent.parent]:
-        if (parent / "CIRCUITS.md").exists():
-            return parent / "CIRCUITS.md"
+    # Check install dir / cwd
+    soma = Path(__file__).parent.parent.parent
+    install_path = soma / "CIRCUITS.md"
+    if install_path.exists():
+        # Auto-migrate to userData
+        if user_data:
+            ud_path = user_data / "CIRCUITS.md"
+            if not ud_path.exists():
+                try:
+                    import shutil
+                    user_data.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(install_path, ud_path)
+                    logger.info("Migrated CIRCUITS.md to userData")
+                    return ud_path
+                except Exception:
+                    pass
+        return install_path
     
-    # Default location
-    return cwd / "CIRCUITS.md"
+    # Copy-on-first-use from template
+    template = soma / "installer" / "templates" / "CIRCUITS.md"
+    if template.exists():
+        target = (user_data / "CIRCUITS.md") if user_data else install_path
+        try:
+            import shutil
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(template, target)
+            logger.info(f"Created CIRCUITS.md from template at {target}")
+            return target
+        except Exception:
+            pass
+    
+    return (user_data / "CIRCUITS.md") if user_data else install_path
 
 
 def read_circuits_file(workspace: Optional[str] = None) -> Optional[str]:

@@ -38,36 +38,90 @@ SOMA = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 
 # ─── File loaders ─────────────────────────────────────────────────────
 
-def _load_file(filename: str) -> Optional[str]:
-    """Load a file from project root. Returns content or None.
+def _get_user_data_dir() -> Optional[str]:
+    """Get the user data directory (survives updates).
     
-    If the file doesn't exist but a template exists at installer/templates/,
-    copies the template first (copy-on-first-use).
+    Set by Electron via SUBSTRATE_USER_DATA env var, or falls back to
+    platform-appropriate location for standalone/dev use.
     """
-    primary = os.path.join(SOMA, filename)
-    if not os.path.isfile(primary):
-        template = os.path.join(SOMA, "installer", "templates", filename)
-        if os.path.isfile(template):
-            try:
-                import shutil
-                shutil.copy2(template, primary)
-                logger.debug(f"[PROMPT] Created {filename} from template")
-            except Exception as e:
-                logger.debug(f"[PROMPT] Failed to copy template for {filename}: {e}")
+    ud = os.environ.get("SUBSTRATE_USER_DATA")
+    if ud:
+        return ud
+    # Fallback for standalone (non-Electron) use
+    if os.name == 'nt':
+        base = os.environ.get("APPDATA", os.path.expanduser("~"))
+        return os.path.join(base, "Substrate")
+    return os.path.join(os.path.expanduser("~"), ".substrate")
+
+
+# User-editable files that should be read from userData first
+_USER_FILES = {"SUBSTRATE.md", "PRIME.md", "CIRCUITS.md"}
+
+
+def _load_file(filename: str) -> Optional[str]:
+    """Load a file, checking userData first for user-editable files.
     
-    paths = [
-        primary,
-        os.path.join(os.getcwd(), filename),
-    ]
-    for p in paths:
-        if os.path.isfile(p):
+    Priority order for user files (SUBSTRATE.md, PRIME.md, CIRCUITS.md):
+      1. userData dir  (survives updates)
+      2. Project root  (install dir — may be overwritten by updates)
+    
+    If the file doesn't exist anywhere, copies from installer/templates/
+    into userData (copy-on-first-use).
+    """
+    user_data = _get_user_data_dir()
+    is_user_file = filename in _USER_FILES
+    
+    # For user-editable files, check userData first
+    if is_user_file and user_data:
+        user_path = os.path.join(user_data, filename)
+        if os.path.isfile(user_path):
             try:
-                with open(p, 'r', encoding='utf-8') as f:
+                with open(user_path, 'r', encoding='utf-8') as f:
                     content = f.read().strip()
                 if content:
                     return content
             except Exception as e:
-                logger.debug(f"[PROMPT] Failed to load {filename}: {e}")
+                logger.debug(f"[PROMPT] Failed to load {filename} from userData: {e}")
+    
+    # Check project root (install dir)
+    primary = os.path.join(SOMA, filename)
+    if os.path.isfile(primary):
+        try:
+            with open(primary, 'r', encoding='utf-8') as f:
+                content = f.read().strip()
+            if content:
+                # Migrate: if this is a user file and it exists in install dir
+                # but NOT in userData, copy it to userData so future updates
+                # don't overwrite the user's version
+                if is_user_file and user_data:
+                    ud_path = os.path.join(user_data, filename)
+                    if not os.path.isfile(ud_path):
+                        try:
+                            os.makedirs(user_data, exist_ok=True)
+                            import shutil
+                            shutil.copy2(primary, ud_path)
+                            logger.info(f"[PROMPT] Migrated {filename} to userData for safe keeping")
+                        except Exception as e:
+                            logger.debug(f"[PROMPT] Failed to migrate {filename} to userData: {e}")
+                return content
+        except Exception as e:
+            logger.debug(f"[PROMPT] Failed to load {filename}: {e}")
+    
+    # Copy-on-first-use from template
+    template = os.path.join(SOMA, "installer", "templates", filename)
+    if os.path.isfile(template):
+        try:
+            import shutil
+            # Copy to userData if it's a user file
+            target = os.path.join(user_data, filename) if (is_user_file and user_data) else primary
+            os.makedirs(os.path.dirname(target), exist_ok=True)
+            shutil.copy2(template, target)
+            logger.debug(f"[PROMPT] Created {filename} from template at {target}")
+            with open(target, 'r', encoding='utf-8') as f:
+                return f.read().strip()
+        except Exception as e:
+            logger.debug(f"[PROMPT] Failed to copy template for {filename}: {e}")
+    
     return None
 
 
@@ -80,33 +134,60 @@ def _scan_skills() -> List[Dict[str, str]]:
     """
     Scan skills/ directory for .md files, extract frontmatter.
     Returns list of {name, description, triggers, location}.
+    
+    Checks userData/skills/ first (user-created/customized skills),
+    then install dir skills/ for defaults. userData skills win on name collision.
+    Also migrates existing install-dir skills to userData on first run.
     """
-    skills_dir = os.path.join(SOMA, "skills")
-    if not os.path.isdir(skills_dir):
-        return []
-
-    skills = []
-    try:
-        for fname in sorted(os.listdir(skills_dir)):
-            if not fname.endswith('.md'):
-                continue
-            fpath = os.path.join(skills_dir, fname)
+    user_data = _get_user_data_dir()
+    user_skills_dir = os.path.join(user_data, "skills") if user_data else None
+    install_skills_dir = os.path.join(SOMA, "skills")
+    
+    # Migrate: if user has skills in install dir but not in userData, copy them
+    if user_skills_dir and os.path.isdir(install_skills_dir):
+        if not os.path.isdir(user_skills_dir):
             try:
-                with open(fpath, 'r', encoding='utf-8') as f:
-                    raw = f.read(2000)  # Only need frontmatter
-                # Parse YAML frontmatter
-                fm = _parse_frontmatter(raw)
-                if fm.get('name') and fm.get('description'):
-                    skills.append({
-                        'name': fm['name'],
-                        'description': fm['description'],
-                        'triggers': fm.get('triggers', ''),
-                        'location': f"skills/{fname}",
-                    })
+                import shutil
+                os.makedirs(user_skills_dir, exist_ok=True)
+                for fname in os.listdir(install_skills_dir):
+                    if fname.endswith('.md'):
+                        src = os.path.join(install_skills_dir, fname)
+                        dst = os.path.join(user_skills_dir, fname)
+                        if not os.path.isfile(dst):
+                            shutil.copy2(src, dst)
+                logger.info(f"[PROMPT] Migrated skills to userData for safe keeping")
             except Exception as e:
-                logger.debug(f"[PROMPT] Failed to parse skill {fname}: {e}")
-    except Exception as e:
-        logger.debug(f"[PROMPT] Failed to scan skills dir: {e}")
+                logger.debug(f"[PROMPT] Failed to migrate skills: {e}")
+    
+    # Scan directories: userData first, then install dir for any missing defaults
+    seen_files = set()
+    skills = []
+    
+    for skills_dir in [user_skills_dir, install_skills_dir]:
+        if not skills_dir or not os.path.isdir(skills_dir):
+            continue
+        try:
+            for fname in sorted(os.listdir(skills_dir)):
+                if not fname.endswith('.md') or fname in seen_files:
+                    continue
+                seen_files.add(fname)
+                fpath = os.path.join(skills_dir, fname)
+                try:
+                    with open(fpath, 'r', encoding='utf-8') as f:
+                        raw = f.read(2000)  # Only need frontmatter
+                    # Parse YAML frontmatter
+                    fm = _parse_frontmatter(raw)
+                    if fm.get('name') and fm.get('description'):
+                        skills.append({
+                            'name': fm['name'],
+                            'description': fm['description'],
+                            'triggers': fm.get('triggers', ''),
+                            'location': f"skills/{fname}",
+                        })
+                except Exception as e:
+                    logger.debug(f"[PROMPT] Failed to parse skill {fname}: {e}")
+        except Exception as e:
+            logger.debug(f"[PROMPT] Failed to scan skills dir {skills_dir}: {e}")
 
     return skills
 

@@ -18,21 +18,68 @@ from dataclasses import dataclass
 logger = logging.getLogger("gateway.substrate_prime")
 
 
+def _get_user_data_dir() -> Optional[Path]:
+    """Get the user data directory (survives updates)."""
+    ud = os.environ.get("SUBSTRATE_USER_DATA")
+    if ud:
+        return Path(ud)
+    if os.name == 'nt':
+        base = os.environ.get("APPDATA", os.path.expanduser("~"))
+        return Path(base) / "Substrate"
+    return Path.home() / ".substrate"
+
+
 def resolve_file_path(filename: str, workspace: Optional[str] = None) -> Path:
-    """Resolve path to SUBSTRATE.md or PRIME.md file."""
+    """Resolve path to SUBSTRATE.md or PRIME.md file.
+    
+    Priority: userData dir > workspace > install dir.
+    Auto-migrates from install dir to userData on first access.
+    """
     if workspace:
-        return Path(workspace) / filename
+        wp = Path(workspace) / filename
+        if wp.exists():
+            return wp
     
-    # Check current directory and parent directories
-    cwd = Path.cwd()
-    for check_dir in [cwd, cwd.parent, cwd.parent.parent]:
-        candidate = check_dir / filename
-        if candidate.exists():
-            return candidate
+    # Check userData first (survives updates)
+    user_data = _get_user_data_dir()
+    if user_data:
+        ud_path = user_data / filename
+        if ud_path.exists():
+            return ud_path
     
-    # Default to soma (project root)
+    # Check install dir (soma)
     soma = Path(__file__).parent.parent.parent
-    return soma / filename
+    install_path = soma / filename
+    
+    # Auto-migrate: copy from install dir to userData so future updates don't overwrite
+    if install_path.exists() and user_data:
+        ud_path = user_data / filename
+        if not ud_path.exists():
+            try:
+                import shutil
+                user_data.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(install_path, ud_path)
+                logger.info(f"Migrated {filename} to userData for safe keeping")
+                return ud_path
+            except Exception as e:
+                logger.debug(f"Failed to migrate {filename} to userData: {e}")
+        return install_path
+    
+    # Copy-on-first-use from template
+    if not install_path.exists():
+        template = soma / "installer" / "templates" / filename
+        if template.exists():
+            target = (user_data / filename) if user_data else install_path
+            try:
+                import shutil
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(template, target)
+                logger.info(f"Created {filename} from template at {target}")
+                return target
+            except Exception as e:
+                logger.debug(f"Failed to copy template for {filename}: {e}")
+    
+    return install_path
 
 
 def read_substrate_file(workspace: Optional[str] = None) -> Optional[str]:

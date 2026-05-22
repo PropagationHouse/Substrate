@@ -17,6 +17,7 @@ CIRCUITS.md format:
 """
 
 import re
+import os
 import logging
 from typing import Dict, Any, List, Optional
 from pathlib import Path
@@ -29,21 +30,61 @@ SOMA = Path(__file__).parent.parent.parent
 CIRCUITS_TEMPLATE = SOMA / "installer" / "templates" / "CIRCUITS.md"
 
 
+def _get_user_data_dir() -> Optional[Path]:
+    """Get the user data directory (survives updates)."""
+    ud = os.environ.get("SUBSTRATE_USER_DATA")
+    if ud:
+        return Path(ud)
+    if os.name == 'nt':
+        base = os.environ.get("APPDATA", os.path.expanduser("~"))
+        return Path(base) / "Substrate"
+    return Path.home() / ".substrate"
+
+
 def _get_circuits_path() -> Path:
-    """Resolve CIRCUITS.md path with copy-on-first-use from template.
+    """Resolve CIRCUITS.md path — userData first, then install dir.
     
-    If CIRCUITS.md doesn't exist at the project root, copies the default
-    template so users get a starter file without overwriting existing data.
+    Priority: userData > install dir > template copy-on-first-use.
+    Auto-migrates from install dir to userData on first access.
     """
-    user_path = SOMA / "CIRCUITS.md"
-    if not user_path.exists() and CIRCUITS_TEMPLATE.exists():
+    user_data = _get_user_data_dir()
+    
+    # Check userData first
+    if user_data:
+        ud_path = user_data / "CIRCUITS.md"
+        if ud_path.exists():
+            return ud_path
+    
+    # Check install dir
+    install_path = SOMA / "CIRCUITS.md"
+    if install_path.exists():
+        # Auto-migrate to userData
+        if user_data:
+            ud_path = user_data / "CIRCUITS.md"
+            if not ud_path.exists():
+                try:
+                    import shutil
+                    user_data.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(install_path, ud_path)
+                    logger.info("Migrated CIRCUITS.md to userData")
+                    return ud_path
+                except Exception as e:
+                    logger.warning(f"Failed to migrate CIRCUITS.md: {e}")
+        return install_path
+    
+    # Copy-on-first-use from template into userData
+    if CIRCUITS_TEMPLATE.exists():
+        target = (user_data / "CIRCUITS.md") if user_data else install_path
         try:
             import shutil
-            shutil.copy2(CIRCUITS_TEMPLATE, user_path)
-            logger.info(f"Created CIRCUITS.md from template")
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(CIRCUITS_TEMPLATE, target)
+            logger.info(f"Created CIRCUITS.md from template at {target}")
+            return target
         except Exception as e:
             logger.warning(f"Failed to copy CIRCUITS.md template: {e}")
-    return user_path
+    
+    return (user_data / "CIRCUITS.md") if user_data else install_path
 
 
 def _read_circuits() -> str:

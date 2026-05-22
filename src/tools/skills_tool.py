@@ -30,19 +30,52 @@ _skills_cache: Dict[str, Dict[str, Any]] = {}
 _cache_time: float = 0
 
 
+def _get_user_data_dir() -> Optional[Path]:
+    """Get the user data directory (survives updates)."""
+    ud = os.environ.get("SUBSTRATE_USER_DATA")
+    if ud:
+        return Path(ud)
+    if os.name == 'nt':
+        base = os.environ.get("APPDATA", os.path.expanduser("~"))
+        return Path(base) / "Substrate"
+    return Path.home() / ".substrate"
+
+
 def _find_skills_dir() -> Optional[Path]:
-    """Find the skills directory."""
-    # Check relative to current working directory
+    """Find the skills directory. userData/skills/ takes priority."""
+    user_data = _get_user_data_dir()
+    
+    # Check userData first (survives updates)
+    if user_data:
+        ud_skills = user_data / "skills"
+        if ud_skills.is_dir():
+            return ud_skills
+    
+    # Check install dir
+    soma = Path(__file__).parent.parent.parent
+    install_skills = soma / "skills"
+    if install_skills.is_dir():
+        # Auto-migrate to userData
+        if user_data:
+            ud_skills = user_data / "skills"
+            if not ud_skills.is_dir():
+                try:
+                    import shutil
+                    ud_skills.mkdir(parents=True, exist_ok=True)
+                    for f in install_skills.glob("*.md"):
+                        dst = ud_skills / f.name
+                        if not dst.exists():
+                            shutil.copy2(f, dst)
+                    logger.info("Migrated skills/ to userData for safe keeping")
+                    return ud_skills
+                except Exception as e:
+                    logger.debug(f"Failed to migrate skills: {e}")
+        return install_skills
+    
+    # Fallback: check other directories
     cwd = Path.cwd()
     for dir_name in SKILLS_DIRS:
         skills_path = cwd / dir_name
-        if skills_path.exists() and skills_path.is_dir():
-            return skills_path
-    
-    # Check relative to this file's directory (soma / project root)
-    soma = Path(__file__).parent.parent.parent
-    for dir_name in SKILLS_DIRS:
-        skills_path = soma / dir_name
         if skills_path.exists() and skills_path.is_dir():
             return skills_path
     

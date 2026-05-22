@@ -181,6 +181,95 @@ def create_dirs():
     return created
 
 
+def _get_user_data_dir():
+    """Get the user data directory (survives updates).
+    
+    On Windows installed apps: %APPDATA%/Substrate
+    Electron sets SUBSTRATE_USER_DATA env var at runtime, but during
+    first_run.py we may not have it yet, so use platform default.
+    """
+    ud = os.environ.get("SUBSTRATE_USER_DATA")
+    if ud:
+        return ud
+    if sys.platform == 'win32':
+        base = os.environ.get("APPDATA", os.path.expanduser("~"))
+        return os.path.join(base, "Substrate")
+    return os.path.join(os.path.expanduser("~"), ".substrate")
+
+
+def seed_user_data():
+    """Copy template files into userData if they don't already exist.
+    
+    This seeds new installs with defaults (SUBSTRATE.md, PRIME.md,
+    CIRCUITS.md, skills/) without overwriting existing user data.
+    Returns list of files seeded.
+    """
+    user_data = _get_user_data_dir()
+    templates_dir = os.path.join(APP_DIR, 'installer', 'templates')
+    seeded = []
+    
+    if not os.path.isdir(templates_dir):
+        return seeded
+    
+    os.makedirs(user_data, exist_ok=True)
+    
+    # Seed individual template files
+    for fname in ['SUBSTRATE.md', 'PRIME.md', 'CIRCUITS.md']:
+        src = os.path.join(templates_dir, fname)
+        dst = os.path.join(user_data, fname)
+        if os.path.isfile(src) and not os.path.isfile(dst):
+            shutil.copy2(src, dst)
+            seeded.append(fname)
+    
+    # Seed skills directory
+    skills_src = os.path.join(templates_dir, 'skills')
+    skills_dst = os.path.join(user_data, 'skills')
+    if os.path.isdir(skills_src):
+        os.makedirs(skills_dst, exist_ok=True)
+        for fname in os.listdir(skills_src):
+            if fname.endswith('.md'):
+                src = os.path.join(skills_src, fname)
+                dst = os.path.join(skills_dst, fname)
+                if not os.path.isfile(dst):
+                    shutil.copy2(src, dst)
+                    seeded.append(f'skills/{fname}')
+    
+    # Also migrate from install dir if user has customized files there
+    # (handles upgrade from pre-userData versions)
+    for fname in ['SUBSTRATE.md', 'PRIME.md', 'CIRCUITS.md']:
+        install_file = os.path.join(APP_DIR, fname)
+        ud_file = os.path.join(user_data, fname)
+        if os.path.isfile(install_file) and not os.path.isfile(ud_file):
+            # Check if install file differs from template (user customized it)
+            template_file = os.path.join(templates_dir, fname)
+            if os.path.isfile(template_file):
+                try:
+                    with open(install_file, 'r', encoding='utf-8') as f:
+                        install_content = f.read()
+                    with open(template_file, 'r', encoding='utf-8') as f:
+                        template_content = f.read()
+                    if install_content != template_content:
+                        # User customized it — migrate their version
+                        shutil.copy2(install_file, ud_file)
+                        seeded.append(f'{fname} (migrated)')
+                except Exception:
+                    pass
+    
+    # Migrate custom skills from install dir
+    install_skills = os.path.join(APP_DIR, 'skills')
+    if os.path.isdir(install_skills):
+        os.makedirs(skills_dst, exist_ok=True)
+        for fname in os.listdir(install_skills):
+            if fname.endswith('.md'):
+                src = os.path.join(install_skills, fname)
+                dst = os.path.join(skills_dst, fname)
+                if not os.path.isfile(dst):
+                    shutil.copy2(src, dst)
+                    seeded.append(f'skills/{fname} (migrated)')
+    
+    return seeded
+
+
 def run_all_checks():
     """Run all prerequisite checks and return combined status."""
     results = {
@@ -189,6 +278,7 @@ def run_all_checks():
         "deps_installed": check_deps_installed(),
         "needs_update": needs_update(),
         "dirs_created": create_dirs(),
+        "user_data_seeded": seed_user_data(),
         "app_version": _get_app_version(),
         "installed_version": _get_installed_version(),
     }

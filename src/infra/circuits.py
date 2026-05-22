@@ -473,24 +473,63 @@ class CircuitsRunner:
             logger.warning(f"Error checking active hours: {e}")
             return True
     
+    @staticmethod
+    def _get_user_data_dir() -> Optional[Path]:
+        """Get the user data directory (survives updates)."""
+        ud = os.environ.get("SUBSTRATE_USER_DATA")
+        if ud:
+            return Path(ud)
+        if os.name == 'nt':
+            base = os.environ.get("APPDATA", os.path.expanduser("~"))
+            return Path(base) / "Substrate"
+        return Path.home() / ".substrate"
+
     def _get_circuits_path(self) -> Path:
         """Resolve CIRCUITS.md path with copy-on-first-use from template.
         
-        If CIRCUITS.md doesn't exist at the project root, copies the default
-        template so users get a starter file without overwriting existing data.
+        Priority: userData > install dir > template copy-on-first-use.
+        Auto-migrates from install dir to userData on first access.
         """
         soma = Path(__file__).parent.parent.parent
-        user_path = soma / "CIRCUITS.md"
-        if not user_path.exists():
-            template = soma / "installer" / "templates" / "CIRCUITS.md"
-            if template.exists():
-                try:
-                    import shutil
-                    shutil.copy2(template, user_path)
-                    logger.info("Created CIRCUITS.md from template")
-                except Exception as e:
-                    logger.warning(f"Failed to copy CIRCUITS.md template: {e}")
-        return user_path
+        user_data = self._get_user_data_dir()
+        
+        # Check userData first (survives updates)
+        if user_data:
+            ud_path = user_data / "CIRCUITS.md"
+            if ud_path.exists():
+                return ud_path
+        
+        # Check install dir
+        install_path = soma / "CIRCUITS.md"
+        if install_path.exists():
+            # Auto-migrate to userData
+            if user_data:
+                ud_path = user_data / "CIRCUITS.md"
+                if not ud_path.exists():
+                    try:
+                        import shutil
+                        user_data.mkdir(parents=True, exist_ok=True)
+                        shutil.copy2(install_path, ud_path)
+                        logger.info("Migrated CIRCUITS.md to userData for safe keeping")
+                        return ud_path
+                    except Exception as e:
+                        logger.warning(f"Failed to migrate CIRCUITS.md: {e}")
+            return install_path
+        
+        # Copy-on-first-use from template into userData
+        template = soma / "installer" / "templates" / "CIRCUITS.md"
+        if template.exists():
+            target = (user_data / "CIRCUITS.md") if user_data else install_path
+            try:
+                import shutil
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(template, target)
+                logger.info(f"Created CIRCUITS.md from template at {target}")
+                return target
+            except Exception as e:
+                logger.warning(f"Failed to copy CIRCUITS.md template: {e}")
+        
+        return (user_data / "CIRCUITS.md") if user_data else install_path
     
     def _read_circuits_file_raw(self) -> Optional[str]:
         """Read raw CIRCUITS.md content. Returns None if file doesn't exist."""

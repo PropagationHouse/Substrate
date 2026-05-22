@@ -1344,7 +1344,7 @@ function startPythonBackend() {
         pythonProcess = spawn(pythonPath, [agentPath], {
             stdio: ['pipe', 'pipe', 'pipe'],
             cwd: __dirname,
-            env: { ...process.env, PYTHONUNBUFFERED: '1' }
+            env: { ...process.env, PYTHONUNBUFFERED: '1', SUBSTRATE_USER_DATA: app.getPath('userData') }
         });
         debugLog(`Spawned PID: ${pythonProcess.pid}`);
 
