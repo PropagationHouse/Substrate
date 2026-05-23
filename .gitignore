@@ -4,6 +4,7 @@ config/mcp_servers.json
 # Custom settings (contains API keys)
 custom_settings.json
 service_account.json
+secrets/
 
 # Python
 venv/
@@ -46,7 +47,10 @@ XGO_Audio_Bridge/xgo_audio/*.wav
 speech_components/vosk-model-*/
 
 # Workspace artifacts (runtime-generated)
-workspace/
+workspace/*
+# Exception: chess game (shipped with release)
+!workspace/chess_game/
+workspace/chess_game/learning_profile.json
 
 # Agent-generated apps / UGC (created by the agent at user request)
 cocktail_app/

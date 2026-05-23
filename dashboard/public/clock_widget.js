@@ -47,8 +47,9 @@
             idle: [],
             speaking: [],
             laughing: [],
-            thinking: [],
-            excited: [],
+            angry: [],
+            sleeping: [],
+            yelling: [],
             searching: []
         }
     };
@@ -768,29 +769,33 @@
     }
 
     function loadGifsFromServer() {
-        // Check if we already have GIFs in localStorage
-        const hasLocal = style.emotionGifs && Object.keys(style.emotionGifs).some(k =>
-            (style.emotionGifs[k] || []).some(u => u && u.trim())
-        );
-        if (hasLocal) {
-            showEmotionGif('idle');
-            return;
-        }
-        // Fallback: fetch from server
+        // Always fetch from server to stay synced with desktop widget GIF config
         fetch('/ui/widget-style').then(r => r.json()).then(data => {
             if (data && data.emotionGifs) {
-                style.emotionGifs = data.emotionGifs;
+                // Merge server GIFs into local style (server wins for non-empty categories)
+                const serverGifs = data.emotionGifs;
+                for (const key of Object.keys(serverGifs)) {
+                    const serverList = (serverGifs[key] || []).filter(u => u && u.trim());
+                    if (serverList.length > 0) {
+                        style.emotionGifs[key] = serverGifs[key];
+                    }
+                }
                 saveStyle();
-                showEmotionGif('idle');
             }
-        }).catch(() => {});
+            showEmotionGif('idle');
+        }).catch(() => {
+            // Fallback to whatever we have locally
+            showEmotionGif('idle');
+        });
     }
 
     const EMOTION_MAP = {
         happy: 'laughing', joy: 'laughing', amused: 'laughing', humor: 'laughing',
-        curious: 'thinking', analytical: 'thinking', contemplative: 'thinking',
-        excited: 'excited', enthusiastic: 'excited', energetic: 'excited',
-        searching: 'searching', researching: 'searching',
+        curious: 'searching', analytical: 'searching', contemplative: 'searching',
+        angry: 'angry', frustrated: 'angry', annoyed: 'angry',
+        sleeping: 'sleeping', sleepy: 'sleeping', tired: 'sleeping',
+        yelling: 'yelling', surprised: 'yelling', shocked: 'yelling',
+        searching: 'searching', researching: 'searching', thinking: 'searching',
         speaking: 'speaking', talking: 'speaking'
     };
     function mapEmotionToGifCategory(emotion) {

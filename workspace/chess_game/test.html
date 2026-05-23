@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html><head><title>Chess Test</title>
+<style>
+body { background: #111; color: white; font-family: sans-serif; display:flex; justify-content:center; align-items:center; height:100vh; margin:0; flex-direction:column; }
+#board { display:grid; grid-template-columns:repeat(8,60px); grid-template-rows:repeat(8,60px); border:2px solid #555; }
+.sq { width:60px; height:60px; display:flex; justify-content:center; align-items:center; font-size:40px; }
+.light { background: #b58863; }
+.dark { background: #f0d9b5; }
+#status { margin-top:10px; font-size:14px; color:#888; }
+</style></head>
+<body>
+<div id='board'></div>
+<div id='status'>Loading...</div>
+<script>
+const PIECES = {p:'\u265f',r:'\u265c',n:'\u265e',b:'\u265d',q:'\u265b',k:'\u265a',P:'\u2659',R:'\u2656',N:'\u2658',B:'\u2657',Q:'\u2655',K:'\u2654'};
+const board = document.getElementById('board');
+const status = document.getElementById('status');
+
+// Create 64 squares
+for(let i=0;i<64;i++){
+  const sq=document.createElement('div');
+  sq.className='sq '+((Math.floor(i/8)+i%8)%2===0?'light':'dark');
+  sq.dataset.idx=i;
+  board.appendChild(sq);
+}
+
+async function render(){
+  try{
+    const r=await fetch('/state');
+    if(!r.ok){status.textContent='Fetch error: '+r.status;return;}
+    const d=await r.json();
+    status.textContent='FEN: '+d.fen;
+    const sqs=board.children;
+    for(let i=0;i<64;i++) sqs[i].textContent='';
+    const pos=d.fen.split(' ')[0];
+    let idx=0;
+    for(const c of pos){
+      if(c==='/') continue;
+      if(isNaN(c)){sqs[idx].textContent=PIECES[c]||c;idx++;}
+      else idx+=parseInt(c);
+    }
+  }catch(e){status.textContent='Error: '+e.message;}
+}
+render();
+</script></body></html>

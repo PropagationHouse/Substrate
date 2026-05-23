@@ -899,7 +899,7 @@ export default function App({ onLogout }: AppProps) {
               )}
             </button>
             {/* Hover flyout */}
-            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:flex flex-col gap-1 p-1.5 rounded-xl bg-[#1a1a2e]/95 border border-white/[0.08] backdrop-blur-xl shadow-xl min-w-[120px] z-50">
+            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 hidden group-hover:flex flex-col gap-1 p-1.5 rounded-xl bg-[#1a1a2e]/95 border border-white/[0.08] backdrop-blur-xl shadow-xl min-w-[120px] z-50">
               <button
                 onClick={toggleChat}
                 className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs transition-all ${

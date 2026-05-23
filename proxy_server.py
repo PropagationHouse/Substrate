@@ -737,6 +737,101 @@ class RemoteAPIError(Exception):
     pass
 
 
+# ── Vertex AI Service Account Auth ──────────────────────────────────────
+# Manages OAuth2 access tokens for Google Cloud Vertex AI using a service
+# account JSON key file.  Tokens are cached and auto-refreshed.
+
+class _VertexTokenManager:
+    """Manages short-lived OAuth2 access tokens for Vertex AI via service account JWT."""
+
+    _SCOPES = "https://www.googleapis.com/auth/cloud-platform"
+    _TOKEN_URI = "https://oauth2.googleapis.com/token"
+    _TOKEN_LIFETIME = 3600  # 1 hour
+
+    def __init__(self):
+        self._access_token = None
+        self._expires_at = 0  # epoch seconds
+        self._sa_data = None  # parsed service account JSON
+        self._sa_path = None
+        self._lock = threading.Lock()
+
+    def configure(self, sa_json_path):
+        """Load service account JSON file. Call once or when path changes."""
+        if not sa_json_path or not os.path.isfile(sa_json_path):
+            self._sa_data = None
+            self._sa_path = None
+            return False
+        try:
+            with open(sa_json_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            if data.get('type') != 'service_account':
+                logger.error(f"[VERTEX] JSON file is not a service account (type={data.get('type')})")
+                return False
+            self._sa_data = data
+            self._sa_path = sa_json_path
+            self._access_token = None
+            self._expires_at = 0
+            logger.info(f"[VERTEX] Service account configured: {data.get('client_email')} (project: {data.get('project_id')})")
+            return True
+        except Exception as e:
+            logger.error(f"[VERTEX] Error loading service account JSON: {e}")
+            self._sa_data = None
+            return False
+
+    @property
+    def is_configured(self):
+        return self._sa_data is not None
+
+    @property
+    def project_id(self):
+        return self._sa_data.get('project_id', '') if self._sa_data else ''
+
+    def get_access_token(self):
+        """Return a valid access token, refreshing if needed. Thread-safe."""
+        with self._lock:
+            if self._access_token and time.time() < (self._expires_at - 60):
+                return self._access_token
+            return self._refresh_token()
+
+    def _refresh_token(self):
+        """Sign a JWT and exchange it for an access token."""
+        if not self._sa_data:
+            raise RemoteAPIError("Vertex AI service account not configured. Add the JSON key file in Settings.")
+        try:
+            import jwt as pyjwt
+        except ImportError:
+            raise RemoteAPIError("PyJWT library not installed. Run: pip install PyJWT[crypto]")
+
+        now = int(time.time())
+        payload = {
+            "iss": self._sa_data['client_email'],
+            "sub": self._sa_data['client_email'],
+            "aud": self._TOKEN_URI,
+            "iat": now,
+            "exp": now + self._TOKEN_LIFETIME,
+            "scope": self._SCOPES,
+        }
+        signed_jwt = pyjwt.encode(payload, self._sa_data['private_key'], algorithm="RS256")
+
+        resp = requests.post(self._TOKEN_URI, data={
+            "grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer",
+            "assertion": signed_jwt,
+        }, timeout=15)
+
+        if resp.status_code != 200:
+            raise RemoteAPIError(f"Vertex AI token exchange failed ({resp.status_code}): {resp.text[:300]}")
+
+        token_data = resp.json()
+        self._access_token = token_data['access_token']
+        self._expires_at = now + token_data.get('expires_in', self._TOKEN_LIFETIME)
+        logger.info(f"[VERTEX] Access token refreshed (expires in {token_data.get('expires_in', '?')}s)")
+        return self._access_token
+
+
+# Singleton token manager
+_vertex_token_mgr = _VertexTokenManager()
+
+
 def _chunk_text(text, chunk_size=400):
     if not text:
         return
@@ -2242,8 +2337,16 @@ class AutonomousHandler(threading.Thread):
         """Run the autonomous handler"""
         while not self._stop_event.is_set():
             try:
+                # Check master autonomy toggle first
+                master_enabled = self.agent.config.get('autonomy', {}).get('enabled', False)
+                if isinstance(master_enabled, str):
+                    master_enabled = master_enabled.lower() == "true"
+                if not master_enabled:
+                    time.sleep(30)
+                    continue
+                
                 # Check if messages are enabled in config
-                is_enabled = self.agent.config.get('autonomy', {}).get('messages', {}).get('enabled', True)
+                is_enabled = self.agent.config.get('autonomy', {}).get('messages', {}).get('enabled', False)
                 
                 # Convert to boolean explicitly to handle string values like "false"
                 if isinstance(is_enabled, str):
@@ -2314,6 +2417,14 @@ class NoteHandler(threading.Thread):
         """Run the note handler"""
         while not self._stop_event.is_set():
             try:
+                # Check master autonomy toggle first
+                master_enabled = self.agent.config.get('autonomy', {}).get('enabled', False)
+                if isinstance(master_enabled, str):
+                    master_enabled = master_enabled.lower() == "true"
+                if not master_enabled:
+                    time.sleep(30)
+                    continue
+                
                 # Check if config has been updated
                 if self._config_updated.is_set():
                     logger.info("Processing config update in NoteHandler")
@@ -2551,6 +2662,8 @@ class ChatAgent:
         deadline = time.time() + timeout
         attempt = 0
         
+        print(f"[WAIT-API-DBG] Starting: provider={provider}, model={model}, vertex_configured={_vertex_token_mgr.is_configured}", flush=True)
+        
         while time.time() < deadline:
             attempt += 1
             try:
@@ -2565,14 +2678,24 @@ class ChatAgent:
                 else:
                     # Remote providers — lightweight ping (no full LLM call)
                     key = _resolve_remote_key(self.config, provider=provider)
-                    if not key:
+                    # Google can auth via Vertex AI service account (no API key needed)
+                    has_vertex = provider == 'google' and _vertex_token_mgr.is_configured
+                    if not key and not has_vertex:
                         if attempt == 1:
+                            print(f"[WAIT-API-DBG] No key and no vertex for '{provider}', will retry...", flush=True)
                             logger.warning(f"[STARTUP] No API key for provider '{provider}', waiting...")
                         time.sleep(2)
                         continue
                     try:
                         if provider == 'google':
-                            # Lightweight: list models endpoint (~200ms vs ~5s for full call)
+                            if _vertex_token_mgr.is_configured:
+                                # Vertex AI: just mark ready — token will be fetched on first real call
+                                print(f"[WAIT-API-DBG] Vertex AI configured, marking ready immediately", flush=True)
+                                logger.info(f"[STARTUP] Google/Vertex AI ready after {attempt} attempt(s)")
+                                with self._api_ready_lock:
+                                    self._api_ready = True
+                                return True
+                            # Standard API key: lightweight list models endpoint
                             resp = requests.get(
                                 f'https://generativelanguage.googleapis.com/v1beta/models?key={key}&pageSize=1',
                                 timeout=5
@@ -2690,24 +2813,49 @@ class ChatAgent:
                     return {'content': ''}
                     
             elif provider == 'google':
-                api_key = _resolve_remote_key(self.config, provider='google')
-                if not api_key:
-                    logger.error("[LLM_SYNC] Missing Google API key")
-                    return {'content': ''}
-                    
                 remote_model = model_metadata.get('remote_model', 'gemini-2.0-flash')
-                endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{remote_model}:generateContent?key={api_key}"
+                
+                # Decide endpoint: Vertex AI (service account) vs standard API key
+                if _vertex_token_mgr.is_configured:
+                    access_token = _vertex_token_mgr.get_access_token()
+                    project_id = _vertex_token_mgr.project_id
+                    region = self.config.get('vertex_ai_region', 'us-central1')
+                    endpoint = (
+                        f"https://aiplatform.googleapis.com/v1beta1/projects/{project_id}"
+                        f"/locations/{region}/publishers/google/models/{remote_model}:generateContent"
+                    )
+                    headers = {'Content-Type': 'application/json', 'Authorization': f'Bearer {access_token}'}
+                    logger.info(f"[LLM_SYNC] Google via Vertex AI: {remote_model}")
+                else:
+                    api_key = _resolve_remote_key(self.config, provider='google')
+                    if not api_key:
+                        logger.error("[LLM_SYNC] Missing Google API key and no Vertex AI configured")
+                        return {'content': ''}
+                    endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{remote_model}:generateContent?key={api_key}"
+                    headers = {'Content-Type': 'application/json'}
                 
                 # Convert messages to Gemini format
                 contents = []
+                system_instruction = ""
                 for msg in messages:
-                    role = 'user' if msg['role'] == 'user' else 'model'
                     if msg['role'] == 'system':
-                        role = 'user'  # Gemini doesn't have system role
-                    contents.append({'role': role, 'parts': [{'text': msg['content']}]})
+                        system_instruction += msg.get('content', '') + "\n"
+                    elif msg['role'] == 'user':
+                        contents.append({'role': 'user', 'parts': [{'text': msg.get('content', '')}]})
+                    else:
+                        contents.append({'role': 'model', 'parts': [{'text': msg.get('content', '')}]})
                 
-                payload = {'contents': contents, 'generationConfig': {'maxOutputTokens': max_tokens_override or self.config.get('max_tokens', 4096)}}
-                response = requests.post(endpoint, json=payload, timeout=180)
+                if not contents:
+                    contents = [{'role': 'user', 'parts': [{'text': '(empty)'}]}]
+                
+                payload = {
+                    'contents': contents,
+                    'generationConfig': {'maxOutputTokens': max_tokens_override or self.config.get('max_tokens', 4096)}
+                }
+                if system_instruction.strip():
+                    payload['systemInstruction'] = {'parts': [{'text': system_instruction.strip()}]}
+                
+                response = requests.post(endpoint, headers=headers, json=payload, timeout=180)
                 if response.status_code == 200:
                     result = response.json()
                     content = result.get('candidates', [{}])[0].get('content', {}).get('parts', [{}])[0].get('text', '')
@@ -2910,6 +3058,14 @@ class ChatAgent:
                             logger.debug(f"LOAD CONFIG: Validation skipped: {_val_err}")
                         
                         _apply_remote_env_defaults(config)
+                        # Auto-configure Vertex AI if service account path is set
+                        sa_path = config.get('vertex_ai_service_account')
+                        print(f"[STARTUP-DBG] vertex_ai_service_account in config: {repr(sa_path)}", flush=True)
+                        if sa_path:
+                            ok = _vertex_token_mgr.configure(sa_path)
+                            print(f"[STARTUP-DBG] _vertex_token_mgr.configure() returned: {ok}, is_configured={_vertex_token_mgr.is_configured}", flush=True)
+                        else:
+                            print(f"[STARTUP-DBG] No vertex_ai_service_account in config", flush=True)
                         return config
                 except json.JSONDecodeError as e:
                     logger.error(f"LOAD CONFIG: JSON parse error: {str(e)}")
@@ -3023,6 +3179,10 @@ class ChatAgent:
             update_elevenlabs_credentials(self.config)
             # Sync Notion API key into MCP server config if changed
             self._sync_notion_mcp_key()
+            # Reconfigure Vertex AI service account if path changed
+            sa_path = self.config.get('vertex_ai_service_account')
+            if sa_path:
+                _vertex_token_mgr.configure(sa_path)
             # Ensure screenshot handler reflects current config (create/stop on toggle)
             self._ensure_screenshot_handler_state()
             
@@ -5254,28 +5414,41 @@ class ChatAgent:
                             return summary[:2000]
             
             elif provider == 'google':
-                api_key = _resolve_remote_key(self.config, provider='google')
-                if api_key:
-                    remote_model = model_metadata.get('remote_model', 'gemini-2.5-pro')
+                remote_model = model_metadata.get('remote_model', 'gemini-2.5-pro')
+                sys_content = summary_prompt[0]['content']
+                user_content = summary_prompt[1]['content']
+                
+                # Decide endpoint: Vertex AI vs standard API key
+                if _vertex_token_mgr.is_configured:
+                    access_token = _vertex_token_mgr.get_access_token()
+                    project_id = _vertex_token_mgr.project_id
+                    region = self.config.get('vertex_ai_region', 'us-central1')
+                    endpoint = (
+                        f"https://aiplatform.googleapis.com/v1beta1/projects/{project_id}"
+                        f"/locations/{region}/publishers/google/models/{remote_model}:generateContent"
+                    )
+                    headers = {'Content-Type': 'application/json', 'Authorization': f'Bearer {access_token}'}
+                else:
+                    api_key = _resolve_remote_key(self.config, provider='google')
+                    if not api_key:
+                        return None
                     endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{remote_model}:generateContent?key={api_key}"
-                    sys_content = summary_prompt[0]['content']
-                    user_content = summary_prompt[1]['content']
-                    resp = requests.post(endpoint, headers={
-                        'Content-Type': 'application/json'
-                    }, json={
-                        'systemInstruction': {'parts': [{'text': sys_content}]},
-                        'contents': [{'role': 'user', 'parts': [{'text': user_content}]}],
-                        'generationConfig': {'maxOutputTokens': max_summary_tokens, 'temperature': 0.3}
-                    }, timeout=20)
-                    if resp.ok:
-                        data = resp.json()
-                        candidates = data.get('candidates', [])
-                        if candidates:
-                            parts = candidates[0].get('content', {}).get('parts', [])
-                            summary = ''.join(p.get('text', '') for p in parts)
-                            if summary:
-                                logger.info(f"[COMPACT] LLM summary generated via Google ({len(summary)} chars)")
-                                return summary[:2000]
+                    headers = {'Content-Type': 'application/json'}
+                
+                resp = requests.post(endpoint, headers=headers, json={
+                    'systemInstruction': {'parts': [{'text': sys_content}]},
+                    'contents': [{'role': 'user', 'parts': [{'text': user_content}]}],
+                    'generationConfig': {'maxOutputTokens': max_summary_tokens, 'temperature': 0.3}
+                }, timeout=20)
+                if resp.ok:
+                    data = resp.json()
+                    candidates = data.get('candidates', [])
+                    if candidates:
+                        parts = candidates[0].get('content', {}).get('parts', [])
+                        summary = ''.join(p.get('text', '') for p in parts)
+                        if summary:
+                            logger.info(f"[COMPACT] LLM summary generated via Google ({len(summary)} chars)")
+                            return summary[:2000]
             
             return None
         except Exception as e:
@@ -5750,7 +5923,12 @@ class ChatAgent:
         
         # Gate: wait for LLM backend to be reachable before first call
         if not self._api_ready:
+            model_check = model_override or self.config.get('model', '')
+            meta_check = _resolve_model_metadata(model_check)
+            prov_check = meta_check.get('provider', 'ollama')
+            print(f"[CHAT-DBG] _api_ready=False, model={model_check}, provider={prov_check}, vertex={_vertex_token_mgr.is_configured}", flush=True)
             if not self._wait_for_api(timeout=30):
+                print(f"[CHAT-DBG] _wait_for_api timed out!", flush=True)
                 return {
                     "response": "The AI backend isn't available yet — still starting up. Try again in a moment.",
                     "result": "The AI backend isn't available yet — still starting up. Try again in a moment.",
@@ -6353,6 +6531,31 @@ class ChatAgent:
                     })
                     continue
                 
+                # Auto-continue: let the model reflect on whether the task is
+                # truly complete. Instead of dumb keyword matching, we give it a
+                # chance to self-evaluate and decide to continue or stop.
+                _MAX_AUTO_CONTINUES = 3  # Hard cap safety valve
+                if _auto_continue and tool_history and round_count < max_tool_rounds and auto_continue_count < _MAX_AUTO_CONTINUES:
+                    auto_continue_count += 1
+                    logger.info(f"[TOOLS] Auto-continue #{auto_continue_count}/{_MAX_AUTO_CONTINUES}: asking model to self-evaluate completion")
+                    # Stream the partial content so the user sees progress
+                    if content and content.strip():
+                        send_message_to_frontend({
+                            "status": "streaming",
+                            "result": content.strip(),
+                            "clear_thinking": True
+                        })
+                    messages.append({"role": "assistant", "content": content})
+                    messages.append({
+                        "role": "user",
+                        "content": (
+                            "Review your work so far against the original request. "
+                            "Is the task fully complete? If YES — respond with your final summary and stop. "
+                            "If NO — continue working and use tools to finish what remains."
+                        )
+                    })
+                    continue
+                
                 # Accept the response — model decided it's done
                 logger.info(f"[TOOLS] Model responded without tool calls (round {round_count}, {len(tool_history)} tools used) — accepting")
                 final_response = self._strip_echoed_instructions(content)
@@ -6891,8 +7094,12 @@ class ChatAgent:
                     elif is_bad_request:
                         hint = "The API rejected this request (bad format). This is a bug — please report it."
                         logger.error(f"[TOOLS] Bad request body sent to API. Full error: {str(e)[:1000]}")
+                    elif _http_status == 404:
+                        hint = f"Model '{model_to_use}' was not found by the API (404). It may not be available for your provider or region. Try a different model in Settings."
                     else:
                         hint = "The requested API endpoint wasn't found. Check your model selection."
+                    # Send error visibly to frontend so user sees it
+                    send_message_to_frontend({"status": "error", "result": hint, "clear_thinking": True})
                     return {"content": hint, "tool_calls": []}
                 
                 # Retryable errors — backoff and retry
@@ -6923,10 +7130,13 @@ class ChatAgent:
                 
                 # Final attempt failed or non-retryable unknown error
                 logger.error(f"[TOOLS] Error calling LLM with tools (attempt {attempt}): {e}")
+                print(f"[LLM-ERROR-DBG] attempt={attempt}, error_type={type(e).__name__}, msg={str(e)[:500]}", flush=True)
                 if is_retryable:
                     hint = f"The API is still having issues after {max_retries} retries. Let me try a different approach."
                 else:
-                    hint = "I hit a snag with that request. Let me try a different approach."
+                    hint = f"I hit a snag with that request ({type(e).__name__}: {str(e)[:150]}). Let me try a different approach."
+                # Send error visibly to frontend
+                send_message_to_frontend({"status": "error", "result": hint, "clear_thinking": True})
                 return {"content": hint, "tool_calls": []}
         
         # Safety net: should never reach here, but guarantee non-None return
@@ -7140,17 +7350,31 @@ class ChatAgent:
         return resp
     
     def _call_google_with_tools(self, messages, tools, metadata):
-        """Call Google/Gemini with function calling."""
-        api_key = _resolve_remote_key(self.config, provider='google')
-        if not api_key:
-            raise RemoteAPIError("Missing Google API key. Set GOOGLE_API_KEY environment variable.")
-        
+        """Call Google/Gemini with function calling (standard or Vertex AI)."""
         model_name = metadata.get('remote_model', 'gemini-2.5-pro')
-        endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
         
-        headers = {
-            'Content-Type': 'application/json'
-        }
+        # Decide endpoint: Vertex AI (service account) vs standard API key
+        if _vertex_token_mgr.is_configured:
+            access_token = _vertex_token_mgr.get_access_token()
+            project_id = _vertex_token_mgr.project_id
+            region = self.config.get('vertex_ai_region', 'us-central1')
+            endpoint = (
+                f"https://aiplatform.googleapis.com/v1beta1/projects/{project_id}"
+                f"/locations/{region}/publishers/google/models/{model_name}:generateContent"
+            )
+            headers = {
+                'Content-Type': 'application/json',
+                'Authorization': f'Bearer {access_token}'
+            }
+            logger.info(f"[VERTEX] Tool call via Vertex AI: {model_name} (project={project_id})")
+        else:
+            api_key = _resolve_remote_key(self.config, provider='google')
+            if not api_key:
+                raise RemoteAPIError("Missing Google API key. Set GOOGLE_API_KEY environment variable or configure a Vertex AI service account.")
+            endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
+            headers = {
+                'Content-Type': 'application/json'
+            }
         
         # Convert tools to Gemini format
         gemini_tools = []
@@ -7304,8 +7528,15 @@ class ChatAgent:
         logger.info(f"Gemini tool call payload: {len(gemini_contents)} contents, tools: {len(gemini_tools) if gemini_tools else 0}")
         # Debug: log role sequence to diagnose format errors
         role_seq = [c.get('role', '?') for c in gemini_contents]
-        print(f"[GEMINI_DEBUG] Role sequence: {role_seq}", file=sys.stderr, flush=True)
-        response = requests.post(endpoint, headers=headers, json=payload, timeout=120)
+        print(f"[GEMINI_DEBUG] Role sequence: {role_seq}", flush=True)
+        print(f"[GEMINI_DEBUG] Endpoint: {endpoint}", flush=True)
+        print(f"[GEMINI_DEBUG] Tool count: {sum(len(t.get('function_declarations',[])) for t in gemini_tools) if gemini_tools else 0}", flush=True)
+        print(f"[GEMINI_DEBUG] System instruction length: {len(system_instruction)}", flush=True)
+        try:
+            response = requests.post(endpoint, headers=headers, json=payload, timeout=120)
+        except Exception as req_err:
+            print(f"[GEMINI_DEBUG] Request exception: {type(req_err).__name__}: {req_err}", flush=True)
+            raise
         
         if response.status_code != 200:
             err_text = response.text[:500]
@@ -8117,10 +8348,11 @@ class ChatAgent:
         display_name = metadata.get('display_name', model_name)
         logger.info(f"[REMOTE] Resolving API key for provider={provider}, model={model_name}")
         api_key = _resolve_remote_key(self.config, model_name=model_name, provider=provider)
-        if not api_key:
+        # Google can auth via Vertex AI service account (no API key needed)
+        if not api_key and not (provider == 'google' and _vertex_token_mgr.is_configured):
             logger.error(f"[REMOTE] No API key found for {display_name}")
             raise RemoteAPIError(f"⚠️ Missing API key for {display_name}. Add it in Settings → API.")
-        logger.info(f"[REMOTE] API key resolved (length={len(api_key)})")
+        logger.info(f"[REMOTE] API key resolved (length={len(api_key) if api_key else 0}, vertex={_vertex_token_mgr.is_configured})")
 
         if provider == 'xai':
             # Grok 4 supports multimodal (images)
@@ -8413,15 +8645,29 @@ class ChatAgent:
                 yield chunk
 
     def _stream_remote_google(self, metadata, api_key, system_prompt, user_prompt, temperature, max_tokens, image_data=None):
-        """Stream response from Google/Gemini API."""
+        """Stream response from Google/Gemini API (standard or Vertex AI)."""
         model_name = metadata.get('remote_model', 'gemini-2.5-pro')
         
-        # Use streaming endpoint
-        endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:streamGenerateContent?key={api_key}"
-        
-        headers = {
-            'Content-Type': 'application/json'
-        }
+        # Decide endpoint: Vertex AI (service account) vs standard API key
+        _is_vertex = _vertex_token_mgr.is_configured
+        if _is_vertex:
+            access_token = _vertex_token_mgr.get_access_token()
+            project_id = _vertex_token_mgr.project_id
+            region = self.config.get('vertex_ai_region', 'us-central1')
+            endpoint = (
+                f"https://aiplatform.googleapis.com/v1beta1/projects/{project_id}"
+                f"/locations/{region}/publishers/google/models/{model_name}:streamGenerateContent?alt=sse"
+            )
+            headers = {
+                'Content-Type': 'application/json',
+                'Authorization': f'Bearer {access_token}'
+            }
+            logger.info(f"[VERTEX] Streaming via Vertex AI: {model_name} (project={project_id}, region={region})")
+        else:
+            endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:streamGenerateContent?key={api_key}"
+            headers = {
+                'Content-Type': 'application/json'
+            }
         
         # Build content parts
         parts = []
@@ -8483,42 +8729,53 @@ class ChatAgent:
                 message = response.text
             raise RemoteAPIError(f"Gemini request failed: {response.status_code} {message}")
         
-        # Gemini streams as JSON array chunks
+        # Parse streaming response — two formats:
+        #   Vertex AI (?alt=sse): lines like  "data: {json}\n\n"
+        #   Standard Gemini API:  JSON array   [{...},\n{...}]
+        def _extract_parts(obj):
+            """Yield (type, text) from a Gemini response object."""
+            for candidate in obj.get('candidates', []):
+                content = candidate.get('content', {})
+                for part in content.get('parts', []):
+                    if part.get('thought') is True and 'text' in part:
+                        yield ('thinking', part['text'])
+                    elif 'text' in part:
+                        yield ('text', part['text'])
+
         buffer = ""
         for chunk in response.iter_content(chunk_size=1024, decode_unicode=True):
             if not chunk:
                 continue
             buffer += chunk
             
-            # Try to parse complete JSON objects from buffer
-            # Gemini returns array of candidates, we look for text parts
             try:
-                # Handle streaming format - each line may be a JSON object
                 lines = buffer.split('\n')
                 buffer = lines[-1]  # Keep incomplete line in buffer
                 
                 for line in lines[:-1]:
                     line = line.strip()
-                    if not line or line == '[' or line == ']' or line == ',':
+                    if not line or line in ('[', ']', ','):
                         continue
                     
-                    # Remove leading comma if present
+                    # Vertex AI SSE format: "data: {json}"
+                    if line.startswith('data:'):
+                        line = line[5:].strip()
+                    
+                    # Remove leading comma (standard Gemini array format)
                     if line.startswith(','):
                         line = line[1:].strip()
                     
+                    if not line:
+                        continue
+                    
                     try:
                         obj = json.loads(line)
-                        candidates = obj.get('candidates', [])
-                        for candidate in candidates:
-                            content = candidate.get('content', {})
-                            for part in content.get('parts', []):
-                                # Gemini 2.5 thinking/thought parts
-                                if part.get('thought') is True and 'text' in part:
-                                    yield ('thinking', part['text'])
-                                elif 'text' in part:
-                                    text = part['text']
-                                    for text_chunk in _chunk_text(text):
-                                        yield text_chunk
+                        for kind, text in _extract_parts(obj):
+                            if kind == 'thinking':
+                                yield ('thinking', text)
+                            else:
+                                for text_chunk in _chunk_text(text):
+                                    yield text_chunk
                     except json.JSONDecodeError:
                         continue
             except Exception as e:
@@ -8526,19 +8783,20 @@ class ChatAgent:
                 continue
         
         # Process any remaining buffer
-        if buffer.strip() and buffer.strip() not in ['[', ']', ',']:
+        remaining = buffer.strip()
+        if remaining and remaining not in ('[', ']', ','):
+            if remaining.startswith('data:'):
+                remaining = remaining[5:].strip()
+            if remaining.startswith(','):
+                remaining = remaining[1:].strip()
             try:
-                if buffer.strip().startswith(','):
-                    buffer = buffer.strip()[1:]
-                obj = json.loads(buffer.strip())
-                candidates = obj.get('candidates', [])
-                for candidate in candidates:
-                    content = candidate.get('content', {})
-                    for part in content.get('parts', []):
-                        if 'text' in part:
-                            text = part['text']
-                            for text_chunk in _chunk_text(text):
-                                yield text_chunk
+                obj = json.loads(remaining)
+                for kind, text in _extract_parts(obj):
+                    if kind == 'thinking':
+                        yield ('thinking', text)
+                    else:
+                        for text_chunk in _chunk_text(text):
+                            yield text_chunk
             except json.JSONDecodeError:
                 pass
 
@@ -8809,22 +9067,40 @@ class ChatAgent:
         
         # ── Online providers ──
         if provider == 'google':
-            api_key = _resolve_remote_key(self.config, provider='google')
-            if api_key:
-                try:
-                    model_name = model_meta.get('remote_model', 'gemini-2.5-flash')
-                    endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
-                    payload = {
-                        'contents': [{
-                            'role': 'user',
-                            'parts': [
-                                {'inline_data': {'mime_type': mime_type, 'data': image_base64}},
-                                {'text': prompt}
-                            ]
-                        }],
-                        'generationConfig': {'temperature': 0.7, 'maxOutputTokens': 1024}
-                    }
-                    resp = requests.post(endpoint, json=payload, timeout=60)
+            try:
+                model_name = model_meta.get('remote_model', 'gemini-2.5-flash')
+                payload = {
+                    'contents': [{
+                        'role': 'user',
+                        'parts': [
+                            {'inline_data': {'mime_type': mime_type, 'data': image_base64}},
+                            {'text': prompt}
+                        ]
+                    }],
+                    'generationConfig': {'temperature': 0.7, 'maxOutputTokens': 1024}
+                }
+                
+                # Decide endpoint: Vertex AI vs standard API key
+                endpoint = None
+                headers = {'Content-Type': 'application/json'}
+                if _vertex_token_mgr.is_configured:
+                    access_token = _vertex_token_mgr.get_access_token()
+                    project_id = _vertex_token_mgr.project_id
+                    region = self.config.get('vertex_ai_region', 'us-central1')
+                    endpoint = (
+                        f"https://aiplatform.googleapis.com/v1beta1/projects/{project_id}"
+                        f"/locations/{region}/publishers/google/models/{model_name}:generateContent"
+                    )
+                    headers = {'Content-Type': 'application/json', 'Authorization': f'Bearer {access_token}'}
+                else:
+                    api_key = _resolve_remote_key(self.config, provider='google')
+                    if not api_key:
+                        logger.warning("[IMAGE] No Google API key and no Vertex AI — skipping Google vision")
+                    else:
+                        endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
+                
+                if endpoint:
+                    resp = requests.post(endpoint, headers=headers, json=payload, timeout=60)
                     resp.raise_for_status()
                     data = resp.json()
                     candidates = data.get('candidates', [])
@@ -8834,8 +9110,8 @@ class ChatAgent:
                         if text_parts:
                             logger.info(f"[IMAGE] Described via Google/{model_name}")
                             return ''.join(text_parts)
-                except Exception as e:
-                    logger.warning(f"[IMAGE] Google vision failed, falling back to local: {e}")
+            except Exception as e:
+                logger.warning(f"[IMAGE] Google vision failed, falling back to local: {e}")
         
         elif provider == 'anthropic':
             api_key = _resolve_remote_key(self.config, provider='anthropic')
@@ -10943,15 +11219,16 @@ def api_local_deep_research():
     if not query:
         return jsonify({'error': 'Missing query'}), 400
     
-    # Resolve Google API key
+    # Resolve Google credentials (Vertex AI preferred, standard API key fallback)
     api_key = None
-    if 'agent' in globals() and agent is not None:
-        api_key = _resolve_remote_key(agent.config, provider='google')
-    if not api_key:
-        api_key = os.environ.get('GOOGLE_API_KEY', '').strip()
-    
-    if not api_key:
-        return jsonify({'error': 'No Google API key configured. Set GOOGLE_API_KEY or add it in settings.'}), 400
+    _cfg = agent.config if 'agent' in globals() and agent is not None else {}
+    if not _vertex_token_mgr.is_configured:
+        if 'agent' in globals() and agent is not None:
+            api_key = _resolve_remote_key(agent.config, provider='google')
+        if not api_key:
+            api_key = os.environ.get('GOOGLE_API_KEY', '').strip()
+        if not api_key:
+            return jsonify({'error': 'No Google API key configured and no Vertex AI service account. Set GOOGLE_API_KEY or add it in settings.'}), 400
     
     # Build the user prompt
     user_prompt = f"Conduct deep research on: {query}"
@@ -10960,7 +11237,20 @@ def api_local_deep_research():
     
     # Use Gemini with Google Search grounding
     model_name = 'gemini-2.5-flash'  # Good balance of speed + quality for grounded research
-    endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
+    
+    # Decide endpoint: Vertex AI vs standard API key
+    if _vertex_token_mgr.is_configured:
+        access_token = _vertex_token_mgr.get_access_token()
+        project_id = _vertex_token_mgr.project_id
+        region = _cfg.get('vertex_ai_region', 'us-central1') if isinstance(_cfg, dict) else 'us-central1'
+        endpoint = (
+            f"https://aiplatform.googleapis.com/v1beta1/projects/{project_id}"
+            f"/locations/{region}/publishers/google/models/{model_name}:generateContent"
+        )
+        headers = {'Content-Type': 'application/json', 'Authorization': f'Bearer {access_token}'}
+    else:
+        endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
+        headers = {'Content-Type': 'application/json'}
     
     payload = {
         'contents': [{'role': 'user', 'parts': [{'text': user_prompt}]}],
@@ -10973,10 +11263,10 @@ def api_local_deep_research():
         },
     }
     
-    logger.info(f"[DEEP_RESEARCH] Starting deep research: '{query[:80]}' via {model_name} with Google Search grounding")
+    logger.info(f"[DEEP_RESEARCH] Starting deep research: '{query[:80]}' via {model_name} with Google Search grounding (vertex={_vertex_token_mgr.is_configured})")
     
     try:
-        resp = requests.post(endpoint, headers={'Content-Type': 'application/json'}, json=payload, timeout=120)
+        resp = requests.post(endpoint, headers=headers, json=payload, timeout=120)
         
         if resp.status_code != 200:
             logger.error(f"[DEEP_RESEARCH] Gemini API error {resp.status_code}: {resp.text[:500]}")
@@ -12288,9 +12578,15 @@ def dashboard_files(filename):
     """Serve dashboard static assets, with SPA fallback for client-side routes."""
     filepath = os.path.join(DASHBOARD_DIR, filename)
     if os.path.isfile(filepath):
-        return send_from_directory(DASHBOARD_DIR, filename)
+        resp = make_response(send_from_directory(DASHBOARD_DIR, filename))
+        # Prevent caching for widget JS/CSS so style sync changes are picked up immediately
+        if filename in ('clock_widget.js', 'clock_widget.css', 'index.html'):
+            resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        return resp
     # SPA fallback — return index.html for any non-file route
-    return send_from_directory(DASHBOARD_DIR, 'index.html')
+    resp = make_response(send_from_directory(DASHBOARD_DIR, 'index.html'))
+    resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    return resp
 
 # === Serve Thin WebUI ===
 WEBUI_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'webui')
@@ -13400,6 +13696,9 @@ def api_models():
         # Check which providers have active API keys
         _cfg = agent.config if 'agent' in globals() and agent else {}
         def _provider_key_active(prov):
+            # Google can auth via Vertex AI service account (no API key needed)
+            if prov == 'google' and _vertex_token_mgr.is_configured:
+                return True
             route = REMOTE_KEY_ROUTE_ALLOWLIST.get(prov)
             if not route:
                 return False
@@ -13476,24 +13775,90 @@ def api_discover_models():
         return []
 
     def _discover_google():
+        # Try standard API key first
         key = _resolve_key('google')
-        if not key:
-            return []
-        try:
-            resp = requests.get(f'https://generativelanguage.googleapis.com/v1beta/models?key={key}&pageSize=100', timeout=10)
-            if resp.ok:
-                data = resp.json()
+        if key:
+            try:
+                resp = requests.get(f'https://generativelanguage.googleapis.com/v1beta/models?key={key}&pageSize=100', timeout=10)
+                if resp.ok:
+                    data = resp.json()
+                    models = []
+                    for m in data.get('models', []):
+                        name = m.get('name', '').replace('models/', '')
+                        display = m.get('displayName', name)
+                        methods = m.get('supportedGenerationMethods', [])
+                        if 'generateContent' in methods:
+                            models.append({'id': name, 'display_name': display, 'provider': 'google',
+                                           'description': m.get('description', '')})
+                    if models:
+                        return models
+                    logger.info("[DISCOVER] Standard Google key returned no models, trying Vertex AI")
+                else:
+                    logger.info(f"[DISCOVER] Standard Google key returned {resp.status_code}, trying Vertex AI")
+            except Exception as e:
+                logger.warning(f"[DISCOVER] Google standard API error: {e}")
+        
+        # Fall back to Vertex AI service account
+        if _vertex_token_mgr.is_configured:
+            try:
+                access_token = _vertex_token_mgr.get_access_token()
+                _cfg = agent.config if 'agent' in dir() else {}
+                region = _cfg.get('vertex_ai_region', 'us-central1') if isinstance(_cfg, dict) else 'us-central1'
+                # Use the publisher models endpoint (no project/location needed)
+                url = f'https://aiplatform.googleapis.com/v1beta1/publishers/google/models'
+                all_publisher_models = []
+                page_token = None
+                for _ in range(5):  # max 5 pages
+                    params = {'pageSize': 100}
+                    if page_token:
+                        params['pageToken'] = page_token
+                    resp = requests.get(url, headers={'Authorization': f'Bearer {access_token}'}, params=params, timeout=10)
+                    if not resp.ok:
+                        logger.warning(f"[DISCOVER] Vertex AI list models returned {resp.status_code}: {resp.text[:200]}")
+                        break
+                    data = resp.json()
+                    all_publisher_models.extend(data.get('publisherModels', []))
+                    page_token = data.get('nextPageToken')
+                    if not page_token:
+                        break
+                
+                # Filter for Gemini models suitable for chat/generation
+                # Exclude embedding, tts, and image-only models
+                _EXCLUDE_SUFFIXES = ('-tts', '-embedding', '-native-audio')
                 models = []
-                for m in data.get('models', []):
-                    name = m.get('name', '').replace('models/', '')
-                    display = m.get('displayName', name)
-                    methods = m.get('supportedGenerationMethods', [])
-                    if 'generateContent' in methods:
-                        models.append({'id': name, 'display_name': display, 'provider': 'google',
-                                       'description': m.get('description', '')})
-                return models
-        except Exception as e:
-            logger.warning(f"[DISCOVER] Google error: {e}")
+                for m in all_publisher_models:
+                    name = m.get('name', '')
+                    model_id = name.split('/')[-1] if '/' in name else name
+                    if not model_id.startswith('gemini'):
+                        continue
+                    if any(model_id.endswith(s) for s in _EXCLUDE_SUFFIXES):
+                        continue
+                    if 'embedding' in model_id:
+                        continue
+                    display = model_id.replace('-', ' ').title()
+                    models.append({'id': model_id, 'display_name': display, 'provider': 'google',
+                                   'description': f'Vertex AI: {model_id}'})
+                
+                if models:
+                    # Sort: stable releases first, then previews
+                    models.sort(key=lambda x: ('preview' in x['id'], x['id']))
+                    logger.info(f"[DISCOVER] Vertex AI found {len(models)} Gemini models")
+                    return models
+                
+                # Vertex model listing returned no Gemini models; return common defaults
+                logger.info("[DISCOVER] Vertex AI model listing returned no Gemini results, using defaults")
+                return [
+                    {'id': 'gemini-2.5-pro', 'display_name': 'Gemini 2.5 Pro', 'provider': 'google', 'description': 'Most capable Gemini model'},
+                    {'id': 'gemini-2.5-flash', 'display_name': 'Gemini 2.5 Flash', 'provider': 'google', 'description': 'Fast and efficient Gemini model'},
+                    {'id': 'gemini-2.0-flash-001', 'display_name': 'Gemini 2.0 Flash', 'provider': 'google', 'description': 'Previous gen fast model'},
+                ]
+            except Exception as e:
+                logger.warning(f"[DISCOVER] Vertex AI discovery error: {e}")
+                # Still return defaults if we have a configured service account
+                return [
+                    {'id': 'gemini-2.5-pro', 'display_name': 'Gemini 2.5 Pro', 'provider': 'google', 'description': 'Most capable Gemini model'},
+                    {'id': 'gemini-2.5-flash', 'display_name': 'Gemini 2.5 Flash', 'provider': 'google', 'description': 'Fast and efficient Gemini model'},
+                ]
         return []
 
     def _discover_xai():

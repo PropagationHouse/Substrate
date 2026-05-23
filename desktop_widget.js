@@ -74,10 +74,11 @@
         } catch(e){}
     }
     function save() { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(hub)); } catch(e){} }
+    function _apiBase() { return (window.proxyBase || 'http://localhost:8765'); }
     function saveStyle() {
         try { localStorage.setItem(STYLE_KEY, JSON.stringify(style)); } catch(e){}
-        // Sync to server so remote WebUI can access emotion GIFs
-        try { fetch('/ui/widget-style', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(style) }).catch(function(){}); } catch(e){}
+        // Sync to server so remote WebUI / dashboard can access emotion GIFs
+        try { fetch(_apiBase() + '/ui/widget-style', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(style) }).catch(function(){}); } catch(e){}
     }
     function fmtD(sec) { sec=Math.abs(Math.floor(sec)); const h=Math.floor(sec/3600),m=String(Math.floor((sec%3600)/60)).padStart(2,'0'),s=String(sec%60).padStart(2,'0'); return h>0?`${h}:${m}:${s}`:`${m}:${s}`; }
 
@@ -1220,6 +1221,9 @@
         if (hub.collapsed) { const b=document.getElementById('dwBody'); if(b) b.style.display='none'; }
         if (hub.showTimer) toggleTimerMode();
         if (hub.showSettings) { const p=document.getElementById('dwSettings'); if(p) p.classList.add('open'); }
+        // Sync current style (including emotionGifs) to server on init
+        // so dashboard/webui can read it — previous saves may have silently failed
+        saveStyle();
     }
 
     // Aggressively hide/show main UI elements for widget mode
@@ -1419,14 +1423,17 @@
         if (enabled) showWidget(); else hideWidget();
     });
 
-    // Initialize on DOM ready
+    // One-time migration: clear the force-enabled flag that the old debug code set.
+    // Without this, users updating from .13→.15 would have widget mode silently active.
+    const _MIGRATION_KEY = 'substrate:dwForceEnableMigrated';
+    if (!localStorage.getItem(_MIGRATION_KEY)) {
+        localStorage.removeItem(ENABLED_KEY);
+        localStorage.setItem(_MIGRATION_KEY, '1');
+    }
+
+    // Initialize on DOM ready — respect the user's stored preference
     document.addEventListener('DOMContentLoaded', function() {
-        // Wait a bit for the backend to be up
-        setTimeout(function() {
-            // Force-enable for testing (remove this line once confirmed working)
-            localStorage.setItem(ENABLED_KEY, 'true');
-            showWidget();
-        }, 1500);
+        setTimeout(checkEnabled, 1500);
     });
 
     // Expose global functions

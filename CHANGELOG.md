@@ -6,11 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
-## [1.2.15] — 2026-05-21
+## [1.2.15] — 2026-05-23
 
-### Widget GIF Persistence & Dashboard Enhancements
+### Vertex AI, UI Fix & Dashboard Enhancements
 
 #### Added
+- **Google Vertex AI support** — Full service account authentication for Vertex AI; accesses all Gemini models including 3.x series
+- **Dual Google auth** — System supports both standard Gemini API keys (`generativelanguage.googleapis.com`) and Vertex AI service accounts simultaneously; Vertex takes priority when configured, standard keys work as before for all existing users
+- **Dynamic model discovery** — `/api/discover-models` queries Vertex AI publisher models endpoint with pagination and smart filtering
 - **Widget emotion GIF system** — Dashboard clock widget now loads and displays emotion GIFs synced from the server (`/ui/widget-style`), matching the Electron desktop widget
 - **Cross-interface GIF persistence** — GIF choices set in any interface (Electron, WebUI, Dashboard) now sync to all others via server endpoint
 - **Widget close button** — ✕ button in the widget top bar to fully dismiss it; persists across sessions
@@ -19,9 +22,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Day Planner drag-and-drop** — Drop items on day/week views to schedule them
 - **Desktop widget** — Full emotion GIF panel with per-emotion slots, drag-drop URL management, cycling between variants
 - **Kanban hooks** — `useCircuitsTasks` and `useMediaSuiteTasks` for task integration
+- **Glass Chess** — Built-in chess game with adaptive AI opponent that learns from your play style; glass-themed UI, full move validation via python-chess, and persistent learning profile
 - **Dual-monitor management skill**
 
 #### Fixed
+- **UI missing on fresh install/update** — Desktop widget had a debug line that force-enabled widget mode on every load, hiding the main chat bar and all interactive UI elements; now respects user preference (disabled by default)
+- **Vertex AI endpoint** — Switched all 7 Vertex AI API calls from regional hostname (`us-central1-aiplatform.googleapis.com`) to global hostname (`aiplatform.googleapis.com`); regional endpoint only served older 2.5.x models, global serves all including 3.x
+- **One-time migration** — Clears stale widget-enabled flag for users upgrading from previous versions so UI renders correctly on first launch
 - `quickCreateProject` now includes `workspace_id` for secondary workspace persistence
 - Hardcoded user paths removed from skill files (replaced with `%USERPROFILE%` / relative paths)
 - Personal data files removed from git tracking (`chat_files.txt`, `profiles/default/*`)

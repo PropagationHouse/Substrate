@@ -1020,7 +1020,7 @@
     let _wuiGifCycleInterval = null;
     let _wuiGifCycleIdx = 0;
 
-    // Try to load saved emotion GIFs from desktop widget style (localStorage first, then server)
+    // Load saved emotion GIFs from localStorage as initial state
     try {
       const saved = localStorage.getItem('deskWidgetStyle');
       if (saved) {
@@ -1028,15 +1028,19 @@
         if (parsed.emotionGifs) _wuiEmotionGifs = parsed.emotionGifs;
       }
     } catch(e) {}
-    // Fallback: fetch from server (for remote browsers without Electron localStorage)
-    if (!Object.keys(_wuiEmotionGifs).some(function(k) { return (_wuiEmotionGifs[k] || []).some(function(u) { return u && u.trim(); }); })) {
-      fetch('/ui/widget-style').then(function(r) { return r.json(); }).then(function(data) {
-        if (data && data.emotionGifs) {
-          _wuiEmotionGifs = data.emotionGifs;
-          _wuiShowEmotion(_wuiCurrentEmotion);
+    // Always fetch from server to stay synced with desktop widget GIF config
+    fetch('/ui/widget-style').then(function(r) { return r.json(); }).then(function(data) {
+      if (data && data.emotionGifs) {
+        var serverGifs = data.emotionGifs;
+        for (var key in serverGifs) {
+          var list = (serverGifs[key] || []).filter(function(u) { return u && u.trim(); });
+          if (list.length > 0) _wuiEmotionGifs[key] = serverGifs[key];
         }
-      }).catch(function() {});
-    }
+      }
+      _wuiShowEmotion(_wuiCurrentEmotion);
+    }).catch(function() {
+      _wuiShowEmotion(_wuiCurrentEmotion);
+    });
 
     function _wuiApplyGif(url) {
       const gifEl = document.getElementById('wuiEmotionGif');
@@ -1102,7 +1106,7 @@
       if (!window.avatar) return;
       var state = window.avatar.state;
       if (!state) return;
-      var map = { idle: 'idle', talking: 'speaking', thinking: 'searching', happy: 'speaking', angry: 'angry', sleepy: 'sleeping', surprised: 'yelling' };
+      var map = { idle: 'idle', talking: 'speaking', thinking: 'searching', happy: 'laughing', angry: 'angry', sleepy: 'sleeping', surprised: 'yelling' };
       var mapped = map[state] || 'idle';
       if (mapped !== _wuiCurrentEmotion) _wuiShowEmotion(mapped);
     }, 2000);

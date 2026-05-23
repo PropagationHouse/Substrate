@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Substrate Chess</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div id="background-layer"></div>
+    <div id="game-container">
+        <div id="controls">
+            <button class="icon-btn" id="history-btn" title="Move History"><i class="fas fa-list"></i></button>
+            <button class="icon-btn" id="forfeit-btn" title="Forfeit Game"><i class="fas fa-flag"></i></button>
+            <button class="icon-btn" id="reset-btn" title="Reset Game"><i class="fas fa-rotate-right"></i></button>
+            <button class="icon-btn" id="in-game-analysis-btn" title="Analyze Position"><i class="fas fa-brain"></i></button>
+            <button class="icon-btn" id="training-btn" title="Training Replay"><i class="fas fa-book"></i></button>
+            <button class="icon-btn" id="settings-btn" title="Settings"><i class="fas fa-cog"></i></button>
+        </div>
+        <div id="chessboard"></div>
+        
+        <!-- In-Game Analysis Panel -->
+        <div id="in-game-analysis-container">
+            <div id="in-game-analysis-panel" class="glass-panel hidden">
+                <div class="analysis-row">
+                    <div class="analysis-item">
+                        <span class="label">Evaluation</span>
+                        <div id="evaluation-score">0.0</div>
+                    </div>
+                    <div class="analysis-item">
+                        <span class="label">Best Move Hint</span>
+                        <div id="best-move-hint">-</div>
+                    </div>
+                </div>
+                <div id="evaluation-bar-container">
+                    <div id="evaluation-bar"></div>
+                </div>
+                <div class="analysis-advice">
+                    <span class="label">Substrate's Advice</span>
+                    <p id="coach-advice">I'm ready when you are.</p>
+                </div>
+            </div>
+        </div>
+
+        <div id="game-status-overlay" class="hidden">
+            <h1 id="game-status-text">Checkmate</h1>
+        </div>
+    </div>
+
+    <!-- History Modal -->
+    <div id="history-modal" class="modal hidden">
+        <div class="modal-content glass-panel">
+            <div class="modal-header">
+                <h2>Move History</h2>
+                <button id="close-history" class="icon-btn"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+                <ul id="move-list"></ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Training Modal -->
+    <div id="training-modal" class="modal hidden">
+        <div class="modal-content glass-panel wide-modal">
+            <div class="modal-header">
+                <h2><i class="fas fa-book-open"></i> Post-Game & Cognitive Training</h2>
+                <button id="close-training" class="icon-btn"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="training-grid">
+                    <!-- Column 1: Profile & Stats -->
+                    <div class="training-col">
+                        <div class="training-card">
+                            <h3><i class="fas fa-user-astronaut"></i> Cognitive Profile</h3>
+                            <div id="cognitive-blindspots">
+                                <!-- Populated dynamically -->
+                            </div>
+                        </div>
+                        <div class="training-card">
+                            <h3><i class="fas fa-chart-line"></i> Performance Metrics</h3>
+                            <div class="metrics-list">
+                                <div class="metric-item">
+                                    <span class="metric-label">Tactical Accuracy</span>
+                                    <div class="progress-bar-container"><div id="metric-accuracy" class="progress-bar" style="width: 0%"></div></div>
+                                </div>
+                                <div class="metric-item">
+                                    <span class="metric-label">Blunder Rate</span>
+                                    <div class="progress-bar-container"><div id="metric-blunders" class="progress-bar alert" style="width: 0%"></div></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Column 2: Presentations & Modules -->
+                    <div class="training-col">
+                        <div class="training-card" style="height: 100%;">
+                            <h3><i class="fas fa-graduation-cap"></i> Tailored Strategy Modules</h3>
+                            <div id="tailored-modules">
+                                <!-- Populated dynamically -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Active Chess Presentation (Full Width) -->
+                <div class="training-card" style="margin-top: 20px;">
+                    <h3><i class="fas fa-desktop"></i> Active Chess Presentation</h3>
+                    <div id="active-presentation" class="presentation-container">
+                        <!-- Slide deck populated dynamically -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal hidden">
+        <div class="modal-content glass-panel">
+            <div class="modal-header">
+                <h2>Aesthetics</h2>
+                <button id="close-settings" class="icon-btn"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="setting-group">
+                    <label>Board Opacity</label>
+                    <input type="range" id="opacity-slider" min="0" max="100" value="40">
+                </div>
+                <div class="setting-group">
+                    <label>Glass Blur</label>
+                    <input type="range" id="blur-slider" min="0" max="50" value="24">
+                </div>
+                <div class="setting-group">
+                    <label>Theme</label>
+                    <select id="theme-select">
+                        <option value="substrate">Substrate (Dark)</option>
+                        <option value="neon">Neon Cyber</option>
+                        <option value="minimal">Minimal Light</option>
+                    </select>
+                </div>
+                <div class="setting-group">
+                    <label>Custom Background</label>
+                    <div id="bg-dropzone" class="dropzone">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                        <span>Drag & Drop Image Here</span>
+                    </div>
+                    <button id="remove-bg-btn" class="secondary-btn">Remove Background</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>
