@@ -1,120 +1,5 @@
 ﻿// ========== WORKBENCH FUNCTIONALITY ==========
 
-// API base helper (duplicated here so board functions can use it early)
-function _getApiBase() {
-    if (window.location.pathname.indexOf('/media-suite') === 0) return '/media-suite/api';
-    return '/api';
-}
-
-// Board (workbench) management
-var _boards = [{ id: 'default', name: 'Main Board' }];
-var _activeBoardId = 'default';
-
-function _getBoardId() { return _activeBoardId || 'default'; }
-
-function loadBoards() {
-    var wsId = window.getWorkspaceId ? window.getWorkspaceId() : '';
-    fetch(_getApiBase() + '/mood-board/boards?workspace_id=' + encodeURIComponent(wsId || 'default'))
-        .then(function(r) { return r.json(); })
-        .then(function(boards) {
-            if (boards && boards.length) _boards = boards;
-            else _boards = [{ id: 'default', name: 'Main Board' }];
-            // Restore last active board from localStorage
-            var last = localStorage.getItem('workbenchActiveBoard');
-            if (last && _boards.find(function(b) { return b.id === last; })) {
-                _activeBoardId = last;
-            } else {
-                _activeBoardId = _boards[0].id;
-            }
-            renderBoardTabs();
-        })
-        .catch(function() { renderBoardTabs(); });
-}
-
-function saveBoards() {
-    var wsId = window.getWorkspaceId ? window.getWorkspaceId() : '';
-    fetch(_getApiBase() + '/mood-board/boards', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ workspace_id: wsId || 'default', boards: _boards })
-    }).catch(function(e) { console.warn('[Boards] save failed:', e); });
-}
-
-function renderBoardTabs() {
-    var container = document.getElementById('boardTabs');
-    if (!container) return;
-    container.innerHTML = '';
-    _boards.forEach(function(board) {
-        var tab = document.createElement('button');
-        tab.className = 'board-tab' + (board.id === _activeBoardId ? ' active' : '');
-        tab.textContent = board.name;
-        tab.style.cssText = 'padding:3px 12px;border-radius:6px;border:1px solid ' +
-            (board.id === _activeBoardId ? 'rgba(74,222,128,0.5)' : 'rgba(255,255,255,0.1)') +
-            ';background:' + (board.id === _activeBoardId ? 'rgba(74,222,128,0.15)' : 'rgba(255,255,255,0.05)') +
-            ';color:' + (board.id === _activeBoardId ? '#4ade80' : 'rgba(255,255,255,0.6)') +
-            ';cursor:pointer;font-size:0.75rem;white-space:nowrap;';
-        tab.onclick = function() { switchBoard(board.id); };
-        tab.oncontextmenu = function(e) { e.preventDefault(); showBoardContextMenu(e, board); };
-        container.appendChild(tab);
-    });
-}
-
-function switchBoard(boardId) {
-    if (boardId === _activeBoardId) return;
-    _activeBoardId = boardId;
-    localStorage.setItem('workbenchActiveBoard', boardId);
-    renderBoardTabs();
-    // Clear current canvas and images, reload for this board
-    moodBoardState.layers = [{ id: 'layer0', name: 'Layer 1', visible: true, strokes: [] }];
-    moodBoardState.activeLayerId = 'layer0';
-    moodBoardState.layerCounter = 1;
-    _strokesLoaded = false;
-    if (moodBoardState.drawCanvas) redrawAllStrokes();
-    if (typeof renderLayerList === 'function') renderLayerList();
-    // Clear existing images from DOM
-    var canvas = document.getElementById('moodBoardCanvas');
-    if (canvas) canvas.innerHTML = '';
-    state.moodBoardImages = [];
-    // Reload images and strokes for the new board
-    loadMoodBoard();
-    loadStrokesFromBackend();
-}
-
-function createNewBoard() {
-    var name = prompt('Board name:');
-    if (!name || !name.trim()) return;
-    var id = 'board_' + Date.now();
-    _boards.push({ id: id, name: name.trim() });
-    saveBoards();
-    switchBoard(id);
-}
-
-function showBoardContextMenu(e, board) {
-    // Simple rename/delete via prompts
-    var action = prompt('Type "rename" or "delete" for board: ' + board.name);
-    if (!action) return;
-    if (action.toLowerCase() === 'rename') {
-        var newName = prompt('New name:', board.name);
-        if (newName && newName.trim()) {
-            board.name = newName.trim();
-            saveBoards();
-            renderBoardTabs();
-        }
-    } else if (action.toLowerCase() === 'delete') {
-        if (_boards.length <= 1) { alert('Cannot delete the last board'); return; }
-        if (!confirm('Delete board "' + board.name + '"? This cannot be undone.')) return;
-        _boards = _boards.filter(function(b) { return b.id !== board.id; });
-        saveBoards();
-        if (_activeBoardId === board.id) {
-            switchBoard(_boards[0].id);
-        } else {
-            renderBoardTabs();
-        }
-    }
-}
-
-window.createNewBoard = createNewBoard;
-
 // Workbench canvas state
 let moodBoardState = {
     zoom: 1,
@@ -169,81 +54,16 @@ function saveMoodBoardView() {
 }
 
 function restoreMoodBoardView() {
-    try {
-        const saved = JSON.parse(localStorage.getItem('moodBoardView'));
-        if (saved && (saved.panX || saved.panY || saved.zoom !== 1)) {
-            moodBoardState.zoom = saved.zoom || 1;
-            moodBoardState.panX = saved.panX || 0;
-            moodBoardState.panY = saved.panY || 0;
-            updateMoodBoardTransform();
-        } else {
-            // No saved view (e.g. new device / mobile) � auto-fit to content
-            setTimeout(fitMoodBoardToContent, 800);
-        }
-    } catch(e) {
-        setTimeout(fitMoodBoardToContent, 800);
-    }
-}
-
-function _saveBrushSettings() {
-    try {
-        localStorage.setItem('workbenchBrush', JSON.stringify({
-            brushType: moodBoardState.brushType,
-            brushSize: moodBoardState.brushSize,
-            brushColor: moodBoardState.brushColor,
-            brushOpacity: moodBoardState.brushOpacity,
-            brushFlow: moodBoardState.brushFlow,
-            brushMinSize: moodBoardState.brushMinSize,
-            brushSmoothing: moodBoardState.brushSmoothing,
-            brushTaper: moodBoardState.brushTaper,
-            pressureSensitivity: moodBoardState.pressureSensitivity
-        }));
-    } catch(e) {}
-}
-
-function _restoreBrushSettings() {
-    try {
-        var saved = JSON.parse(localStorage.getItem('workbenchBrush'));
-        if (!saved) return;
-        if (saved.brushType) moodBoardState.brushType = saved.brushType;
-        if (saved.brushSize) moodBoardState.brushSize = saved.brushSize;
-        if (saved.brushColor) moodBoardState.brushColor = saved.brushColor;
-        if (saved.brushOpacity !== undefined) moodBoardState.brushOpacity = saved.brushOpacity;
-        if (saved.brushFlow !== undefined) moodBoardState.brushFlow = saved.brushFlow;
-        if (saved.brushMinSize !== undefined) moodBoardState.brushMinSize = saved.brushMinSize;
-        if (saved.brushSmoothing !== undefined) moodBoardState.brushSmoothing = saved.brushSmoothing;
-        if (saved.brushTaper !== undefined) moodBoardState.brushTaper = saved.brushTaper;
-        if (saved.pressureSensitivity !== undefined) moodBoardState.pressureSensitivity = saved.pressureSensitivity;
-        // Update UI to reflect restored settings
-        var sizeSlider = document.getElementById('brushSizeSlider');
-        if (sizeSlider) sizeSlider.value = moodBoardState.brushSize;
-        var sizeLabel = document.getElementById('brushSizeLabel');
-        if (sizeLabel) sizeLabel.textContent = moodBoardState.brushSize;
-        var colorPicker = document.getElementById('brushColorPicker');
-        if (colorPicker) colorPicker.value = moodBoardState.brushColor;
-        var opacitySlider = document.getElementById('brushOpacitySlider');
-        if (opacitySlider) opacitySlider.value = Math.round(moodBoardState.brushOpacity * 100);
-        var opacityLabel = document.getElementById('brushOpacityLabel');
-        if (opacityLabel) opacityLabel.textContent = Math.round(moodBoardState.brushOpacity * 100);
-        var pressureBtn = document.getElementById('pressureToggle');
-        if (pressureBtn) pressureBtn.classList.toggle('active', moodBoardState.pressureSensitivity);
-        // Brush type active state
-        document.querySelectorAll('.draw-tool-btn[data-brush]').forEach(function(b) {
-            b.classList.toggle('active', b.getAttribute('data-brush') === moodBoardState.brushType);
-        });
-        document.querySelectorAll('.rdm-sec-btn[data-brush]').forEach(function(b) {
-            b.classList.toggle('active', b.getAttribute('data-brush') === moodBoardState.brushType);
-        });
-        console.log('[Brush] Restored settings from previous session');
-    } catch(e) {}
+    // Always auto-fit to content center mass.
+    // Use rAF + timeout to ensure DOM layout is complete before computing bounds.
+    requestAnimationFrame(function() {
+        setTimeout(fitMoodBoardToContent, 500);
+    });
 }
 
 function initMoodBoard() {
     const moodBoard = document.getElementById('moodBoard');
     const canvas = document.getElementById('moodBoardCanvas');
-    const uploadBtn = document.getElementById('uploadMoodImageBtn');
-    const generateBtn = document.getElementById('generateMoodImageBtn');
-    const fullscreenBtn = document.getElementById('fullscreenMoodBtn');
     
     if (!moodBoard || !canvas) return;
     
@@ -355,35 +175,6 @@ function initMoodBoard() {
         zoomMoodBoard(delta, mouseX, mouseY);
     }, { passive: false });
     
-    // Upload button
-    if (uploadBtn) {
-        uploadBtn.addEventListener('click', () => {
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.accept = 'image/*';
-            input.multiple = true;
-            input.onchange = async (e) => {
-                for (const file of e.target.files) {
-                    await uploadMoodImage(file);
-                }
-            };
-            input.click();
-        });
-    }
-    
-    // Generate button
-    if (generateBtn) {
-        generateBtn.addEventListener('click', () => {
-            openModal('imageGenModal');
-            loadStyleReferences();
-        });
-    }
-    
-    // Fullscreen button
-    if (fullscreenBtn) {
-        fullscreenBtn.addEventListener('click', toggleMoodBoardFullscreen);
-    }
-    
     // Initialize drawing canvas
     initDrawCanvas();
 }
@@ -421,9 +212,6 @@ function initDrawCanvas() {
     drawCanvas.addEventListener('pointerup', stopDrawing);
     drawCanvas.addEventListener('pointerleave', stopDrawing);
     drawCanvas.style.touchAction = 'none';
-
-    // Restore brush settings from previous session
-    _restoreBrushSettings();
 }
 
 function toggleDrawMode() {
@@ -436,13 +224,12 @@ function toggleDrawMode() {
     if (!drawCanvas) { console.warn('[Draw] Canvas not found'); return; }
     const moodBoard = document.getElementById('moodBoard');
     const toolbar = document.getElementById('drawToolbar');
-    const drawBtn = document.getElementById('drawModeBtn');
+    const hub = document.getElementById('rdmHub');
 
     if (moodBoardState.drawMode) {
         drawCanvas.classList.add('drawing');
         moodBoard.classList.add('draw-mode');
-        if (toolbar) toolbar.style.display = 'flex';
-        if (drawBtn) drawBtn.classList.add('active');
+        if (hub) hub.classList.add('active');
         // Ensure canvas dimensions are correct
         const rect = moodBoard.getBoundingClientRect();
         if (drawCanvas.width < 10 || drawCanvas.height < 10 ||
@@ -466,13 +253,10 @@ function toggleDrawMode() {
     } else {
         drawCanvas.classList.remove('drawing');
         moodBoard.classList.remove('draw-mode');
-        if (toolbar) toolbar.style.display = 'none';
-        if (drawBtn) drawBtn.classList.remove('active');
+        if (hub) hub.classList.remove('active');
         // Close ring on exit
         const ring = document.getElementById('rdmRing');
-        const hub = document.getElementById('rdmHub');
         if (ring) ring.classList.remove('open');
-        if (hub) hub.classList.remove('open');
         cancelSelection();
     }
 }
@@ -891,6 +675,7 @@ function renderFullStroke(ctx, stroke, zoom, panX, panY) {
             }
         }
     }
+
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'source-over';
 }
@@ -901,28 +686,24 @@ function setBrushType(type) {
     document.querySelectorAll('.draw-tool-btn[data-brush]').forEach(b => b.classList.remove('active'));
     const btn = document.querySelector(`.draw-tool-btn[data-brush="${type}"]`);
     if (btn) btn.classList.add('active');
-    _saveBrushSettings();
 }
 
 function setBrushSize(val) {
     moodBoardState.brushSize = parseInt(val);
     const label = document.getElementById('brushSizeLabel');
     if (label) label.textContent = val;
-    _saveBrushSettings();
 }
 
 function setBrushColor(color) {
     moodBoardState.brushColor = color;
     const picker = document.getElementById('brushColorPicker');
     if (picker) picker.value = color;
-    _saveBrushSettings();
 }
 
 function setBrushOpacity(val) {
     moodBoardState.brushOpacity = parseInt(val) / 100;
     const label = document.getElementById('brushOpacityLabel');
     if (label) label.textContent = val;
-    _saveBrushSettings();
 }
 
 function togglePressureSensitivity() {
@@ -930,7 +711,6 @@ function togglePressureSensitivity() {
     const btn = document.getElementById('pressureToggle');
     if (btn) btn.classList.toggle('active', moodBoardState.pressureSensitivity);
     showNotification(`Pressure sensitivity ${moodBoardState.pressureSensitivity ? 'ON' : 'OFF'}`);
-    _saveBrushSettings();
 }
 
 function pushDrawUndo() {
@@ -1053,9 +833,17 @@ function fitMoodBoardToContent() {
 }
 
 function _doFitMoodBoard(moodBoard, images) {
+    const boardRect = moodBoard.getBoundingClientRect();
+    // If the board isn't visible yet (collapsed module, hidden tab), retry later
+    if (boardRect.width < 50 || boardRect.height < 50) {
+        console.log('[AutoCenter] Board not visible yet (' + boardRect.width.toFixed(0) + 'x' + boardRect.height.toFixed(0) + '), retrying in 1s');
+        setTimeout(function() { fitMoodBoardToContent(); }, 1000);
+        return;
+    }
+
     // Find bounding box of all images using stored positions + state metadata
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    images.forEach(img => {
+    images.forEach(function(img) {
         const x = parseFloat(img.style.left) || 0;
         const y = parseFloat(img.style.top) || 0;
         // Prefer actual rendered size, but fall back to state metadata for lazy-loaded images
@@ -1081,13 +869,23 @@ function _doFitMoodBoard(moodBoard, images) {
 
     const contentW = maxX - minX;
     const contentH = maxY - minY;
-    if (contentW <= 0 || contentH <= 0) return;
+    if (contentW <= 0 || contentH <= 0) {
+        console.log('[AutoCenter] No valid content bounds, resetting to default');
+        moodBoardState.zoom = 1;
+        moodBoardState.panX = 0;
+        moodBoardState.panY = 0;
+        updateMoodBoardTransform();
+        return;
+    }
 
-    const boardRect = moodBoard.getBoundingClientRect();
     const padding = 40;
     const scaleX = (boardRect.width - padding * 2) / contentW;
     const scaleY = (boardRect.height - padding * 2) / contentH;
-    const zoom = Math.min(scaleX, scaleY, 2);
+    let zoom = Math.min(scaleX, scaleY, 2);
+
+    // Sanity: clamp zoom to valid range
+    if (!isFinite(zoom) || zoom <= 0) zoom = 1;
+    zoom = Math.max(0.1, Math.min(2, zoom));
 
     const centerX = (minX + maxX) / 2;
     const centerY = (minY + maxY) / 2;
@@ -1099,12 +897,8 @@ function _doFitMoodBoard(moodBoard, images) {
     moodBoardState.panY = panY;
     updateMoodBoardTransform();
     saveMoodBoardView();
-    console.log('fitMoodBoardToContent: zoom=' + zoom.toFixed(3) + ' pan=' + panX.toFixed(0) + ',' + panY.toFixed(0));
+    console.log('[AutoCenter] zoom=' + zoom.toFixed(3) + ' pan=' + panX.toFixed(0) + ',' + panY.toFixed(0) + ' content=' + contentW.toFixed(0) + 'x' + contentH.toFixed(0) + ' board=' + boardRect.width.toFixed(0) + 'x' + boardRect.height.toFixed(0));
 }
-
-// Store original parent so we can move mood board back after fullscreen
-let _moodBoardOriginalParent = null;
-let _moodBoardNextSibling = null;
 
 function toggleMoodBoardFullscreen() {
     const moodBoard = document.getElementById('moodBoard');
@@ -1112,15 +906,47 @@ function toggleMoodBoardFullscreen() {
 
     const isCurrentlyFs = moodBoard.classList.contains('fullscreen');
 
+    // Capture old dimensions before the switch
+    const oldRect = moodBoard.getBoundingClientRect();
+
     if (!isCurrentlyFs) {
         // ENTER fullscreen: reparent to body so it escapes overflow:hidden and backdrop-filter containing blocks
         _moodBoardOriginalParent = moodBoard.parentNode;
         _moodBoardNextSibling = moodBoard.nextSibling;
         document.body.appendChild(moodBoard);
         moodBoard.classList.add('fullscreen');
+        // Apply saved fullscreen settings
+        var savedFsBlur = localStorage.getItem('fsBlur');
+        var savedFsDarkness = localStorage.getItem('fsDarkness');
+        if (savedFsBlur) {
+            var blurVal = 'blur(' + savedFsBlur + 'px) saturate(1.4)';
+            moodBoard.style.setProperty('backdrop-filter', blurVal, 'important');
+            moodBoard.style.setProperty('-webkit-backdrop-filter', blurVal, 'important');
+        }
+        if (savedFsDarkness) {
+            var alpha = (parseInt(savedFsDarkness) / 100).toFixed(2);
+            moodBoard.style.setProperty('background',
+                'linear-gradient(rgba(255,255,255,0.07) 1px, transparent 1px),' +
+                'linear-gradient(90deg, rgba(255,255,255,0.07) 1px, transparent 1px),' +
+                'linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px),' +
+                'linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px),' +
+                'radial-gradient(circle at 50% 50%, rgba(74,222,128,0.05), transparent 70%),' +
+                'rgba(10,10,15,' + alpha + ')',
+                'important'
+            );
+            moodBoard.style.setProperty('background-size',
+                '50px 50px, 50px 50px, 10px 10px, 10px 10px, 100% 100%, 100% 100%',
+                'important'
+            );
+        }
     } else {
         // EXIT fullscreen: move back to original location
         moodBoard.classList.remove('fullscreen');
+        // Clear inline fullscreen overrides
+        moodBoard.style.removeProperty('backdrop-filter');
+        moodBoard.style.removeProperty('-webkit-backdrop-filter');
+        moodBoard.style.removeProperty('background');
+        moodBoard.style.removeProperty('background-size');
         if (_moodBoardOriginalParent) {
             if (_moodBoardNextSibling) {
                 _moodBoardOriginalParent.insertBefore(moodBoard, _moodBoardNextSibling);
@@ -1132,30 +958,43 @@ function toggleMoodBoardFullscreen() {
 
     const isFs = moodBoard.classList.contains('fullscreen');
 
-    // Update header button text
+    // Update button icon
     const fullscreenBtn = document.getElementById('fullscreenMoodBtn');
     if (fullscreenBtn) {
-        fullscreenBtn.textContent = isFs ? 'Exit Fullscreen' : 'Fullscreen';
+        fullscreenBtn.textContent = isFs ? '✕' : '⛶';
+        fullscreenBtn.title = isFs ? 'Exit Fullscreen' : 'Fullscreen';
     }
 
-    // Add/remove inline exit button
-    let exitBtn = document.getElementById('moodExitFsBtn');
-    if (isFs && !exitBtn) {
-        exitBtn = document.createElement('button');
-        exitBtn.id = 'moodExitFsBtn';
-        exitBtn.className = 'mood-board-control-btn';
-        exitBtn.style.cssText = 'position:fixed;top:1rem;left:1rem;z-index:10001;background:rgba(255,0,0,0.15);border-color:rgba(255,100,100,0.3);font-size:0.85rem;padding:0.5rem 1rem;';
-        exitBtn.textContent = 'X Exit';
-        exitBtn.onclick = toggleMoodBoardFullscreen;
-        moodBoard.appendChild(exitBtn);
-    } else if (!isFs && exitBtn) {
-        exitBtn.remove();
-    }
+    // Adjust pan so content stays visually centered after container resize
+    // Use rAF to get the new layout dimensions
+    requestAnimationFrame(function() {
+        const newRect = moodBoard.getBoundingClientRect();
+        // Shift pan by half the difference in container size to keep content centered
+        const dx = (newRect.width - oldRect.width) / 2;
+        const dy = (newRect.height - oldRect.height) / 2;
+        moodBoardState.panX += dx;
+        moodBoardState.panY += dy;
+        updateMoodBoardTransform();
+        saveMoodBoardView();
+
+        // Resize draw canvas to match new container
+        const drawCanvas = moodBoardState.drawCanvas;
+        if (drawCanvas) {
+            drawCanvas.width = newRect.width;
+            drawCanvas.height = newRect.height;
+            redrawAllStrokes();
+        }
+    });
 }
 
 // Keyboard shortcuts
 document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {
+        // Exit draw mode first, then fullscreen
+        if (moodBoardState.drawMode) {
+            toggleDrawMode();
+            return;
+        }
         const moodBoard = document.getElementById('moodBoard');
         if (moodBoard && moodBoard.classList.contains('fullscreen')) {
             toggleMoodBoardFullscreen();
@@ -1184,7 +1023,6 @@ async function uploadMoodImage(file) {
     formData.append('image', file);
     formData.append('brand_profile_id', state.brandProfile?.id);
     formData.append('workspace_id', window.getWorkspaceId ? window.getWorkspaceId() : '');
-    formData.append('board_id', _getBoardId());
     
     try {
         const response = await fetch('/api/mood-board/upload', {
@@ -1203,6 +1041,9 @@ async function uploadMoodImage(file) {
         state.moodBoardImages.push(image);
         appendMoodImage(image);
         showNotification('Image added to mood board');
+        
+        // Auto-center view to include the new image
+        setTimeout(fitMoodBoardToContent, 400);
         
         // Update AI context
         updateAIContext();
@@ -1226,7 +1067,7 @@ async function loadMoodBoard(retryCount) {
     try {
         // Step 1: Fetch lightweight metadata only (no base64 data — fast on mobile)
         console.log('[Workbench] Fetching metadata for brand:', state.brandProfile.id);
-        const metaResponse = await fetch(`/api/mood-board?brand_profile_id=${state.brandProfile.id}&metadata_only=1&board_id=${encodeURIComponent(_getBoardId())}`);
+        const metaResponse = await fetch(`/api/mood-board?brand_profile_id=${state.brandProfile.id}&metadata_only=1`);
         if (!metaResponse.ok) {
             console.error('[Workbench] Metadata fetch failed:', metaResponse.status);
             return;
@@ -1309,7 +1150,7 @@ function renderMoodBoard() {
     if (state.moodBoardImages.length === 0) {
         canvas.innerHTML = `
             <div class="mood-board-empty">
-                <p>📌 Drop images here or click Upload to start your Workbench</p>
+                <p>📌 Drop images here to start your Workbench</p>
                 <p style="font-size: 0.9rem; color: var(--text-tertiary); margin-top: 0.5rem;">Sketch, iterate, generate variations & edit images — all in one place</p>
             </div>
         `;
@@ -1520,68 +1361,133 @@ function mediaWallDeselectAll() {
 }
 
 function showMediaWallContextMenu(e, imageId) {
-    const menu = document.getElementById('mwContextMenu');
+    var menu = document.getElementById('mwContextMenu');
     if (!menu) return;
-    
-    const moodBoard = document.getElementById('moodBoard');
-    const rect = moodBoard.getBoundingClientRect();
-    
-    menu.style.left = (e.clientX - rect.left) + 'px';
-    menu.style.top = (e.clientY - rect.top) + 'px';
+    // Position with fixed coords on body so no overlay can block clicks
+    if (menu.parentNode !== document.body) document.body.appendChild(menu);
+    menu.style.position = 'fixed';
+    menu.style.left = e.clientX + 'px';
+    menu.style.top = e.clientY + 'px';
     menu.style.display = 'block';
+    menu.style.zIndex = '99999';
     
-    const count = moodBoardState.selectedImages.size;
-    const plural = count > 1 ? ` (${count})` : '';
+    var count = moodBoardState.selectedImages.size;
+    var plural = count > 1 ? ' (' + count + ')' : '';
     
-    menu.innerHTML = `
-        <div class="mw-ctx-item" onclick="downloadMoodImage('${imageId}')">⬇ Download${plural}</div>
-        <div class="mw-ctx-divider"></div>
-        <div class="mw-ctx-item" onclick="event.stopPropagation(); showVariationSubmenu('${imageId}')">✨ Generate Variation ▸</div>
-        <div class="mw-ctx-item" onclick="event.stopPropagation(); showManualPromptUI('${imageId}', 'edit')">🖌️ Edit with AI</div>
-        <div class="mw-ctx-item" onclick="event.stopPropagation(); showManualPromptUI('${imageId}', 'reference')">🖼️ New from Reference</div>
-        <div class="mw-ctx-divider"></div>
-        <div class="mw-ctx-item" onclick="rotateMoodImage('${imageId}')">↻ Rotate</div>
-        <div class="mw-ctx-item" onclick="duplicateMoodImage('${imageId}')">📋 Duplicate</div>
-        <div class="mw-ctx-item danger" onclick="deleteMoodImage('${imageId}')">🗑 Delete${plural}</div>
-    `;
-    
-    const closeMenu = (e) => {
-        if (!menu.contains(e.target)) {
+    menu.innerHTML = '<div class="mw-ctx-item" data-action="download">\u2b07 Download' + plural + '</div>'
+        + '<div class="mw-ctx-divider"></div>'
+        + '<div class="mw-ctx-item" data-action="variation">\u2728 Generate Variation \u25b8</div>'
+        + '<div class="mw-ctx-item" data-action="edit">\ud83d\udd8c\ufe0f Edit with AI</div>'
+        + '<div class="mw-ctx-item" data-action="reference">\ud83d\uddbc\ufe0f New from Reference</div>'
+        + '<div class="mw-ctx-divider"></div>'
+        + '<div class="mw-ctx-item" data-action="rotate">\u21bb Rotate</div>'
+        + '<div class="mw-ctx-item" data-action="duplicate">\ud83d\udccb Duplicate</div>'
+        + '<div class="mw-ctx-item danger" data-action="delete">\ud83d\uddd1 Delete' + plural + '</div>';
+
+    menu.querySelectorAll('.mw-ctx-item[data-action]').forEach(function(item) {
+        var action = item.getAttribute('data-action');
+        item.addEventListener('pointerup', function(ev) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            console.log('[CtxMenu] pointerup action:', action, 'imageId:', imageId);
+            if (action === 'download') return downloadMoodImage(imageId);
+            if (action === 'variation') return showVariationSubmenu(imageId);
+            if (action === 'edit') return showManualPromptUI(imageId, 'edit');
+            if (action === 'reference') return showManualPromptUI(imageId, 'reference');
+            if (action === 'rotate') return rotateMoodImage(imageId);
+            if (action === 'duplicate') return duplicateMoodImage(imageId);
+            if (action === 'delete') return deleteMoodImage(imageId);
+        });
+    });
+
+    var closeMenu = function(ev) {
+        if (!menu.contains(ev.target)) {
             menu.style.display = 'none';
-            document.removeEventListener('mousedown', closeMenu);
+            document.removeEventListener('pointerdown', closeMenu);
         }
     };
-    setTimeout(() => document.addEventListener('mousedown', closeMenu), 10);
+    if (menu._closeHandler) document.removeEventListener('pointerdown', menu._closeHandler);
+    menu._closeHandler = closeMenu;
+    setTimeout(function() { document.addEventListener('pointerdown', closeMenu); }, 50);
 }
 
 function showVariationSubmenu(imageId) {
-    const menu = document.getElementById('mwContextMenu');
+    var menu = document.getElementById('mwContextMenu');
     if (!menu) return;
     
-    menu.innerHTML = `
-        <div class="mw-ctx-header">✨ Generate Variation</div>
-        <div class="mw-ctx-item" onclick="runImageGeneration('${imageId}', 'vary_strong')">🔥 Vary Strong</div>
-        <div class="mw-ctx-item" onclick="runImageGeneration('${imageId}', 'vary_light')">🌿 Vary Light</div>
-        <div class="mw-ctx-item" onclick="event.stopPropagation(); showManualPromptUI('${imageId}', 'vary_manual')">✏️ Manual Prompt</div>
-        <div class="mw-ctx-divider"></div>
-        <div class="mw-ctx-header" style="font-size:0.75rem;">Output Size</div>
-        <div class="mw-ctx-row">
-            <label class="mw-ctx-radio"><input type="radio" name="mw-size" value="auto" checked> Auto (match source)</label>
-        </div>
-        <div class="mw-ctx-row">
-            <label class="mw-ctx-radio"><input type="radio" name="mw-size" value="manual"> Manual</label>
-            <input type="number" id="mwManualScale" placeholder="Scale %" value="100" style="width:55px;padding:2px 4px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:#fff;font-size:0.75rem;display:none;" />
-        </div>
-        <div class="mw-ctx-divider"></div>
-        <div class="mw-ctx-item" style="color:var(--text-tertiary);" onclick="showMediaWallContextMenu(event, '${imageId}')">← Back</div>
-    `;
+    menu.innerHTML = '<div class="mw-ctx-header">\u2728 Generate Variation</div>'
+        + '<div class="mw-ctx-item" data-action="vary_strong">\ud83d\udd25 Vary Strong</div>'
+        + '<div class="mw-ctx-item" data-action="vary_light">\ud83c\udf3f Vary Light</div>'
+        + '<div class="mw-ctx-item" data-action="vary_manual">\u270f\ufe0f Manual Prompt</div>'
+        + '<div class="mw-ctx-divider"></div>'
+        + '<div class="mw-ctx-header" style="font-size:0.75rem;">Output Size</div>'
+        + '<div class="mw-ctx-row"><label class="mw-ctx-radio"><input type="radio" name="mw-size" value="auto" checked> Auto (match source)</label></div>'
+        + '<div class="mw-ctx-row"><label class="mw-ctx-radio"><input type="radio" name="mw-size" value="manual"> Manual</label>'
+        + '<input type="number" id="mwManualScale" placeholder="Scale %" value="100" style="width:55px;padding:2px 4px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:#fff;font-size:0.75rem;display:none;" /></div>'
+        + '<div class="mw-ctx-divider"></div>'
+        + '<div class="mw-ctx-item" data-action="back" style="color:var(--text-tertiary);">\u2190 Back</div>';
+
+    menu.querySelectorAll('.mw-ctx-item[data-action]').forEach(function(item) {
+        var action = item.getAttribute('data-action');
+        item.addEventListener('pointerup', function(ev) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            console.log('[CtxMenu] variation pointerup:', action);
+            if (action === 'vary_strong') return runImageGeneration(imageId, 'vary_strong');
+            if (action === 'vary_light') return runImageGeneration(imageId, 'vary_light');
+            if (action === 'vary_manual') return showManualPromptUI(imageId, 'vary_manual');
+            if (action === 'back') return showMediaWallContextMenu(ev, imageId);
+        });
+    });
     
-    // Show/hide manual scale input
-    menu.querySelectorAll('input[name="mw-size"]').forEach(r => {
-        r.addEventListener('change', () => {
+    menu.querySelectorAll('input[name="mw-size"]').forEach(function(r) {
+        r.addEventListener('change', function() {
             document.getElementById('mwManualScale').style.display = r.value === 'manual' ? 'inline-block' : 'none';
         });
     });
+}
+
+function showManualPromptUI(imageId, mode) {
+    var menu = document.getElementById('mwContextMenu');
+    if (!menu) return;
+
+    var titles = {
+        vary_manual: '\u2728 Manual Variation',
+        edit: '\ud83d\udd8c\ufe0f Edit with AI',
+        reference: '\ud83d\uddbc\ufe0f New from Reference'
+    };
+    var placeholders = {
+        vary_manual: 'Describe the variation you want...',
+        edit: 'e.g. make it more vibrant, remove background...',
+        reference: 'e.g. product shot in this style, sketch inspired by this...'
+    };
+
+    menu.innerHTML = '<div class="mw-ctx-header">' + (titles[mode] || 'Generate') + '</div>'
+        + '<div style="padding:0.4rem 0.75rem;"><textarea id="mwPromptInput" rows="3" placeholder="' + (placeholders[mode] || 'Describe...') + '" style="width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:8px;color:#fff;padding:0.5rem;font-size:0.8rem;resize:none;font-family:inherit;"></textarea></div>'
+        + '<div style="padding:0.25rem 0.75rem 0.5rem;"><div class="mw-ctx-header" style="font-size:0.7rem;margin-bottom:0.25rem;">Output Size</div>'
+        + '<div class="mw-ctx-row"><label class="mw-ctx-radio"><input type="radio" name="mw-size" value="auto" checked> Auto</label>'
+        + '<label class="mw-ctx-radio"><input type="radio" name="mw-size" value="manual"> Manual</label>'
+        + '<input type="number" id="mwManualScale" placeholder="%" value="100" style="width:48px;padding:2px 4px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:#fff;font-size:0.75rem;display:none;" /></div></div>'
+        + '<div style="display:flex;gap:0.4rem;padding:0.25rem 0.75rem 0.5rem;"><button class="mw-ctx-btn" data-action="cancel">Cancel</button><button class="mw-ctx-btn primary" data-action="generate">Generate</button></div>';
+
+    menu.querySelectorAll('.mw-ctx-btn[data-action]').forEach(function(btn) {
+        var action = btn.getAttribute('data-action');
+        btn.addEventListener('pointerup', function(ev) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            console.log('[CtxMenu] prompt UI pointerup:', action);
+            if (action === 'cancel') return showMediaWallContextMenu(ev, imageId);
+            if (action === 'generate') return runImageGeneration(imageId, mode);
+        });
+    });
+
+    menu.querySelectorAll('input[name="mw-size"]').forEach(function(r) {
+        r.addEventListener('change', function() {
+            document.getElementById('mwManualScale').style.display = r.value === 'manual' ? 'inline-block' : 'none';
+        });
+    });
+
+    setTimeout(function() { var ta = document.getElementById('mwPromptInput'); if (ta) ta.focus(); }, 50);
 }
 
 function getSelectedSizeMode() {
@@ -1692,7 +1598,6 @@ async function runImageGeneration(imageId, mode) {
             formData.append('image', new File([blob], 'ai-generated.png', { type: blob.type }));
             formData.append('brand_profile_id', state.brandProfile?.id);
             formData.append('workspace_id', window.getWorkspaceId ? window.getWorkspaceId() : '');
-            formData.append('board_id', _getBoardId());
             
             const uploadResp = await fetch('/api/mood-board/upload', { method: 'POST', body: formData });
             const newImage = await uploadResp.json();
@@ -1724,18 +1629,27 @@ async function runImageGeneration(imageId, mode) {
 
 function downloadMoodImage(imageId) {
     const ids = moodBoardState.selectedImages.size > 0 ? [...moodBoardState.selectedImages] : [imageId];
-    ids.forEach(id => {
+    ids.forEach(async (id) => {
         const imgData = state.moodBoardImages.find(i => i.id === id);
-        if (imgData && imgData.url) {
+        if (!imgData || !imgData.url) return;
+        try {
+            const resp = await fetch(imgData.url, { cache: 'no-store' });
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            const blob = await resp.blob();
+            const objUrl = URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.href = imgData.url;
+            a.href = objUrl;
             a.download = `media-wall-${id.substring(0, 8)}.png`;
             document.body.appendChild(a);
             a.click();
             a.remove();
+            setTimeout(() => URL.revokeObjectURL(objUrl), 1000);
+        } catch (err) {
+            console.error('[Download] Failed', err);
+            try { showNotification('Download failed'); } catch (_) {}
         }
     });
-    showNotification(`Downloaded ${ids.length} image${ids.length > 1 ? 's' : ''}`);
+    try { showNotification(`Downloaded ${ids.length} image${ids.length > 1 ? 's' : ''}`); } catch (_) {}
     const menu = document.getElementById('mwContextMenu');
     if (menu) menu.style.display = 'none';
 }
@@ -1770,6 +1684,8 @@ async function deleteMoodImage(imageId) {
         state.moodBoardImages = state.moodBoardImages.filter(img => img.id !== imageId);
         renderMoodBoard();
         showNotification('Image removed');
+        // Auto-center on remaining content
+        setTimeout(fitMoodBoardToContent, 300);
         updateAIContext();
     } catch (error) {
         showNotification('Error removing image', 'error');
@@ -2608,6 +2524,8 @@ async function _doSaveMoodBoardState() {
         console.error('Error saving mood board state:', error);
     }
 }
+
+// ============================================================
 // PREMIUM BRUSH CONTROL FUNCTIONS
 // ============================================================
 
@@ -2615,28 +2533,24 @@ function setBrushMinSize(val) {
     moodBoardState.brushMinSize = parseInt(val) / 100;
     const label = document.getElementById('brushMinSizeLabel');
     if (label) label.textContent = val + '%';
-    _saveBrushSettings();
 }
 
 function setBrushFlow(val) {
     moodBoardState.brushFlow = parseInt(val) / 100;
     const label = document.getElementById('brushFlowLabel');
     if (label) label.textContent = val + '%';
-    _saveBrushSettings();
 }
 
 function setBrushSmoothing(val) {
     moodBoardState.brushSmoothing = parseInt(val);
     const label = document.getElementById('brushSmoothLabel');
     if (label) label.textContent = val;
-    _saveBrushSettings();
 }
 
 function setBrushTaper(val) {
     moodBoardState.brushTaper = parseInt(val);
     const label = document.getElementById('brushTaperLabel');
     if (label) label.textContent = val;
-    _saveBrushSettings();
 }
 
 function setDrawTool(tool) {
@@ -2872,10 +2786,6 @@ function openFreshCanvas() {
     canvas.style.width = (W * displayScale) + 'px';
     canvas.style.height = (H * displayScale) + 'px';
 
-    // White background
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, W, H);
-
     freshCanvasState = {
         canvas, ctx, W, H, displayScale,
         bg: 'white',
@@ -3096,8 +3006,6 @@ window.cancelSelection = cancelSelection;
 window.openFreshCanvas = openFreshCanvas;
 // Radial menu
 window.toggleRadialMenu = toggleRadialMenu;
-
-// ============================================================
 // RADIAL MENU LOGIC
 // ============================================================
 
@@ -3105,20 +3013,29 @@ function toggleRadialMenu() {
     const hub = document.getElementById('rdmHub');
     const ring = document.getElementById('rdmRing');
     if (!hub || !ring) return;
-    const isOpen = ring.classList.contains('open');
-    if (isOpen) {
-        ring.classList.remove('open');
-        hub.classList.remove('open');
-    } else {
+
+    if (!moodBoardState.drawMode) {
+        // Draw mode is OFF — activate it and open the ring
+        toggleDrawMode();
         ring.classList.add('open');
         hub.classList.add('open');
+    } else {
+        const isOpen = ring.classList.contains('open');
+        if (isOpen) {
+            // Ring is open — close it (stay in draw mode)
+            ring.classList.remove('open');
+            hub.classList.remove('open');
+        } else {
+            // Ring is closed — exit draw mode
+            toggleDrawMode();
+        }
     }
 }
 
-// Close radial menu when clicking outside
+// Close radial menu ring when clicking outside (draw mode stays on so user can keep drawing)
 document.addEventListener('pointerdown', function(e) {
     const menu = document.getElementById('drawToolbar');
-    if (!menu || menu.style.display === 'none') return;
+    if (!menu) return;
     // Don't close if clicking inside the menu
     if (menu.contains(e.target)) return;
     // Don't close if clicking on the draw canvas (user is drawing)
@@ -3301,6 +3218,12 @@ function connectDrawSync() {
             }
         });
 
+        _drawSocket.on('draw:clear', function() {
+            moodBoardState.layers.forEach(function(l) { l.strokes = []; });
+            redrawAllStrokes();
+            renderLayerList();
+        });
+
         _drawSocket.on('disconnect', function() {
             console.log('[DrawSync] Disconnected');
         });
@@ -3427,7 +3350,6 @@ function saveStrokesToBackend() {
             });
             var payload = {
                 workspace_id: wsId || 'default',
-                board_id: _getBoardId(),
                 layers: cleanLayers,
                 layerCounter: moodBoardState.layerCounter,
                 activeLayerId: moodBoardState.activeLayerId
@@ -3454,7 +3376,7 @@ function saveStrokesToBackend() {
 
 function loadStrokesFromBackend() {
     var wsId = window.getWorkspaceId ? window.getWorkspaceId() : '';
-    var url = _getApiBase() + '/mood-board/strokes?workspace_id=' + encodeURIComponent(wsId || 'default') + '&board_id=' + encodeURIComponent(_getBoardId());
+    var url = _getApiBase() + '/mood-board/strokes?workspace_id=' + encodeURIComponent(wsId || 'default');
     console.log('[Strokes] Loading from:', url);
     fetch(url)
         .then(function(r) {
@@ -3516,7 +3438,10 @@ function _ensureStrokesRendered() {
 // ============================================================
 // SSE REAL-TIME SYNC — instant push when any client saves strokes
 // ============================================================
-// _getApiBase() is defined at the top of the file
+function _getApiBase() {
+    if (window.location.pathname.indexOf('/media-suite') === 0) return '/media-suite/api';
+    return '/api';
+}
 
 var _syncEventSource = null;
 var _lastSaveTime = 0;
@@ -3532,8 +3457,6 @@ if (document.readyState === 'loading') {
 } else {
     _initStrokesAndSync();
 }
-// Load board tabs separately so it never blocks stroke sync
-setTimeout(function() { try { loadBoards(); } catch(e) {} }, 200);
 
 function _connectSSE() {
     if (_syncEventSource) { try { _syncEventSource.close(); } catch(e) {} }
@@ -3568,7 +3491,7 @@ function _connectSSE() {
 
 function _fetchAndRedraw() {
     var wsId = window.getWorkspaceId ? window.getWorkspaceId() : '';
-    fetch(_getApiBase() + '/mood-board/strokes?workspace_id=' + encodeURIComponent(wsId || 'default') + '&board_id=' + encodeURIComponent(_getBoardId()))
+    fetch(_getApiBase() + '/mood-board/strokes?workspace_id=' + encodeURIComponent(wsId || 'default'))
         .then(function(r) { return r.json(); })
         .then(function(d) {
             if (!d || !d.layers) return;
@@ -3603,117 +3526,8 @@ function _fetchAndRedraw() {
 }
 
 // ============================================================
-// DRAGGABLE HUB — allow user to reposition the radial menu hub
-// ============================================================
-(function initDraggableHub() {
-    document.addEventListener('DOMContentLoaded', function() {
-        const hub = document.getElementById('rdmHub');
-        const menu = document.getElementById('drawToolbar');
-        if (!hub || !menu) return;
-
-        let isDragging = false;
-        let startX, startY, origLeft, origBottom;
-        let moved = false;
-
-        hub.addEventListener('pointerdown', function(e) {
-            isDragging = true;
-            moved = false;
-            startX = e.clientX;
-            startY = e.clientY;
-            const rect = menu.getBoundingClientRect();
-            const parent = menu.offsetParent || document.body;
-            const parentRect = parent.getBoundingClientRect();
-            origLeft = rect.left - parentRect.left;
-            origBottom = parentRect.bottom - rect.bottom;
-            hub.setPointerCapture(e.pointerId);
-            e.stopPropagation();
-        });
-
-        hub.addEventListener('pointermove', function(e) {
-            if (!isDragging) return;
-            const dx = e.clientX - startX;
-            const dy = e.clientY - startY;
-            if (!moved && Math.abs(dx) + Math.abs(dy) < 8) return;
-            moved = true;
-            menu.style.left = (origLeft + dx) + 'px';
-            menu.style.bottom = (origBottom - dy) + 'px';
-            menu.style.transform = 'none';
-            e.stopPropagation();
-        });
-
-        hub.addEventListener('pointerup', function(e) {
-            isDragging = false;
-            hub.releasePointerCapture(e.pointerId);
-            if (moved) {
-                e.stopPropagation();
-                e.preventDefault();
-                hub.addEventListener('click', function blocker(ev) {
-                    ev.stopPropagation();
-                    ev.preventDefault();
-                    hub.removeEventListener('click', blocker, true);
-                }, { capture: true, once: true });
-            }
-        });
-    });
-})();
-
-// ============================================================
 // SELECTION EXPORT — frame an area and export as PNG
 // ============================================================
-
-// Shared helper: render images + strokes within a world-space rect onto ctx
-function _renderSelectionToCanvas(ctx, worldX, worldY, worldW, worldH, scale) {
-    // 1) Draw workbench images that overlap the selection
-    var imageEls = document.querySelectorAll('.mood-image');
-    var promises = [];
-    imageEls.forEach(function(el) {
-        var imgTag = el.querySelector('img');
-        if (!imgTag || !imgTag.src || imgTag.src === '') return;
-        var ix = parseFloat(el.style.left) || 0;
-        var iy = parseFloat(el.style.top) || 0;
-        var iw = el.offsetWidth || 200;
-        var ih = el.offsetHeight || 150;
-        var id = el.dataset.id;
-        var imgData = state.moodBoardImages.find(function(i) { return i.id === id; });
-        var imgScale = (imgData && imgData.scale) ? imgData.scale : 1;
-        var imgRotation = (imgData && imgData.rotation) ? imgData.rotation : 0;
-        var imgOpacity = (imgData && imgData.opacity !== undefined) ? imgData.opacity : 1;
-
-        // Check overlap with selection rect (in world coords)
-        if (ix + iw < worldX || ix > worldX + worldW) return;
-        if (iy + ih < worldY || iy > worldY + worldH) return;
-
-        // Draw this image onto the export canvas
-        var drawX = (ix - worldX) * scale;
-        var drawY = (iy - worldY) * scale;
-        var drawW = iw * scale;
-        var drawH = ih * scale;
-
-        ctx.save();
-        ctx.globalAlpha = imgOpacity;
-        if (imgRotation) {
-            var cx = drawX + drawW / 2;
-            var cy = drawY + drawH / 2;
-            ctx.translate(cx, cy);
-            ctx.rotate(imgRotation * Math.PI / 180);
-            ctx.translate(-cx, -cy);
-        }
-        try {
-            ctx.drawImage(imgTag, drawX, drawY, drawW, drawH);
-        } catch(e) {
-            console.warn('[Export] Could not draw image', id, e);
-        }
-        ctx.restore();
-    });
-
-    // 2) Draw all visible strokes
-    var offsetX = -worldX * scale;
-    var offsetY = -worldY * scale;
-    getAllVisibleStrokes().forEach(function(stroke) {
-        renderFullStroke(ctx, stroke, scale, offsetX, offsetY);
-    });
-}
-
 function exportSelectionPNG(transparent) {
     const sel = moodBoardState.selectionRect;
     if (!sel) { showNotification('No selection — draw a frame first', 'error'); return; }
@@ -3727,29 +3541,33 @@ function exportSelectionPNG(transparent) {
     const worldW = sel.w / zoom;
     const worldH = sel.h / zoom;
 
-    if (worldW < 1 || worldH < 1) { showNotification('Selection too small', 'error'); return; }
-
     // Create offscreen canvas at the selection size
     const exportCanvas = document.createElement('canvas');
     const scale = 2; // 2x for higher resolution export
-    exportCanvas.width = Math.round(worldW * scale);
-    exportCanvas.height = Math.round(worldH * scale);
+    exportCanvas.width = worldW * scale;
+    exportCanvas.height = worldH * scale;
     const ctx = exportCanvas.getContext('2d');
 
     if (!transparent) {
-        const bgColor = moodBoardState._exportBgColor || '#1a1a2e';
+        // Get background color from prompt or default white
+        const bgColor = moodBoardState._exportBgColor || '#ffffff';
         ctx.fillStyle = bgColor;
         ctx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
     }
 
-    _renderSelectionToCanvas(ctx, worldX, worldY, worldW, worldH, scale);
+    // Render all visible strokes into this region
+    const offsetX = -worldX * scale;
+    const offsetY = -worldY * scale;
+    getAllVisibleStrokes().forEach(function(stroke) {
+        renderFullStroke(ctx, stroke, scale, offsetX, offsetY);
+    });
 
     // Trigger download
     const link = document.createElement('a');
-    link.download = 'workbench-' + Date.now() + '.png';
+    link.download = 'sketch-' + Date.now() + '.png';
     link.href = exportCanvas.toDataURL('image/png');
     link.click();
-    showNotification('Exported as PNG');
+    showNotification('Sketch exported as PNG');
 }
 
 function showExportDialog() {
@@ -3771,21 +3589,96 @@ function selectionToWorkbenchImage() {
     const worldW = sel.w / zoom;
     const worldH = sel.h / zoom;
 
-    if (worldW < 1 || worldH < 1) return;
-
     const exportCanvas = document.createElement('canvas');
-    const scale = 2;
-    exportCanvas.width = Math.round(worldW * scale);
-    exportCanvas.height = Math.round(worldH * scale);
+    exportCanvas.width = worldW * 2;
+    exportCanvas.height = worldH * 2;
     const ctx = exportCanvas.getContext('2d');
 
-    _renderSelectionToCanvas(ctx, worldX, worldY, worldW, worldH, scale);
+    const offsetX = -worldX * 2;
+    const offsetY = -worldY * 2;
+    getAllVisibleStrokes().forEach(function(stroke) {
+        renderFullStroke(ctx, stroke, 2, offsetX, offsetY);
+    });
 
     exportCanvas.toBlob(function(blob) {
         if (!blob) return;
-        const file = new File([blob], 'workbench-' + Date.now() + '.png', { type: 'image/png' });
+        const file = new File([blob], 'sketch-' + Date.now() + '.png', { type: 'image/png' });
         uploadMoodImage(file);
         cancelSelection();
-        showNotification('Added to workbench');
+        showNotification('Sketch added to workbench');
     }, 'image/png');
 }
+
+// ============================================================
+// DRAGGABLE RADIAL MENU — persist position between sessions
+// ============================================================
+(function initRadialMenuDrag() {
+    document.addEventListener('DOMContentLoaded', function() {
+        var menu = document.getElementById('drawToolbar');
+        var hub = document.getElementById('rdmHub');
+        if (!menu || !hub) return;
+
+        // Restore saved position
+        var savedPos = localStorage.getItem('radialMenuPos');
+        if (savedPos) {
+            try {
+                var pos = JSON.parse(savedPos);
+                menu.style.left = pos.left;
+                menu.style.bottom = pos.bottom;
+                menu.style.transform = 'none';
+            } catch(e) {}
+        }
+
+        var _rdmDragActive = false;
+        var _rdmMoved = false;
+        var _rdmStartX = 0, _rdmStartY = 0, _rdmOrigLeft = 0, _rdmOrigBottom = 0;
+        var _rdmPointerId = null;
+
+        hub.addEventListener('pointerdown', function(e) {
+            _rdmDragActive = true;
+            _rdmMoved = false;
+            _rdmStartX = e.clientX;
+            _rdmStartY = e.clientY;
+            // Always use moodBoard as the reference container (works in both regular and fullscreen)
+            var moodBoard = document.getElementById('moodBoard');
+            var containerRect = moodBoard ? moodBoard.getBoundingClientRect() : { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
+            var menuRect = menu.getBoundingClientRect();
+            _rdmOrigLeft = menuRect.left - containerRect.left + menuRect.width / 2;
+            _rdmOrigBottom = containerRect.height - (menuRect.top - containerRect.top) - menuRect.height / 2;
+            _rdmPointerId = e.pointerId;
+        });
+
+        document.addEventListener('pointermove', function(e) {
+            if (!_rdmDragActive || e.pointerId !== _rdmPointerId) return;
+            var dx = e.clientX - _rdmStartX;
+            var dy = e.clientY - _rdmStartY;
+            if (!_rdmMoved && Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+            _rdmMoved = true;
+
+            menu.style.left = (_rdmOrigLeft + dx) + 'px';
+            menu.style.bottom = (_rdmOrigBottom - dy) + 'px';
+            menu.style.transform = 'none';
+        });
+
+        document.addEventListener('pointerup', function(e) {
+            if (!_rdmDragActive || e.pointerId !== _rdmPointerId) return;
+            _rdmDragActive = false;
+
+            if (_rdmMoved) {
+                localStorage.setItem('radialMenuPos', JSON.stringify({
+                    left: menu.style.left,
+                    bottom: menu.style.bottom
+                }));
+            }
+        });
+
+        // Suppress click only when a drag occurred
+        hub.addEventListener('click', function(e) {
+            if (_rdmMoved) {
+                e.stopImmediatePropagation();
+                e.preventDefault();
+                _rdmMoved = false;
+            }
+        }, true);
+    });
+})();

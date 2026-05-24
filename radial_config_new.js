@@ -2657,6 +2657,11 @@
                     <input type="password" id="google-api-key-input-radial" placeholder="Enter Google/Gemini API key" autocomplete="off" spellcheck="false">
                 </div>
                 <div class="config-row">
+                    <label for="vertex-sa-path-input-radial">Vertex AI Service Account:</label>
+                    <input type="text" id="vertex-sa-path-input-radial" placeholder="Path to service account JSON file" autocomplete="off" spellcheck="false" style="font-size:10px;">
+                </div>
+                <div class="config-help" style="margin-top:-2px;font-size:10px;opacity:0.5;">Optional. Use instead of API key for Vertex AI auth (download JSON from GCP Console).</div>
+                <div class="config-row">
                     <label for="minimax-api-key-input-radial">MiniMax API Key:</label>
                     <input type="password" id="minimax-api-key-input-radial" placeholder="Enter MiniMax API key" autocomplete="off" spellcheck="false">
                 </div>
@@ -3360,6 +3365,20 @@
             }
         }
         
+        // Load vertex_ai_service_account path from config (no original panel element)
+        const vertexSaInput = document.getElementById('vertex-sa-path-input-radial');
+        if (vertexSaInput) {
+            let vertexVal = '';
+            try {
+                if (window.currentConfig && typeof window.currentConfig.vertex_ai_service_account === 'string') {
+                    vertexVal = window.currentConfig.vertex_ai_service_account;
+                }
+            } catch(_) {}
+            if (vertexVal) {
+                vertexSaInput.value = vertexVal;
+            }
+        }
+        
         // Load vision_fallback_model from config
         const visionFallbackHidden = document.getElementById('vision-fallback-select');
         const visionFallbackLabel = document.getElementById('vision-fallback-label');
@@ -3755,6 +3774,76 @@
                 el.addEventListener('change', _autoSaveElevenLabsCreds);
             }
         });
+        
+        // Auto-save Google API key on input with debounce
+        let _googleSaveTimer = null;
+        const _autoSaveGoogleKey = () => {
+            if (_googleSaveTimer) clearTimeout(_googleSaveTimer);
+            _googleSaveTimer = setTimeout(() => {
+                const apiKey = (document.getElementById('google-api-key-input-radial') || {}).value || '';
+                if (apiKey.length > 0) {
+                    console.log('[Google AUTO-SAVE] Saving key, length:', apiKey.length);
+                    window.api.send('config', { action: 'save', config: { remote_api_keys: { google_api_key: apiKey } } });
+                }
+            }, 1500);
+        };
+        const googleKeyEl = document.getElementById('google-api-key-input-radial');
+        if (googleKeyEl) {
+            googleKeyEl.addEventListener('input', _autoSaveGoogleKey);
+            googleKeyEl.addEventListener('change', _autoSaveGoogleKey);
+        }
+        
+        // Auto-save Vertex AI service account path on input with debounce
+        let _vertexSaveTimer = null;
+        const _autoSaveVertexPath = () => {
+            if (_vertexSaveTimer) clearTimeout(_vertexSaveTimer);
+            _vertexSaveTimer = setTimeout(() => {
+                const saPath = (document.getElementById('vertex-sa-path-input-radial') || {}).value || '';
+                console.log('[Vertex AUTO-SAVE] Saving service account path:', saPath);
+                window.api.send('config', { action: 'save', config: { vertex_ai_service_account: saPath } });
+            }, 1500);
+        };
+        const vertexSaEl = document.getElementById('vertex-sa-path-input-radial');
+        if (vertexSaEl) {
+            vertexSaEl.addEventListener('input', _autoSaveVertexPath);
+            vertexSaEl.addEventListener('change', _autoSaveVertexPath);
+        }
+        
+        // Auto-save Anthropic API key on input with debounce
+        let _anthropicSaveTimer = null;
+        const _autoSaveAnthropicKey = () => {
+            if (_anthropicSaveTimer) clearTimeout(_anthropicSaveTimer);
+            _anthropicSaveTimer = setTimeout(() => {
+                const apiKey = (document.getElementById('anthropic-api-key-input-radial') || {}).value || '';
+                if (apiKey.length > 0) {
+                    console.log('[Anthropic AUTO-SAVE] Saving key, length:', apiKey.length);
+                    window.api.send('config', { action: 'save', config: { remote_api_keys: { anthropic_api_key: apiKey } } });
+                }
+            }, 1500);
+        };
+        const anthropicKeyEl = document.getElementById('anthropic-api-key-input-radial');
+        if (anthropicKeyEl) {
+            anthropicKeyEl.addEventListener('input', _autoSaveAnthropicKey);
+            anthropicKeyEl.addEventListener('change', _autoSaveAnthropicKey);
+        }
+        
+        // Auto-save xAI/Grok API key on input with debounce
+        let _xaiSaveTimer = null;
+        const _autoSaveXaiKey = () => {
+            if (_xaiSaveTimer) clearTimeout(_xaiSaveTimer);
+            _xaiSaveTimer = setTimeout(() => {
+                const apiKey = (document.getElementById('xai-api-key-input-radial') || {}).value || '';
+                if (apiKey.length > 0) {
+                    console.log('[xAI AUTO-SAVE] Saving key, length:', apiKey.length);
+                    window.api.send('config', { action: 'save', config: { remote_api_keys: { xai_api_key: apiKey } } });
+                }
+            }, 1500);
+        };
+        const xaiKeyEl = document.getElementById('xai-api-key-input-radial');
+        if (xaiKeyEl) {
+            xaiKeyEl.addEventListener('input', _autoSaveXaiKey);
+            xaiKeyEl.addEventListener('change', _autoSaveXaiKey);
+        }
         
         // Auto-save OpenAI API key on input with debounce
         let _oaiSaveTimer = null;
@@ -4218,4 +4307,13 @@
             clearInterval(_autoLoadCheck);
         }
     }, 1500);
+
+    // Expose radial panel controls to window so the desktop widget can use them
+    window.showRadialConfigPanel = function() {
+        if (!radialPanel) createRadialPanel();
+        syncPanelData();
+        setupRadialAutoSave();
+        showRadialPanel();
+    };
+    window.hideRadialConfigPanel = hideRadialPanel;
 })();
