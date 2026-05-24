@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.2.16] — 2026-05-23
+
+### Workbench & Widget Fixes
+
+#### Fixed
+- **Workbench context menu dead on desktop** — Mouse clicks on context menu items (Download, Rotate, Delete, Generate Variation, Edit with AI, etc.) were blocked by `#moodBoardCanvas` overlay sitting on top in the DOM; fixed by moving context menu to `document.body` with `position: fixed` and `z-index: 99999`
+- **Workbench image generation broken** — Deprecated `google-generativeai` SDK (v0.8.6) doesn't support `responseModalities`; switched to Gemini REST API directly with `responseModalities: ["TEXT", "IMAGE"]` and model fallback chain (`gemini-2.5-flash-image` → `gemini-2.5-flash`)
+- **Widget settings button** — Now correctly opens the radial config settings panel instead of the old config toggle
+- **Widget main trigger button** — Click now opens the web dashboard; radial menu expands on hover (matching main chat bar behavior)
+- **Inline onclick handlers replaced** — All Workbench context menu actions now use `pointerup` event listeners via `data-action` attributes for cross-input (mouse + touch) compatibility
+
+---
+
 ## [1.2.15] — 2026-05-23
 
 ### Vertex AI, UI Fix & Dashboard Enhancements
