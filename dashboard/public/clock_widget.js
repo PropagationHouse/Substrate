@@ -73,8 +73,8 @@
     function save() { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(hub)); } catch(e){} }
     function saveStyle() {
         try { localStorage.setItem(STYLE_KEY, JSON.stringify(style)); } catch(e){}
-        // Sync to server so other interfaces (WebUI, Electron) can access emotion GIFs
-        try { fetch('/ui/widget-style', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(style) }).catch(function(){}); } catch(e){}
+        // NOTE: Do NOT POST to /ui/widget-style — desktop widget is the source of truth.
+        // Dashboard reads from server but only saves locally.
     }
     function fmtD(sec) { sec=Math.abs(Math.floor(sec)); const h=Math.floor(sec/3600),m=String(Math.floor((sec%3600)/60)).padStart(2,'0'),s=String(sec%60).padStart(2,'0'); return h>0?`${h}:${m}:${s}`:`${m}:${s}`; }
 
@@ -101,9 +101,16 @@
         if (!el) return;
         const tc = textColors(style.bg);
         el.style.setProperty('--nh-bg', style.bg);
-        el.style.setProperty('--nh-text', tc.text);
-        el.style.setProperty('--nh-text-sub', tc.sub);
-        el.style.setProperty('--nh-text-muted', tc.muted);
+        // If user set a custom text color on the desktop widget, use it
+        if (style.textColor) {
+            el.style.setProperty('--nh-text', style.textColor);
+            el.style.setProperty('--nh-text-sub', style.textColor);
+            el.style.setProperty('--nh-text-muted', style.textColor);
+        } else {
+            el.style.setProperty('--nh-text', tc.text);
+            el.style.setProperty('--nh-text-sub', tc.sub);
+            el.style.setProperty('--nh-text-muted', tc.muted);
+        }
         el.style.setProperty('--nh-shadow-dark', tc.shadowDark);
         el.style.setProperty('--nh-shadow-light', tc.shadowLight);
         el.style.setProperty('--nh-inset-dark', tc.insetDark);
@@ -182,9 +189,9 @@
                 <div class="nh-bottom">
                     <div class="nh-chat-pill">
                         <div class="nh-mode-selector" id="nhModeSelector">
-                            <button class="nh-mode-btn active" data-mode="ask" onclick="hubSetMode('ask')" title="Ask"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.5 4.5H18l-3.5 2.5L16 14.5 12 12l-4 2.5 1.5-4.5L6 7.5h4.5z"/></svg></button>
-                            <button class="nh-mode-btn" data-mode="code" onclick="hubSetMode('code')" title="Code"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></button>
-                            <button class="nh-mode-btn" data-mode="plan" onclick="hubSetMode('plan')" title="Plan"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></button>
+                            <button class="nh-mode-btn" data-mode="code" data-tooltip="Code" onclick="hubSetMode('code')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></button>
+                            <button class="nh-mode-btn active" data-mode="ask" data-tooltip="Ask" onclick="hubSetMode('ask')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></button>
+                            <button class="nh-mode-btn" data-mode="plan" data-tooltip="Plan" onclick="hubSetMode('plan')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></button>
                         </div>
                         <input type="text" id="nhChatInput" class="nh-chat-input" placeholder="ask anything..." autocomplete="off">
                         <button class="nh-mic-btn" id="nhMicBtn" onclick="hubToggleMic()" title="Voice input"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></button>
@@ -684,11 +691,17 @@
     let chatMode = 'ask';
     function setMode(m) {
         chatMode = m;
-        document.querySelectorAll('.nh-mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === m));
+        document.querySelectorAll('.nh-mode-btn').forEach(b => {
+            const isActive = b.dataset.mode === m;
+            b.classList.toggle('active', isActive);
+            // Ensure opacity updates immediately for visual feedback
+            b.style.opacity = isActive ? '0.9' : '';
+        });
         const inp = document.getElementById('nhChatInput');
         if (inp) {
             const placeholders = { ask: 'ask anything...', code: 'write code...', plan: 'plan a task...' };
             inp.placeholder = placeholders[m] || 'ask anything...';
+            inp.focus();
         }
     }
     function toggleMic() {
@@ -768,19 +781,30 @@
         }, 5000 + Math.floor(Math.random() * 3000));
     }
 
-    function loadGifsFromServer() {
-        // Always fetch from server to stay synced with desktop widget GIF config
+    function loadStyleFromServer() {
+        // Always fetch from server to stay synced with desktop widget config
+        // Desktop widget is the source of truth — it POSTs full style to /ui/widget-style
         fetch('/ui/widget-style').then(r => r.json()).then(data => {
-            if (data && data.emotionGifs) {
-                // Merge server GIFs into local style (server wins for non-empty categories)
-                const serverGifs = data.emotionGifs;
-                for (const key of Object.keys(serverGifs)) {
-                    const serverList = (serverGifs[key] || []).filter(u => u && u.trim());
-                    if (serverList.length > 0) {
-                        style.emotionGifs[key] = serverGifs[key];
+            if (data && typeof data === 'object' && Object.keys(data).length > 0) {
+                // Merge all style properties from server (server wins)
+                const styleKeys = ['bg', 'accent', 'textColor', 'bloom', 'intensity', 'opacity',
+                    'width', 'scale', 'imgOpacity', 'screenGlow', 'screenBloom', 'chatPos'];
+                for (const key of styleKeys) {
+                    if (data[key] !== undefined) style[key] = data[key];
+                }
+                // Merge emotion GIFs (server wins for non-empty categories)
+                if (data.emotionGifs) {
+                    for (const key of Object.keys(data.emotionGifs)) {
+                        const serverList = (data.emotionGifs[key] || []).filter(u => u && u.trim());
+                        if (serverList.length > 0) {
+                            style.emotionGifs[key] = data.emotionGifs[key];
+                        }
                     }
                 }
-                saveStyle();
+                // Save to localStorage only — don't POST back to server
+                // (desktop widget is the source of truth for server data)
+                try { localStorage.setItem(STYLE_KEY, JSON.stringify(style)); } catch(e){}
+                applyStyle();
             }
             showEmotionGif('idle');
         }).catch(() => {
@@ -807,13 +831,19 @@
     // ---- CLOSE / REOPEN WIDGET ----
     function closeWidget() {
         hub.closed = true;
+        // Reset collapsed state so widget comes back fully visible on reopen
+        hub.collapsed = false;
         save();
         hideWidget();
         window.dispatchEvent(new CustomEvent('substrate:widget-closed'));
     }
     function reopenWidget() {
         hub.closed = false;
+        hub.collapsed = false;
         save();
+        // Ensure nhBody is visible (may have been hidden by collapse before close)
+        const b = document.getElementById('nhBody');
+        if (b) b.style.display = '';
         showWidget();
         window.dispatchEvent(new CustomEvent('substrate:widget-reopened'));
     }
@@ -828,7 +858,7 @@
         if (hub.collapsed) { const b=document.getElementById('nhBody'); if(b) b.style.display='none'; }
         if (hub.showTimer) toggleTimerMode();
         if (hub.showSettings) { const p=document.getElementById('nhSettings'); if(p) p.classList.add('open'); }
-        loadGifsFromServer();
+        loadStyleFromServer();
     }
     function showWidget() { const el = document.getElementById('cmdHub'); if (el) el.style.display = ''; }
     function hideWidget() { const el = document.getElementById('cmdHub'); if (el) el.style.display = 'none'; }
@@ -840,6 +870,9 @@
             hideWidget();
             window.dispatchEvent(new CustomEvent('substrate:widget-closed'));
         } else {
+            // Ensure nhBody is visible (guard against stale collapsed state)
+            const b = document.getElementById('nhBody');
+            if (b && !hub.collapsed) b.style.display = '';
             showWidget();
         }
     });
@@ -877,6 +910,9 @@
                 hideWidget();
                 window.dispatchEvent(new CustomEvent('substrate:widget-closed'));
             } else {
+                // Ensure nhBody is visible (guard against stale collapsed state)
+                const b = document.getElementById('nhBody');
+                if (b && !hub.collapsed) b.style.display = '';
                 showWidget();
             }
         }

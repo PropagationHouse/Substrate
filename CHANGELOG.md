@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.2.17] — 2026-05-25
+
+### Widget & Chatbar Fixes
+
+#### Fixed
+- **Chatbar disappears on app reopen** — When the widget was closed (via ✕ button) while in collapsed state, the `collapsed: true` flag persisted to localStorage; on next page load or widget reopen, `nhBody` (containing the chatbar/chat pill) stayed hidden. Now `closeWidget()` resets collapsed state, and `reopenWidget()` explicitly forces `nhBody` visible.
+- **Stale collapsed state on fresh auth** — Both the `substrate:authenticated` handler and the 2-second fallback init path now guard against stale `hub.collapsed` state by ensuring `nhBody` is visible when showing the widget.
+- **Janky widget mode selector** — Mode buttons (Ask/Code/Plan) had tiny 3px padding hit targets and 0.28 opacity with no hover feedback; increased padding to 5×6px, added `border-radius`, hover/active background highlights, `pointer-events: none` on SVG children to prevent click swallowing, and faster 0.1s opacity transition for immediate visual feedback.
+- **Mode switch UX** — Selecting a mode now auto-focuses the chat input and applies inline opacity for instant visual confirmation.
+
+---
+
 ## [1.2.16] — 2026-05-23
 
 ### Workbench & Widget Fixes
