@@ -6,6 +6,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.2.18] — 2026-05-26
+
+### Glass Chess, Auto-Continue UX, Workspace Panel & Tooling
+
+#### Added
+- **Glass Chess in dashboard** — Crown icon in header bar opens the full Glass Chess app (Stockfish AI, position analysis, learning profile) in a draggable FloatingWindow via iframe on port 5050
+- **Chess auto-start** — `proxy_server.py` now auto-launches `workspace/chess_game/app.py` on port 5050 alongside the workbench
+- **Workspace panel** — New dashboard feature with Config, Crons, Skills, and Memory tabs for workspace management
+- **Research standalone module** — Dedicated research panel and `research_module.js` for independent research workflows
+- **OpenCode tool** — New `src/tools/opencode_tool.py` for code generation/editing
+- **Patch tool** — New `src/tools/patch_tool.py` for applying code patches
+- **Coding agent skill template** — `installer/templates/skills/coding-agent.md`
+- **Windsurf-to-Substrate migration docs** — `docs/WINDSURF_TO_SUBSTRATE_MIGRATION.md`
+
+#### Changed
+- **Auto-continue behavior** — Model now checks in with the user when task isn't complete instead of silently continuing to call tools; respects user interruptions for alignment on objective & priority
+- **Chess app port** — Moved from 8000 to 5050 to avoid workbench conflict
+
+#### Fixed
+- **Dashboard build error** — Missing `Film` icon import in `AppearanceSettings.tsx` broke production builds
+- **Workbench intermittent downtime** — Improved auto-start reliability
+
+---
+
 ## [1.2.17] — 2026-05-25
 
 ### Widget & Chatbar Fixes
