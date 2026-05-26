@@ -1,4 +1,4 @@
-import { Monitor, Eye, Type, Activity, ALargeSmall, Code2 } from 'lucide-react';
+import { Monitor, Eye, Type, Activity, ALargeSmall, Code2, Film } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { InlineSelect } from '@/components/ui/InlineSelect';
 import { useSettings } from '@/contexts/SettingsContext';
@@ -42,7 +42,7 @@ const FONT_SIZE_OPTIONS = [
 
 /** Settings section for theme, font, font size, and panel visibility. */
 export function AppearanceSettings() {
-  const { eventsVisible, toggleEvents, logVisible, toggleLog, theme, setTheme, font, setFont, fontSize, setFontSize, editorFontSize, setEditorFontSize } = useSettings();
+  const { eventsVisible, toggleEvents, logVisible, toggleLog, theme, setTheme, font, setFont, fontSize, setFontSize, editorFontSize, setEditorFontSize, setGlassOpacity, setBackgroundGif } = useSettings();
 
   const handleThemeChange = (next: string) => {
     setTheme(next as ThemeName);
@@ -145,6 +145,65 @@ export function AppearanceSettings() {
         </div>
       </div>
 
+      {/* Background GIF selector */}
+      <div className="cockpit-row items-start justify-between">
+        <div className="flex min-w-0 items-start gap-3">
+          <Film size={14} className="text-primary" />
+          <div className="flex flex-col">
+            <span className="text-sm font-medium text-foreground">Background GIF</span>
+            <span className="text-xs text-muted-foreground">Drag and drop a GIF to set as background.</span>
+          </div>
+        </div>
+        <div className="relative w-full sm:w-auto">
+          <input
+            type="file"
+            accept="image/gif"
+            className="hidden"
+            id="bg-gif-upload"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) {
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                  const dataUrl = ev.target?.result as string;
+                  document.documentElement.style.setProperty('--substrate-bg-image', `url(${dataUrl})`);
+                  localStorage.setItem('substrate:bg-gif', dataUrl);
+                };
+                reader.readAsDataURL(file);
+              }
+            }}
+          />
+          <label htmlFor="bg-gif-upload" className="cursor-pointer px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-xs text-white/70">
+            Select GIF
+          </label>
+        </div>
+      </div>
+
+      {/* Blur opacity selector */}
+      <div className="cockpit-row items-start justify-between">
+        <div className="flex min-w-0 items-start gap-3">
+          <Eye size={14} className="text-primary" />
+          <div className="flex flex-col">
+            <span className="text-sm font-medium text-foreground">Glass blur opacity</span>
+            <span className="text-xs text-muted-foreground">Adjust the transparency of glass panels.</span>
+          </div>
+        </div>
+        <div className="relative w-full sm:w-auto">
+          <input
+            type="range"
+            min="0.1"
+            max="1"
+            step="0.05"
+            className="w-full sm:w-[148px] h-2 bg-white/10 rounded-lg appearance-none cursor-pointer"
+            onChange={(e) => {
+              const val = e.target.value;
+              document.documentElement.style.setProperty('--glass-bg', `rgba(15, 15, 25, ${val})`);
+              localStorage.setItem('substrate:glass-opacity', val);
+            }}
+          />
+        </div>
+      </div>
+
       {/* Events Panel Visibility */}
       <div className="cockpit-row items-start justify-between">
         <div className="flex items-center gap-3">
@@ -177,6 +236,43 @@ export function AppearanceSettings() {
         />
       </div>
 
+      {/* Opacity Slider */}
+      <div className="cockpit-row items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Eye size={14} className="text-primary" />
+          <span className="text-sm font-medium text-foreground">Glass Opacity</span>
+        </div>
+        <input
+          type="range"
+          min="0.1"
+          max="1"
+          step="0.05"
+          defaultValue="0.65"
+          onChange={(e) => setGlassOpacity(parseFloat(e.target.value))}
+          className="w-32 accent-primary"
+        />
+      </div>
+
+      {/* Background GIF Upload */}
+      <div className="cockpit-row items-center justify-between">
+        <div className="flex items-center gap-3">
+          <Code2 size={14} className="text-primary" />
+          <span className="text-sm font-medium text-foreground">Background GIF</span>
+        </div>
+        <input
+          type="file"
+          accept="image/gif"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) {
+              const reader = new FileReader();
+              reader.onload = (ev) => setBackgroundGif(ev.target?.result as string);
+              reader.readAsDataURL(file);
+            }
+          }}
+          className="text-xs text-muted-foreground w-32"
+        />
+      </div>
     </div>
   );
 }

@@ -1,0 +1,3 @@
+workspace\get_transcript.py
+workspace\emergent\drifting_430am.py
+workspace\genealogy_analyzer\generate_app.py

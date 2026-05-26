@@ -1677,7 +1677,7 @@ function selectMoodImage(imageId) {
 }
 
 async function deleteMoodImage(imageId) {
-    if (!confirm('Remove this image from mood board?')) return;
+    // No confirmation - trust the user's delete choice
     
     try {
         await fetch(`/api/mood-board/${imageId}`, { method: 'DELETE' });

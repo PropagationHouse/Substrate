@@ -122,6 +122,8 @@ _cors_origins = [
     "http://127.0.0.1:8765",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "http://localhost:5000",
+    "http://127.0.0.1:5000",
     "https://127.0.0.1:8766",
     "file://",  # Electron
 ]
@@ -278,6 +280,7 @@ _AUTH_EXEMPT_PREFIXES = (
     '/api/gateway/', '/api/events',
     '/api/media-suite/',
     '/api/widget-mode',
+    '/api/local/',
 )
 
 def _get_agent_config():
@@ -6551,7 +6554,9 @@ class ChatAgent:
                         "content": (
                             "Review your work so far against the original request. "
                             "Is the task fully complete? If YES — respond with your final summary and stop. "
-                            "If NO — continue working and use tools to finish what remains."
+                            "If NO — check in with the user about what you're still working on and why. "
+                            "If the user asks you what you're doing mid task, pause your work and discuss "
+                            "with the user first to ensure you're in alignment of objective & priority."
                         )
                     })
                     continue
@@ -15365,6 +15370,89 @@ def main():
         flask_thread.start()
         print("Flask server started on http://0.0.0.0:8765")
 
+        # ── Auto-start Media Suite (Workbench) on port 5000 if not already running ──
+        def _start_media_suite():
+            import socket
+            # Check if port 5000 is already occupied
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                    s.settimeout(1)
+                    s.connect(('127.0.0.1', 5000))
+                    print("[MEDIA-SUITE] Already running on port 5000")
+                    return
+            except (ConnectionRefusedError, OSError, socket.timeout):
+                pass
+
+            # Search for Media Suite app.py in common locations
+            _base = os.path.dirname(os.path.abspath(__file__))
+            _candidates = [
+                os.path.join(os.path.expanduser('~'), 'CascadeProjects', 'windsurf-project', 'app.py'),
+                os.path.join(_base, 'media_suite', 'app.py'),
+                os.path.join(_base, 'workbench', 'app.py'),
+            ]
+            # Also check config for explicit path
+            _cfg_path = agent.config.get('media_suite_path', '') if agent else ''
+            if _cfg_path:
+                _candidates.insert(0, _cfg_path)
+
+            _app_py = None
+            for c in _candidates:
+                if os.path.isfile(c):
+                    _app_py = c
+                    break
+
+            if not _app_py:
+                print("[MEDIA-SUITE] Not found — skipping auto-start (searched: " + ", ".join(_candidates) + ")")
+                return
+
+            _python = sys.executable
+            _cwd = os.path.dirname(_app_py)
+            try:
+                _proc = subprocess.Popen(
+                    [_python, _app_py],
+                    cwd=_cwd,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    env={**os.environ, 'PYTHONUNBUFFERED': '1'},
+                )
+                print(f"[MEDIA-SUITE] Started (PID {_proc.pid}) from {_app_py}")
+            except Exception as e:
+                print(f"[MEDIA-SUITE] Failed to start: {e}")
+
+        threading.Thread(target=_start_media_suite, daemon=True).start()
+
+        # ── Auto-start Glass Chess on port 5050 if not already running ──
+        def _start_glass_chess():
+            import socket
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                    s.settimeout(1)
+                    s.connect(('127.0.0.1', 5050))
+                    print("[GLASS-CHESS] Already running on port 5050")
+                    return
+            except (ConnectionRefusedError, OSError, socket.timeout):
+                pass
+
+            _base = os.path.dirname(os.path.abspath(__file__))
+            _chess_py = os.path.join(_base, 'workspace', 'chess_game', 'app.py')
+            if not os.path.isfile(_chess_py):
+                print("[GLASS-CHESS] Not found — skipping auto-start")
+                return
+
+            _python = sys.executable
+            try:
+                _proc = subprocess.Popen(
+                    [_python, _chess_py],
+                    cwd=os.path.dirname(_chess_py),
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    env={**os.environ, 'PYTHONUNBUFFERED': '1'},
+                )
+                print(f"[GLASS-CHESS] Started (PID {_proc.pid}) from {_chess_py}")
+            except Exception as e:
+                print(f"[GLASS-CHESS] Failed to start: {e}")
+
+        threading.Thread(target=_start_glass_chess, daemon=True).start()
 
         # Start HTTPS server on port 8766 for mobile (camera/notifications require secure context)
         # Uses werkzeug directly since Flask's app.run() can't be called twice on the same app

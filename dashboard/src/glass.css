@@ -34,6 +34,9 @@
 /* ── Background ────────────────────────────────────────────────────── */
 .substrate-bg {
   background: linear-gradient(135deg, #0a0a1a 0%, #0d0d24 40%, #0a0f1f 70%, #080818 100%);
+  background-image: var(--substrate-bg-image, none);
+  background-size: cover;
+  background-position: center;
   min-height: 100vh;
   position: relative;
   overflow: hidden;

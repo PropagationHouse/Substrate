@@ -150,7 +150,13 @@ class CircuitsRunner:
             self._emit_event("stopped", {})
     
     def wake_now(self, reason: Optional[str] = None):
-        """Trigger immediate circuits run."""
+        """Trigger immediate circuits run (no-op if already running a circuits cycle)."""
+        # Guard: if a circuits run is already in progress, don't re-trigger.
+        # This prevents infinite loops where tool calls inside circuits wake circuits again.
+        if self._current_run_start is not None:
+            logger.debug(f"Circuits wake ignored (already running): {reason or 'manual'}")
+            return
+        
         logger.info(f"Circuits wake requested: {reason or 'manual'}")
         self._wake_event.set()
         
@@ -218,6 +224,11 @@ class CircuitsRunner:
         with self._lock:
             if not self._running:
                 return
+        
+        # Guard: skip if a run is already in progress (prevents re-entrant loops)
+        if self._current_run_start is not None:
+            logger.debug("Circuits timer fired but a run is already in progress — skipping")
+            return
         
         # Check active hours
         if not self._is_within_active_hours():

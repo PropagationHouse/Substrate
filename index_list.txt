@@ -1,0 +1,6 @@
+workspace\index.html
+workspace\chess_game\index.html
+workspace\cloud_node\index.html
+workspace\cocktail_app\index.html
+workspace\cocktail_app\templates\index.html
+workspace\mnpt_site\index.html

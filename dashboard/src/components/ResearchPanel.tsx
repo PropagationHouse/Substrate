@@ -149,6 +149,9 @@ interface ResearchPanelProps {
   isAgentGenerating: boolean;
   streamingText: string;
   streamingRawText?: string;
+  channel?: { id: string; name: string } | null;
+  onClearChannel?: () => void;
+  standalone?: boolean;
 }
 
 // ─── Constants ──────────────────────────────────────────────────────────────
@@ -714,7 +717,15 @@ export function ResearchPanel({
   isAgentGenerating,
   streamingText,
   streamingRawText,
+  channel,
+  onClearChannel,
+  standalone,
 }: ResearchPanelProps) {
+  // Per-channel data URLs — when a channel is set, data is stored separately per channel
+  const feedUrl = channel ? `/api/local/research-feed?channel=${channel.id}` : '/api/local/research-feed';
+  const topicsUrl = channel ? `/api/local/research-topics?channel=${channel.id}` : '/api/local/research-topics';
+  const promptsUrl = channel ? `/api/local/research-prompts?channel=${channel.id}` : '/api/local/research-prompts';
+
   const [topics, setTopics] = useState<Topic[]>([]);
   const [feedItems, setFeedItems] = useState<FeedItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -729,7 +740,7 @@ export function ResearchPanel({
   const [newTopic, setNewTopic] = useState('');
   const [newUrl, setNewUrl] = useState('');
   const [researchQuery, setResearchQuery] = useState('');
-  const [researchMode, setResearchMode] = useState<'quick' | 'deep'>('quick');
+  const [researchMode, setResearchMode] = useState<'quick' | 'deep'>(standalone ? 'deep' : 'quick');
   const [deepResearchLoading, setDeepResearchLoading] = useState(false);
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
   const [slideIndex, setSlideIndex] = useState(0);
@@ -737,6 +748,12 @@ export function ResearchPanel({
   const slideRef = useRef<HTMLDivElement>(null);
   const [prompts, setPrompts] = useState<PromptTemplates>({ ...DEFAULT_PROMPTS });
   const [followUpInputs, setFollowUpInputs] = useState<Record<string, string>>({});
+
+  // Track channel + URLs for use in callbacks (avoids stale closure)
+  const channelRef = useRef(channel);
+  channelRef.current = channel;
+  const feedUrlRef = useRef(feedUrl);
+  feedUrlRef.current = feedUrl;
 
   // Track pending research requests
   const pendingRef = useRef<PendingRequest | null>(null);
@@ -757,9 +774,9 @@ export function ResearchPanel({
   useEffect(() => {
     let cancelled = false;
     Promise.all([
-      fetch('/api/local/research-topics').then(r => r.ok ? r.json() : null).catch(() => null),
-      fetch('/api/local/research-feed').then(r => r.ok ? r.json() : null).catch(() => null),
-      fetch('/api/local/research-prompts').then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch(topicsUrl).then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch(feedUrl).then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch(promptsUrl).then(r => r.ok ? r.json() : null).catch(() => null),
     ]).then(([topicsData, feedData, promptsData]) => {
       if (cancelled) return;
       const loadedTopics = topicsData?.topics?.length > 0 ? topicsData.topics : DEFAULT_TOPICS;
@@ -769,7 +786,7 @@ export function ResearchPanel({
       setLoading(false);
     });
     return () => { cancelled = true; };
-  }, []);
+  }, [feedUrl, topicsUrl, promptsUrl]);
 
   // ─── Watch for agent response completion ────────────────────────
   // Stash chatMessages ref so the retry can always read the latest
@@ -853,7 +870,7 @@ export function ResearchPanel({
               };
               return { ...fi, sections: newSections };
             }).filter(i => !(i.pending && i.title === pending.query));
-            fetch('/api/local/research-feed', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: updated }) }).catch(() => {});
+            fetch(feedUrlRef.current, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: updated }) }).catch(() => {});
             return updated;
           });
         }
@@ -865,10 +882,16 @@ export function ResearchPanel({
       const item = parseResponseToFeedItem(rawText, pending.query, pending.type, {
         parentId: pending.parentId, outputFormat: pending.outputFormat, ...pending.extras,
       });
+      // Tag with channel if one is active
+      const ch = channelRef.current;
+      if (ch) {
+        const tag = `channel:${ch.id}`;
+        if (!item.topics.includes(tag)) item.topics.push(tag);
+      }
       setFeedItems(prev => {
         const without = prev.filter(i => !(i.pending && i.title === pending.query));
         const updated = [item, ...without];
-        fetch('/api/local/research-feed', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: updated }) }).catch(() => {});
+        fetch(feedUrlRef.current, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: updated }) }).catch(() => {});
         return updated;
       });
       setSelectedItemId(item.id);
@@ -957,12 +980,12 @@ export function ResearchPanel({
   // ─── Persistence ────────────────────────────────────────────────
   const saveTopics = useCallback(async (t: Topic[]) => {
     setTopics(t);
-    try { await fetch('/api/local/research-topics', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ topics: t }) }); } catch { /* */ }
+    try { await fetch(feedUrlRef.current.replace('research-feed', 'research-topics'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ topics: t }) }); } catch { /* */ }
   }, []);
   // saveFeed removed -- all callers now use setFeedItems(prev => ...) with inline persist to avoid stale closures
   const savePrompts = useCallback(async (p: PromptTemplates) => {
     setPrompts(p);
-    try { await fetch('/api/local/research-prompts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompts: p }) }); } catch { /* */ }
+    try { await fetch(feedUrlRef.current.replace('research-feed', 'research-prompts'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompts: p }) }); } catch { /* */ }
   }, []);
 
   // ─── Topic CRUD ─────────────────────────────────────────────────
@@ -992,7 +1015,8 @@ export function ResearchPanel({
     }
     console.log('[ResearchPanel] sendPipelineRequest:', opts.query, 'msgs:', chatMessages.length);
     pendingRef.current = { query: opts.query, type: opts.type, msgCount: chatMessages.length, parentId: opts.parentId, outputFormat: opts.outputFormat, extras: opts.extras };
-    setFeedItems(prev => [{ id: genId(), type: opts.type, title: opts.query, summary: '', topics: [], timestamp: Date.now(), pending: true, parentId: opts.parentId, outputFormat: opts.outputFormat }, ...prev]);
+    const pendingTopics = channelTag ? [channelTag] : [];
+    setFeedItems(prev => [{ id: genId(), type: opts.type, title: opts.query, summary: '', topics: pendingTopics, timestamp: Date.now(), pending: true, parentId: opts.parentId, outputFormat: opts.outputFormat }, ...prev]);
     setView('research'); setSlideIndex(0);
     onSendToAgent('[RESEARCH_PIPELINE] ' + opts.prompt);
   }, [chatMessages.length, onSendToAgent, isAgentGenerating]);
@@ -1057,7 +1081,7 @@ export function ResearchPanel({
 
         setFeedItems(prev => {
           const updated = prev.map(i => i.id === pendingId ? item : i);
-          fetch('/api/local/research-feed', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: updated }) }).catch(() => {});
+          fetch(feedUrlRef.current, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: updated }) }).catch(() => {});
           return updated;
         });
         setSelectedItemId(pendingId);
@@ -1162,7 +1186,7 @@ export function ResearchPanel({
             }
             return { ...fi, sections: newSections };
           });
-          fetch('/api/local/research-feed', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: updated }) }).catch(() => {});
+          fetch(feedUrlRef.current, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: updated }) }).catch(() => {});
           return updated;
         });
       }
@@ -1283,7 +1307,7 @@ export function ResearchPanel({
               if (newSections[i]) newSections[i] = { ...newSections[i], html: data.html };
               return { ...fi, sections: newSections };
             });
-            fetch('/api/local/research-feed', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: updated }) }).catch(() => {});
+            fetch(feedUrlRef.current, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: updated }) }).catch(() => {});
             return updated;
           });
           completedCount++;
@@ -1381,7 +1405,7 @@ export function ResearchPanel({
             }
             return { ...fi, sections: newSections };
           });
-          fetch('/api/local/research-feed', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: updated }) }).catch(() => {});
+          fetch(feedUrlRef.current, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: updated }) }).catch(() => {});
           return updated;
         });
       }
@@ -1429,89 +1453,46 @@ export function ResearchPanel({
   const toggleSaved = useCallback((id: string) => {
     setFeedItems(prev => {
       const updated = prev.map(i => i.id === id ? { ...i, saved: !i.saved } : i);
-      fetch('/api/local/research-feed', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: updated }) }).catch(() => {});
+      fetch(feedUrlRef.current, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: updated }) }).catch(() => {});
       return updated;
     });
   }, []);
   const deleteFeedItem = useCallback((id: string) => {
     setFeedItems(prev => {
       const updated = prev.filter(i => i.id !== id);
-      fetch('/api/local/research-feed', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: updated }) }).catch(() => {});
+      fetch(feedUrlRef.current, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: updated }) }).catch(() => {});
       return updated;
     });
   }, []);
   const editFeedItem = useCallback((id: string, patch: Partial<FeedItem>) => {
     setFeedItems(prev => {
       const updated = prev.map(i => i.id === id ? { ...i, ...patch } : i);
-      fetch('/api/local/research-feed', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: updated }) }).catch(() => {});
+      fetch(feedUrlRef.current, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: updated }) }).catch(() => {});
       return updated;
     });
   }, []);
 
-  // ─── Periodic DB sync from Media Suite ──────────────────────────
-  // Pulls all Media Suite articles into the Hub feed (tagged by workspace).
-  // The Hub sees everything; Media Suite channels are fine-tuned for their own scope.
-  useEffect(() => {
-    let cancelled = false;
-    const doSync = async () => {
-      try {
-        const resp = await fetch('/api/local/research-sync');
-        if (!resp.ok || cancelled) return;
-        const data = await resp.json();
-        if (data.ok && data.synced > 0) {
-          // Reload feed to pick up newly synced items
-          const feedResp = await fetch('/api/local/research-feed');
-          if (feedResp.ok && !cancelled) {
-            const feed = await feedResp.json();
-            if (feed.items) setFeedItems(feed.items);
-          }
-        }
-      } catch { /* Media Suite offline — that's fine */ }
-    };
-    doSync(); // sync on mount
-    const interval = setInterval(doSync, 30_000); // then every 30s
-    return () => { cancelled = true; clearInterval(interval); };
-  }, []);
+  // ─── Media Suite sync removed ──────────────────────────────────
+  // Workbench now opens the Intelligence Hub directly (channel-scoped)
+  // instead of dumping articles into the Hub feed. No more periodic
+  // research-sync or postMessage result forwarding.
 
-  // ─── Real-time sync from Media Suite search (postMessage) ──────
+  // ─── Listen for query pre-fill from Workbench ──────────────────
   useEffect(() => {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail;
-      if (!detail?.query || !detail?.summary) return;
-      const sources = (detail.sources || []) as { title: string; url: string; source: string; summary: string }[];
-      // Build full sections: AI summary first, then each source with its content
-      const allSections: { heading: string; body: string }[] = [];
-      if (detail.summary) allSections.push({ heading: 'Research Summary', body: detail.summary });
-      for (const s of sources) {
-        if (s.title || s.summary) allSections.push({ heading: s.title || s.source || 'Source', body: s.summary || '' });
-      }
-      const newItem: FeedItem = {
-        id: `ms-search-${Date.now()}`,
-        type: 'research',
-        title: detail.query,
-        summary: detail.summary,
-        content: detail.summary,
-        topics: ['media-suite'],
-        timestamp: Date.now(),
-        saved: false,
-        pending: false,
-        sourceUrls: sources.filter(s => s.url?.startsWith('http')).map(s => ({ url: s.url, label: s.source || s.title })),
-        sections: allSections.length > 0 ? allSections : undefined,
-      };
-      setFeedItems(prev => {
-        const recent = prev.find(i => i.title === detail.query && Date.now() - i.timestamp < 300000);
-        if (recent) return prev;
-        const updated = [newItem, ...prev];
-        fetch('/api/local/research-feed', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: updated }) }).catch(() => {});
-        return updated;
-      });
+      if (detail?.query) setResearchQuery(detail.query);
     };
-    window.addEventListener('substrate:media-suite-research', handler);
-    return () => window.removeEventListener('substrate:media-suite-research', handler);
+    window.addEventListener('substrate:research-prefill', handler);
+    return () => window.removeEventListener('substrate:research-prefill', handler);
   }, []);
 
   // ─── Derived ────────────────────────────────────────────────────
-  const filteredItems = activeFilter ? feedItems.filter(item => item.topics.some(t => t.toLowerCase().includes(activeFilter.toLowerCase()))) : feedItems;
+  // In standalone mode, data is already per-channel (separate file), so no filtering needed.
+  // In floating window mode, filter by channel tag within the shared global feed.
+  const channelTag = (!standalone && channel) ? `channel:${channel.id}` : null;
+  const baseItems = channelTag ? feedItems.filter(item => item.topics.includes(channelTag)) : feedItems;
+  const filteredItems = activeFilter ? baseItems.filter(item => item.topics.some(t => t.toLowerCase().includes(activeFilter.toLowerCase()))) : baseItems;
   const presentationSlides = useMemo(() => {
     const completed = filteredItems.filter(i => !i.pending);
     if (completed.length === 0) return [];
@@ -1614,11 +1595,24 @@ export function ResearchPanel({
             </button>
           ))}
         </div>
-        {isPending && (
-          <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] bg-white/[0.06] text-white/50 border border-white/[0.06]">
-            <Loader2 size={9} className="animate-spin" /> Working
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {channel && (
+            <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[9px] font-medium bg-purple-500/15 text-purple-300/80 border border-purple-400/20">
+              <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />
+              {channel.name}
+              {!standalone && onClearChannel && (
+                <button onClick={onClearChannel} className="ml-0.5 text-purple-300/50 hover:text-purple-300 transition-colors" title="View all channels">
+                  <X size={9} />
+                </button>
+              )}
+            </span>
+          )}
+          {isPending && (
+            <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] bg-white/[0.06] text-white/50 border border-white/[0.06]">
+              <Loader2 size={9} className="animate-spin" /> Working
+            </span>
+          )}
+        </div>
       </div>
 
       {/* ─── Feed View ──────────────────────────────────────────────── */}

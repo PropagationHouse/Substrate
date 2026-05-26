@@ -50,6 +50,21 @@ function substrateLocalPlugin() {
   return {
     name: 'substrate-local-data',
     configureServer(server: any) {
+      // CORS: allow Workbench (port 5000) to call /api/local/* endpoints
+      server.middlewares.use((req: any, res: any, next: any) => {
+        if (req.url?.startsWith('/api/local/')) {
+          const origin = req.headers.origin
+          const allowed = ['http://localhost:5000', 'http://127.0.0.1:5000', 'http://localhost:3000', 'http://127.0.0.1:3000']
+          if (origin && allowed.includes(origin)) {
+            res.setHeader('Access-Control-Allow-Origin', origin)
+            res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+            res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+          }
+          if (req.method === 'OPTIONS') { res.statusCode = 204; res.end(); return }
+        }
+        next()
+      })
+
       // 1) Chat date distribution
       server.middlewares.use('/api/local/chat-dates', (_req: any, res: any) => {
         const all = loadConversations()
@@ -628,9 +643,13 @@ function substrateLocalPlugin() {
         })
       })
 
-      // 7) Research topics — read/write user topic subscriptions
+      // 7) Research topics — read/write user topic subscriptions (per-channel via ?channel=ID)
       server.middlewares.use('/api/local/research-topics', (req: any, res: any) => {
-        const topicsFile = path.join(workspaceRoot, 'data', 'research_topics.json')
+        const url = parseUrl(req)
+        const chId = url.searchParams.get('channel')
+        const topicsFile = chId
+          ? path.join(workspaceRoot, 'data', 'channels', chId, 'research_topics.json')
+          : path.join(workspaceRoot, 'data', 'research_topics.json')
         if (req.method === 'POST') {
           let body = ''
           req.on('data', (chunk: string) => { body += chunk })
@@ -647,6 +666,32 @@ function substrateLocalPlugin() {
           const data = safeReadJSON(topicsFile)
           res.setHeader('Content-Type', 'application/json')
           res.end(JSON.stringify({ ok: true, topics: data?.topics || [], feeds: data?.feeds || [] }))
+        }
+      })
+
+      // 7b) Research prompts — read/write custom prompt templates (per-channel via ?channel=ID)
+      server.middlewares.use('/api/local/research-prompts', (req: any, res: any) => {
+        const url = parseUrl(req)
+        const chId = url.searchParams.get('channel')
+        const promptsFile = chId
+          ? path.join(workspaceRoot, 'data', 'channels', chId, 'research_prompts.json')
+          : path.join(workspaceRoot, 'data', 'research_prompts.json')
+        if (req.method === 'POST') {
+          let body = ''
+          req.on('data', (chunk: string) => { body += chunk })
+          req.on('end', () => {
+            try {
+              const data = JSON.parse(body)
+              mkdirSync(path.dirname(promptsFile), { recursive: true })
+              writeFileSync(promptsFile, JSON.stringify(data, null, 2), 'utf-8')
+              res.setHeader('Content-Type', 'application/json')
+              res.end(JSON.stringify({ ok: true }))
+            } catch (e: any) { res.statusCode = 500; res.end(JSON.stringify({ error: e.message })) }
+          })
+        } else {
+          const data = safeReadJSON(promptsFile)
+          res.setHeader('Content-Type', 'application/json')
+          res.end(JSON.stringify({ ok: true, prompts: data?.prompts || null }))
         }
       })
 
@@ -743,91 +788,20 @@ function substrateLocalPlugin() {
           console.warn('[research-feed] Workspace sync warning:', syncErr.message)
         }
       }
-      // ── Media Suite Research Sync ─────────────────────────────────
-      // Pulls articles from Media Suite Flask backend and merges them into
-      // the Intelligence Hub research feed, tagged with 'media-suite' topic.
-      // The Hub sees everything; Media Suite channels see only their own.
-      const mediaSuiteUrl = process.env.MEDIA_SUITE_URL || 'http://localhost:5000'
-
+      // ── Media Suite Research Sync (disabled) ───────────────────────
+      // Workbench now opens the Intelligence Hub directly (channel-scoped)
+      // instead of dumping articles into the Hub feed.
       server.middlewares.use('/api/local/research-sync', async (_req: any, res: any) => {
         res.setHeader('Content-Type', 'application/json')
-        try {
-          // Pull recent articles + search results from Media Suite
-          const [articlesResp, workspacesResp] = await Promise.all([
-            fetch(`${mediaSuiteUrl}/api/news?limit=50`).then(r => r.ok ? r.json() : []).catch(() => []),
-            fetch(`${mediaSuiteUrl}/api/workspaces`).then(r => r.ok ? r.json() : []).catch(() => []),
-          ])
-
-          const articles: any[] = Array.isArray(articlesResp) ? articlesResp : []
-          const workspaces: any[] = Array.isArray(workspacesResp) ? workspacesResp : []
-          const wsMap = new Map(workspaces.map((w: any) => [w.id, w.name || 'Media Suite']))
-
-          // Load existing research feed
-          const feedFile = path.join(workspaceRoot, 'data', 'research_feed.json')
-          const existing = safeReadJSON(feedFile)
-          const existingItems: any[] = existing?.items || []
-
-          // Build a set of already-synced Media Suite article IDs
-          // Remove old truncated v1 entries so they get re-synced with full content
-          const v1Ids = new Set(existingItems.filter((i: any) => i.id?.startsWith('ms-article-') && !i.id?.startsWith('ms-article-v2-')).map((i: any) => i.id))
-          if (v1Ids.size > 0) {
-            const before = existingItems.length
-            existingItems.splice(0, existingItems.length, ...existingItems.filter((i: any) => !v1Ids.has(i.id)))
-            if (existingItems.length < before) console.log(`[research-sync] Removed ${before - existingItems.length} old v1 entries for re-sync`)
-          }
-          const syncedIds = new Set(
-            existingItems
-              .filter((i: any) => i.id?.startsWith('ms-article-v2-'))
-              .map((i: any) => i.id)
-          )
-
-          // Convert Media Suite articles to Intelligence Hub feed items
-          let added = 0
-          for (const article of articles) {
-            const feedId = `ms-article-v2-${article.id}`
-            if (syncedIds.has(feedId)) continue
-
-            const wsName = article.workspace_id ? wsMap.get(article.workspace_id) || 'Media Suite' : 'Media Suite'
-            const isRealUrl = article.url && !article.url.startsWith('ai-research://') && article.url.startsWith('http')
-
-            const fullContent = article.content || article.summary || ''
-            const feedItem = {
-              id: feedId,
-              type: 'article' as const,
-              title: article.title || 'Untitled',
-              summary: (article.summary || article.content || '').slice(0, 500),
-              content: fullContent,
-              topics: ['media-suite', wsName.toLowerCase().replace(/\s+/g, '-')],
-              timestamp: article.published_at ? new Date(article.published_at).getTime() : Date.now(),
-              saved: article.is_pinned || false,
-              pending: false,
-              sourceUrls: isRealUrl ? [{ url: article.url, label: article.source || 'Source' }] : [],
-              sections: fullContent.length > 100 ? [
-                { heading: 'Summary', body: article.summary || fullContent.slice(0, 500) },
-                { heading: article.source || 'Source', body: fullContent },
-              ] : article.summary ? [{ heading: article.source || 'Source', body: article.summary }] : undefined,
-            }
-
-            existingItems.unshift(feedItem)
-            added++
-          }
-
-          // Save back if we added anything
-          if (added > 0) {
-            const data = { ...existing, items: existingItems }
-            mkdirSync(path.dirname(feedFile), { recursive: true })
-            writeFileSync(feedFile, JSON.stringify(data, null, 2), 'utf-8')
-          }
-
-          res.end(JSON.stringify({ ok: true, synced: added, total: existingItems.length, mediaSuiteArticles: articles.length }))
-        } catch (e: any) {
-          console.warn('[research-sync] Media Suite sync error:', e.message)
-          res.end(JSON.stringify({ ok: false, error: e.message, synced: 0 }))
-        }
+        res.end(JSON.stringify({ ok: true, synced: 0, total: 0, disabled: true }))
       })
 
       server.middlewares.use('/api/local/research-feed', (req: any, res: any) => {
-        const feedFile = path.join(workspaceRoot, 'data', 'research_feed.json')
+        const url = parseUrl(req)
+        const channelId = url.searchParams.get('channel')
+        const feedFile = channelId
+          ? path.join(workspaceRoot, 'data', 'channels', channelId, 'research_feed.json')
+          : path.join(workspaceRoot, 'data', 'research_feed.json')
         if (req.method === 'POST') {
           let body = ''
           req.on('data', (chunk: string) => { body += chunk })
@@ -839,12 +813,14 @@ function substrateLocalPlugin() {
               // Respond immediately — don't block on workspace sync
               res.setHeader('Content-Type', 'application/json')
               res.end(JSON.stringify({ ok: true }))
-              // Debounced deferred workspace sync (2s after last POST)
-              if (_researchSyncTimer) clearTimeout(_researchSyncTimer)
-              _researchSyncTimer = setTimeout(() => {
-                _researchSyncTimer = null
-                _syncResearchToWorkspace(data)
-              }, 2000)
+              // Debounced deferred workspace sync (2s after last POST) — only for global feed
+              if (!channelId) {
+                if (_researchSyncTimer) clearTimeout(_researchSyncTimer)
+                _researchSyncTimer = setTimeout(() => {
+                  _researchSyncTimer = null
+                  _syncResearchToWorkspace(data)
+                }, 2000)
+              }
             } catch (e: any) { res.statusCode = 500; res.end(JSON.stringify({ error: e.message })) }
           })
         } else {
@@ -936,6 +912,10 @@ export default defineConfig({
   build: {
     sourcemap: false,
     rollupOptions: {
+      input: {
+        main: path.resolve(__dirname, 'index.html'),
+        research: path.resolve(__dirname, 'research.html'),
+      },
       output: {
         manualChunks: {
           'react-vendor': ['react', 'react-dom'],

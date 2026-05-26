@@ -777,6 +777,9 @@ class AutonomousRunner:
         
         try:
             registry = get_tool_registry()
+            # Pre-load coding tools for autonomous runs
+            from ..tools.tool_registry import load_contextual_tools
+            load_contextual_tools("opencode coding agent apply patch", registry)
             return registry.get_ollama_tools()
         except Exception as e:
             logger.error(f"Error getting tool schemas: {e}")

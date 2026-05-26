@@ -23,6 +23,7 @@ import {
   BarChart3,
   Film,
   Clock,
+  Crown,
 } from 'lucide-react';
 import { useGateway } from '@/contexts/GatewayContext';
 import { useSessionContext } from '@/contexts/SessionContext';
@@ -585,23 +586,46 @@ export default function App({ onLogout }: AppProps) {
     hoveredFileRef.current.current = `${prefix}${normalized}`;
   }, []);
   const [researchOpen, setResearchOpen] = useState(false);
+  const [researchChannel, setResearchChannel] = useState<{ id: string; name: string } | null>(null);
   const [statsOpen, setStatsOpen] = useState(false);
   const [tasksOpen, setTasksOpen] = useState(false);
   const [tasksTab, setTasksTab] = useState<'board' | 'circuits'>('board');
   const [mediaSuiteOpen, setMediaSuiteOpen] = useState(false);
+  const [chessOpen, setChessOpen] = useState(false);
   const [booted, setBooted] = useState(false);
+
+  useEffect(() => {
+    const savedOpacity = localStorage.getItem('substrate:glass-opacity');
+    if (savedOpacity) {
+      document.documentElement.style.setProperty('--glass-bg', `rgba(15, 15, 25, ${savedOpacity})`);
+    }
+    const savedBgGif = localStorage.getItem('substrate:bg-gif');
+    if (savedBgGif) {
+      document.documentElement.style.setProperty('--substrate-bg-image', `url(${savedBgGif})`);
+    }
+  }, []);
+
+  // Chat bridge: track which iframe sent a research-chat-request so we can stream responses back
+  const researchChatSourceRef = useRef<Window | null>(null);
 
   // Listen for postMessage from Media Suite iframe and custom DOM events from clock widget
   useEffect(() => {
     const msgHandler = (e: MessageEvent) => {
       if (e.data?.type === 'substrate:open-research') {
         setResearchOpen(true);
+        // If Workbench sent channel context, scope the Hub to that channel
+        if (e.data.channelId) {
+          setResearchChannel({ id: e.data.channelId, name: e.data.channelName || 'Channel' });
+        }
+        // If a query was sent, pre-fill it
+        if (e.data.query) {
+          window.dispatchEvent(new CustomEvent('substrate:research-prefill', { detail: { query: e.data.query } }));
+        }
       }
-      // Sync research results from Media Suite into Intelligence Hub awareness
-      if (e.data?.type === 'substrate:research-result') {
-        setResearchOpen(true);
-        // Dispatch custom event so ResearchPanel can pick up the result
-        window.dispatchEvent(new CustomEvent('substrate:media-suite-research', { detail: e.data }));
+      // Chat bridge: embedded research iframe sends agent requests here
+      if (e.data?.type === 'substrate:research-chat-request') {
+        researchChatSourceRef.current = e.source as Window;
+        handleSend(e.data.text);
       }
     };
     // Clock widget dispatches this custom event to send chat messages
@@ -624,25 +648,50 @@ export default function App({ onLogout }: AppProps) {
   // Pipe streaming responses back to the clock widget's chat wall
   const lastMsgCountRef = useRef(messages.length);
   useEffect(() => {
-    if (!clockChatActiveRef.current) return;
-    // Stream in progress — send thinking indicator
+    if (!clockChatActiveRef.current && !researchChatSourceRef.current) return;
+    // Stream in progress — send to clock widget and/or research iframe
     if (isGenerating && stream?.rawText) {
-      window.dispatchEvent(new CustomEvent('substrate:clock-chat-response', {
-        detail: { type: 'streaming', text: stream.rawText }
-      }));
+      if (clockChatActiveRef.current) {
+        window.dispatchEvent(new CustomEvent('substrate:clock-chat-response', {
+          detail: { type: 'streaming', text: stream.rawText }
+        }));
+      }
+      if (researchChatSourceRef.current) {
+        try {
+          researchChatSourceRef.current.postMessage({
+            type: 'substrate:research-chat-response',
+            text: stream.rawText,
+            rawText: stream.rawText,
+            done: false,
+          }, '*');
+        } catch { /* iframe may have navigated */ }
+      }
     }
   }, [isGenerating, stream?.rawText]);
 
   useEffect(() => {
-    if (!clockChatActiveRef.current) return;
+    if (!clockChatActiveRef.current && !researchChatSourceRef.current) return;
     // New assistant message arrived — send final response
     if (messages.length > lastMsgCountRef.current) {
       const newest = messages[messages.length - 1];
       if (newest?.role === 'assistant' && newest.rawText) {
-        window.dispatchEvent(new CustomEvent('substrate:clock-chat-response', {
-          detail: { type: 'final', text: newest.rawText }
-        }));
-        clockChatActiveRef.current = false;
+        if (clockChatActiveRef.current) {
+          window.dispatchEvent(new CustomEvent('substrate:clock-chat-response', {
+            detail: { type: 'final', text: newest.rawText }
+          }));
+          clockChatActiveRef.current = false;
+        }
+        if (researchChatSourceRef.current) {
+          try {
+            researchChatSourceRef.current.postMessage({
+              type: 'substrate:research-chat-response',
+              text: newest.rawText,
+              rawText: newest.rawText,
+              done: true,
+            }, '*');
+          } catch { /* iframe may have navigated */ }
+          researchChatSourceRef.current = null;
+        }
       }
     }
     lastMsgCountRef.current = messages.length;
@@ -864,6 +913,21 @@ export default function App({ onLogout }: AppProps) {
             title="Workbench"
           >
             <Film size={15} />
+          </button>
+
+          {/* Chess toggle */}
+          <button
+            onClick={() => setChessOpen(o => !o)}
+            className={`
+              relative w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200
+              ${chessOpen
+                ? 'bg-amber-500/20 border border-amber-400/25 text-amber-300'
+                : 'bg-white/[0.04] border border-white/[0.06] text-white/40 hover:text-white/60 hover:bg-white/[0.06]'
+              }
+            `}
+            title="Glass Chess"
+          >
+            <Crown size={15} />
           </button>
 
           {/* Tasks toggle */}
@@ -1144,16 +1208,18 @@ export default function App({ onLogout }: AppProps) {
         <div className={researchOpen ? '' : 'hidden'}>
           <FloatingWindow
             id="research-hub"
-            title="Intelligence Hub"
+            title={researchChannel ? `Intelligence Hub — ${researchChannel.name}` : 'Intelligence Hub'}
             titleIcon={<Sparkles size={13} className="text-purple-400" />}
             defaultWidth={780}
             defaultHeight={640}
             minWidth={480}
             minHeight={400}
-            onClose={() => setResearchOpen(false)}
+            onClose={() => { setResearchOpen(false); setResearchChannel(null); }}
           >
             <ResearchPanel
-              onClose={() => setResearchOpen(false)}
+              onClose={() => { setResearchOpen(false); setResearchChannel(null); }}
+              channel={researchChannel}
+              onClearChannel={() => setResearchChannel(null)}
               onSendToAgent={(text) => {
                 handleSend(text);
               }}
@@ -1253,6 +1319,27 @@ export default function App({ onLogout }: AppProps) {
               className="w-full h-full border-none"
               allow="clipboard-write; fullscreen"
               allowFullScreen
+              style={{ background: '#1a1a2e' }}
+            />
+          </FloatingWindow>
+        </div>
+
+        {/* Glass Chess — iframe FloatingWindow */}
+        <div className={chessOpen ? '' : 'hidden'}>
+          <FloatingWindow
+            id="glass-chess"
+            title="Glass Chess"
+            titleIcon={<Crown size={13} className="text-amber-400" />}
+            defaultWidth={520}
+            defaultHeight={600}
+            minWidth={400}
+            minHeight={480}
+            onClose={() => setChessOpen(false)}
+          >
+            <iframe
+              src={`http://${window.location.hostname}:5050`}
+              className="w-full h-full border-none"
+              allow="clipboard-write"
               style={{ background: '#1a1a2e' }}
             />
           </FloatingWindow>

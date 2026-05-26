@@ -1464,8 +1464,88 @@ _ON_DEMAND_TOOLS = {
             category="automation",
         ),
     },
+    "patch": {
+        "keywords": ["apply patch", "unified diff", "patch file", "diff", "apply diff", "hunk"],
+        "register": lambda reg: reg.register(
+            name="patch",
+            execute=lambda action, **kwargs: _patch_dispatch(action, **kwargs),
+            description=(
+                "Apply unified diffs (patches) to files. Supports multi-file patches, fuzzy line matching, "
+                "file creation/deletion. Use action='apply' with a 'patch' string in standard unified diff format. "
+                "Use action='validate' to dry-run without writing. "
+                "Format: --- a/file\\n+++ b/file\\n@@ -line,count +line,count @@\\n context/+added/-removed lines."
+            ),
+            schema={
+                "type": "object",
+                "properties": {
+                    "action": {"type": "string", "enum": ["apply", "validate"]},
+                    "patch": {"type": "string", "description": "Unified diff text"},
+                    "base_dir": {"type": "string", "description": "Base directory for relative paths"},
+                    "dry_run": {"type": "boolean", "description": "Validate only, don't write (default false)"},
+                    "fuzz": {"type": "integer", "description": "Line matching tolerance (default 2)"},
+                },
+                "required": ["action", "patch"],
+            },
+            category="coding",
+        ),
+    },
+    "opencode": {
+        "keywords": ["opencode", "coding agent", "refactor", "code change", "implement feature", "fix bug", "write code", "code review"],
+        "register": lambda reg: reg.register(
+            name="opencode",
+            execute=lambda action, **kwargs: _opencode_dispatch(action, **kwargs),
+            description=(
+                "Delegate coding tasks to OpenCode, a specialized coding agent with LSP-aware editing, "
+                "multi-file apply_patch, and built-in verification. Use for complex code changes that need "
+                "structural understanding. "
+                "Actions: run (headless single-shot task), start_server (start persistent server), "
+                "stop_server, status, session_list, session_create, session_chat. "
+                "For run: provide 'prompt' with the coding task. Optional: 'working_dir', 'model' (provider/model), "
+                "'agent' (build|plan|explore|scout), 'files' (list of files to attach as context)."
+            ),
+            schema={
+                "type": "object",
+                "properties": {
+                    "action": {"type": "string", "enum": ["run", "start_server", "stop_server", "status", "session_list", "session_create", "session_chat"]},
+                    "prompt": {"type": "string", "description": "Coding task description (for run/session_chat)"},
+                    "working_dir": {"type": "string", "description": "Working directory for the coding task"},
+                    "model": {"type": "string", "description": "Model in provider/model format (e.g. anthropic/claude-sonnet-4-20250514)"},
+                    "agent": {"type": "string", "description": "OpenCode agent: build, plan, explore, scout, general"},
+                    "files": {"type": "array", "items": {"type": "string"}, "description": "Files to attach as context"},
+                    "session_id": {"type": "string", "description": "Session ID for session_chat or continue"},
+                    "message": {"type": "string", "description": "Message for session_chat"},
+                    "title": {"type": "string", "description": "Title for session_create"},
+                    "timeout_sec": {"type": "integer", "description": "Timeout in seconds (default 300)"},
+                },
+                "required": ["action"],
+            },
+            category="coding",
+        ),
+    },
 }
 
+
+
+def _patch_dispatch(action: str, **kwargs) -> Dict[str, Any]:
+    """Dispatch patch tool actions."""
+    try:
+        from .patch_tool import patch_dispatch
+        return patch_dispatch(action, **kwargs)
+    except ImportError:
+        return {"status": "error", "error": "patch_tool not available"}
+    except Exception as e:
+        return {"status": "error", "error": f"Patch tool error: {e}"}
+
+
+def _opencode_dispatch(action: str, **kwargs) -> Dict[str, Any]:
+    """Dispatch OpenCode coding agent actions."""
+    try:
+        from .opencode_tool import opencode_dispatch
+        return opencode_dispatch(action, **kwargs)
+    except ImportError:
+        return {"status": "error", "error": "opencode_tool not available"}
+    except Exception as e:
+        return {"status": "error", "error": f"OpenCode tool error: {e}"}
 
 
 def _gmail_dispatch(action: str, **kwargs) -> Dict[str, Any]:

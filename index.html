@@ -3846,17 +3846,21 @@ REQUIREMENTS:
         // Function to toggle the config panel and request latest config
         function toggleConfigPanel() {
             const configPanel = document.getElementById('config-panel');
+            const overlay = document.getElementById('config-overlay');
             
             if (!configPanel) {
                 console.error('Config panel not found');
                 return;
             }
             
-            // Toggle visibility
-            if (configPanel.style.display === 'block') {
-                configPanel.style.display = 'none';
+            // Toggle visibility via .active class (opacity + pointer-events CSS transition)
+            const isOpen = configPanel.classList.contains('active');
+            if (isOpen) {
+                configPanel.classList.remove('active');
+                if (overlay) overlay.classList.remove('active');
             } else {
-                configPanel.style.display = 'block';
+                configPanel.classList.add('active');
+                if (overlay) overlay.classList.add('active');
                 
                 // Request the latest configuration data when opening
                 console.log('Config panel opened, requesting latest config');
@@ -3867,10 +3871,7 @@ REQUIREMENTS:
                 }
                 
                 if (window.api && window.api.send) {
-                    // Use the text command format that works in tp 105
                     window.api.send('config', { action: 'get' });
-                    
-                    // Also try the original format for redundancy
                     window.api.send('requestConfig');
                 }
             }

@@ -74,7 +74,7 @@
     background: rgb(20, 20, 30);
     z-index: 100;
     pointer-events: auto;
-    overflow: hidden;
+    overflow: visible;
 }
 
 .section-card h3 {
@@ -161,6 +161,7 @@
 /* Futuristic form elements */
 .section-card input[type="text"],
 .section-card input[type="number"],
+.section-card input[type="password"],
 .section-card textarea {
     background: rgba(0, 0, 0, 0.3);
     border: 1px solid rgba(79, 195, 247, 0.3);
@@ -173,12 +174,16 @@
     transition: border-color 0.3s, box-shadow 0.3s;
     word-wrap: break-word;
     overflow-wrap: break-word;
+}
+
+.section-card textarea {
     min-height: 80px;
     resize: vertical;
 }
 
 .section-card input[type="text"]:focus,
 .section-card input[type="number"]:focus,
+.section-card input[type="password"]:focus,
 .section-card textarea:focus {
     border-color: rgba(79, 195, 247, 0.8);
     box-shadow: 0 0 10px rgba(79, 195, 247, 0.3);

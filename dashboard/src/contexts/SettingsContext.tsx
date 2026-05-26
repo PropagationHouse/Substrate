@@ -44,6 +44,8 @@ interface SettingsContextValue {
   setFontSize: (size: number) => void;
   editorFontSize: number;
   setEditorFontSize: (size: number) => void;
+  setGlassOpacity: (opacity: number) => void;
+  setBackgroundGif: (gifUrl: string) => void;
 }
 
 const SettingsContext = createContext<SettingsContextValue | null>(null);
@@ -304,6 +306,16 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('substrate:font-size', String(normalized));
   }, []);
 
+  const setGlassOpacity = useCallback((opacity: number) => {
+    localStorage.setItem('substrate:glass-opacity', String(opacity));
+    document.documentElement.style.setProperty('--glass-bg', `rgba(15, 15, 25, ${opacity})`);
+  }, []);
+
+  const setBackgroundGif = useCallback((gifUrl: string) => {
+    localStorage.setItem('substrate:bg-gif', gifUrl);
+    document.documentElement.style.setProperty('--substrate-bg-image', `url(${gifUrl})`);
+  }, []);
+
   const setEditorFontSize = useCallback((size: number) => {
     const normalized = normalizeEditorFontSize(size);
     setEditorFontSizeState(normalized);
@@ -347,6 +359,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     setFontSize,
     editorFontSize,
     setEditorFontSize,
+    setGlassOpacity,
+    setBackgroundGif,
   }), [
     soundEnabled, toggleSound, ttsProvider, ttsModel, changeTtsProvider, changeTtsModel, toggleTtsProvider,
     sttProvider, changeSttProvider, sttInputMode, changeSttInputMode, sttModel, changeSttModel,
@@ -355,6 +369,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     speak, panelRatio, setPanelRatio, telemetryVisible, toggleTelemetry,
     eventsVisible, toggleEvents, logVisible, toggleLog, theme, setTheme, font, setFont,
     fontSize, setFontSize, editorFontSize, setEditorFontSize,
+    setGlassOpacity, setBackgroundGif,
   ]);
 
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;
