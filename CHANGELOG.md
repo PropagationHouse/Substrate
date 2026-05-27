@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.2.19] — 2026-05-27
+
+### Tasks Board Subchannel Filtering
+
+#### Fixed
+- **Subchannel tabs empty in tasks board** — Media items from the workbench all appeared under "All" with subchannel tabs (House, MILLET) showing empty. Root cause: `MediaItem.to_dict()` in `models.py` omitted `workspace_id` from the API response, so the dashboard couldn't map items to their workspace/channel. Added `workspace_id` to the serializer.
+- **Unassigned media items** — 2 items had `NULL` workspace_id in the database; assigned them to the main workspace (House).
+- **Dashboard channel mapping** — `KanbanBoard.tsx` now correctly resolves `workspace_id` → workspace name for channel tabs, with a fallback to the main workspace for any future unassigned items.
+
+---
+
 ## [1.2.18] — 2026-05-26
 
 ### Glass Chess, Auto-Continue UX, Workspace Panel & Tooling

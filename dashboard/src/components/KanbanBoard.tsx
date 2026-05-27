@@ -232,20 +232,28 @@ export function KanbanBoard() {
     return map;
   }, [msWorkspaces]);
 
+  // Find the main workspace name for items with no workspace_id
+  const mainWsName = useMemo(() => {
+    const main = msWorkspaces.find(ws => ws.is_main);
+    return main?.name || (msWorkspaces.length > 0 ? msWorkspaces[0].name : undefined);
+  }, [msWorkspaces]);
+
   // Fetch ALL Media Suite tasks (no workspace filter) — tag each with channel name
   const refreshMsTasks = useCallback(() => {
     fetch('/api/media-suite/media-items')
       .then(r => r.ok ? r.json() : [])
       .then((items: MediaSuiteItem[]) => {
         const mapped = items.map(item => {
-          const chName = item.workspace_id ? wsIdToName[String(item.workspace_id)] : undefined;
+          const chName = item.workspace_id
+            ? wsIdToName[String(item.workspace_id)]
+            : mainWsName;  // Default unassigned items to main workspace
           return msItemToTask(item, chName);
         });
-        console.log('[KanbanBoard] Media Suite items:', mapped.length, 'channels:', Object.keys(wsIdToName));
+        console.log('[KanbanBoard] Media Suite items:', mapped.length, 'channels:', Object.keys(wsIdToName), 'mainWs:', mainWsName);
         setMsTasks(mapped);
       })
       .catch((err) => console.warn('[KanbanBoard] MS fetch error:', err));
-  }, [wsIdToName]);
+  }, [wsIdToName, mainWsName]);
 
   // Fetch Media Suite tasks on mount + poll every 10s
   useEffect(() => {
