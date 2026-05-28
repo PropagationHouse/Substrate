@@ -333,9 +333,14 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         /* Simpler input box */
-        #chat-input-container {
-            background-color: rgba(20, 20, 30, 0.35) !important;
+        .chat-input-container {
             border-radius: 10px !important;
+        }
+        /* Ensure input container is always visible */
+        #input-container {
+            display: flex !important;
+            visibility: visible !important;
+            opacity: 1 !important;
         }
         
         /* Cursor animation for streaming effect */
@@ -865,34 +870,66 @@ document.addEventListener('DOMContentLoaded', function() {
         // Find any containers that might be holding duplicate UIs
         document.querySelectorAll('div[style*="position: fixed"], div[style*="position:fixed"]').forEach(el => {
             // Keep essential elements and avatar-related elements
-            if (el.id !== 'chat-input-container' && 
+            if (el.id !== 'input-container' &&
+                el.id !== 'chat-input-container' && 
+                el.id !== 'drag-region' &&
+                el.id !== 'titlebar' &&
+                el.id !== 'file-preview' &&
+                el.id !== 'loading-indicator' &&
                 !el.classList.contains('titlebar') &&
+                !el.classList.contains('chat-input-container') &&
                 !el.classList.contains('avatar') && 
                 !el.classList.contains('animated-avatar') &&
                 !el.classList.contains('nh') &&
                 !el.classList.contains('nh-chat-wall') &&
+                !el.classList.contains('config-overlay') &&
                 !el.id.includes('config') &&
                 !el.id.includes('avatar') &&
                 !el.id.includes('radial') &&
                 !el.id.includes('button-container') &&
                 !el.id.includes('deskWidget') &&
                 !el.id.includes('dwChat') &&
-                !el.querySelector('.message-avatar')) {
+                !el.id.includes('faceEditor') &&
+                !el.querySelector('.message-avatar') &&
+                !el.closest('#input-container') &&
+                !el.closest('#app')) {
                 el.remove();
             }
         });
 
-        // Style the input container
-        const chatInputContainer = document.getElementById('chat-input-container');
+        // Ensure the input container is visible (class selector, not ID)
+        const chatInputContainer = document.querySelector('.chat-input-container');
         if (chatInputContainer) {
-            chatInputContainer.style.backgroundColor = 'rgba(20, 20, 30, 0.35)';
             chatInputContainer.style.borderRadius = '10px';
         }
         
         // Make sure the avatar is visible
         ensureAvatarVisible();
+        // Make sure the chatbar is visible
+        ensureChatbarVisible();
     }
     
+    // Make sure the chat input bar is visible on the transparent window
+    function ensureChatbarVisible() {
+        // Don't force chatbar visible when desktop widget mode is active
+        try {
+            if (JSON.parse(localStorage.getItem('substrate:desktopWidgetEnabled') || 'false')) return;
+        } catch(e) {}
+        
+        const inputContainer = document.getElementById('input-container');
+        if (inputContainer) {
+            inputContainer.style.display = 'flex';
+            inputContainer.style.visibility = 'visible';
+            inputContainer.style.opacity = '1';
+        }
+        const chatBar = document.querySelector('.chat-input-container');
+        if (chatBar) {
+            chatBar.style.display = 'flex';
+            chatBar.style.visibility = 'visible';
+            chatBar.style.opacity = '1';
+        }
+    }
+
     // Make sure avatar is visible and properly loaded
     function ensureAvatarVisible() {
         // Check if avatar preview exists
@@ -2174,23 +2211,22 @@ document.addEventListener('DOMContentLoaded', function() {
         window.cleanupBrokenChat = function() { /* Do nothing */ };
     }
     
-    // Block ALL interval-based cleanups from other scripts
+    // Block interval-based cleanups from other scripts that would remove our messages
     const originalSetInterval = window.setInterval;
     window.setInterval = function(fn, delay) {
-        // Allow our own intervals to run
-        if (fn === aggressiveCleanup || fn === ensureAvatarVisible) {
+        // Allow our own intervals and all non-function intervals to run
+        if (fn === aggressiveCleanup || fn === ensureAvatarVisible || typeof fn !== 'function') {
             return originalSetInterval(fn, delay);
         }
         
-        // Block any cleanup-related intervals
-        if (typeof fn === 'function' && fn.toString) {
+        // Block only intervals that look like aggressive DOM cleaners targeting #output
+        if (fn.toString) {
             const fnStr = fn.toString();
-            if (fnStr.includes('removeChild') || 
-                fnStr.includes('clean') || 
-                fnStr.includes('innerHTML') ||
-                fnStr.includes('remove()')) {
-                console.log("Blocked potential cleanup interval");
-                return 0; // Return fake interval ID
+            // Only block if it specifically targets output cleanup, not general DOM ops
+            if ((fnStr.includes('removeChild') || fnStr.includes('innerHTML = \'\'')) &&
+                fnStr.includes('output') && !fnStr.includes('deskWidget') && !fnStr.includes('dwChat')) {
+                console.log("Blocked potential output cleanup interval");
+                return 0;
             }
         }
         

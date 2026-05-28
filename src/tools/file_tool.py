@@ -275,7 +275,7 @@ def edit_file(
             }
         
         # Read current content
-        with open(full_path, 'r', encoding=encoding) as f:
+        with open(full_path, 'r', encoding=encoding, errors='replace') as f:
             content = f.read()
         
         # Check if old_string exists

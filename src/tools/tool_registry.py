@@ -345,7 +345,7 @@ def _process_dispatch(action: str, **kwargs) -> Dict[str, Any]:
         "exec_status": lambda: get_session(session_id=kwargs.get("session_id", "")),
         "exec_kill": lambda: kill_session(session_id=kwargs.get("session_id", "")),
         "exec_list": lambda: {"sessions": list_sessions(kwargs.get("active_only", False))},
-        "list_processes": lambda: list_processes(name_filter=kwargs.get("name_filter"), limit=kwargs.get("limit")),
+        "list_processes": lambda: list_processes(name_filter=kwargs.get("name_filter"), limit=kwargs.get("limit") or 50),
         "process_info": lambda: get_process_info(pid=kwargs.get("pid", 0)),
         "kill_process": lambda: kill_process(pid=kwargs.get("pid", 0), force=kwargs.get("force", False)),
         "list_windows": lambda: list_windows(title_filter=kwargs.get("title_filter")),
@@ -584,6 +584,116 @@ def _agent_dispatch(action: str, **kwargs) -> Dict[str, Any]:
         return {"status": "error", "error": f"Unknown agent action: {action}. Available: spawn, status, list, cancel, result, cleanup"}
 
 
+def _task_board_dispatch(action: str, **kwargs) -> Dict[str, Any]:
+    """Manage the user's Kanban task board — view, add, edit, remove, and review tasks."""
+    import requests as _req
+    import os as _os
+    base = _os.environ.get('SUBSTRATE_API_URL', 'http://localhost:8765')
+
+    try:
+        if action == "overview":
+            r = _req.get(f'{base}/api/local/tasks/agent-context', timeout=5)
+            return r.json() if r.ok else {"status": "error", "error": f"HTTP {r.status_code}"}
+
+        elif action == "list":
+            r = _req.get(f'{base}/api/local/tasks', timeout=5)
+            if not r.ok:
+                return {"status": "error", "error": f"HTTP {r.status_code}"}
+            data = r.json()
+            tasks = data.get('tasks', [])
+            # Optional filters
+            channel = kwargs.get('channel')
+            owner = kwargs.get('owner')
+            column = kwargs.get('column')
+            priority = kwargs.get('priority')
+            if channel:
+                tasks = [t for t in tasks if t.get('channel') == channel]
+            if owner:
+                tasks = [t for t in tasks if t.get('owner') == owner]
+            if column:
+                tasks = [t for t in tasks if t.get('column') == column]
+            if priority:
+                tasks = [t for t in tasks if t.get('priority') == priority]
+            return {"status": "success", "count": len(tasks), "tasks": tasks}
+
+        elif action == "add":
+            title = kwargs.get('title', '')
+            if not title:
+                return {"status": "error", "error": "title is required"}
+            import time as _time
+            task = {
+                'id': f"t-{int(_time.time()*1000)}-{_os.urandom(3).hex()}",
+                'title': title,
+                'description': kwargs.get('description', ''),
+                'owner': kwargs.get('owner', 'human'),
+                'priority': kwargs.get('priority', 'medium'),
+                'schedule': kwargs.get('schedule', 'whenever'),
+                'column': kwargs.get('column', 'backlog'),
+                'channel': kwargs.get('channel'),
+                'dueDate': kwargs.get('due_date'),
+                'statusNote': kwargs.get('status_note'),
+                'createdAt': int(_time.time() * 1000),
+                'updatedAt': int(_time.time() * 1000),
+            }
+            r = _req.post(f'{base}/api/local/tasks', json={'action': 'upsert', 'task': task}, timeout=5)
+            return {"status": "success", "task": task} if r.ok else {"status": "error", "error": f"HTTP {r.status_code}"}
+
+        elif action == "update":
+            task_id = kwargs.get('task_id', '')
+            if not task_id:
+                return {"status": "error", "error": "task_id is required"}
+            # Fetch current tasks to find the one to update
+            r = _req.get(f'{base}/api/local/tasks', timeout=5)
+            if not r.ok:
+                return {"status": "error", "error": f"HTTP {r.status_code}"}
+            tasks = r.json().get('tasks', [])
+            existing = next((t for t in tasks if t.get('id') == task_id), None)
+            if not existing:
+                return {"status": "error", "error": f"Task not found: {task_id}"}
+            # Apply updates
+            for field in ('title', 'description', 'owner', 'priority', 'schedule', 'column', 'channel', 'progress', 'status_note'):
+                if field in kwargs and kwargs[field] is not None:
+                    key = 'statusNote' if field == 'status_note' else ('dueDate' if field == 'due_date' else field)
+                    existing[key] = kwargs[field]
+            if 'due_date' in kwargs:
+                existing['dueDate'] = kwargs['due_date']
+            r = _req.post(f'{base}/api/local/tasks', json={'action': 'upsert', 'task': existing}, timeout=5)
+            return {"status": "success", "task": existing} if r.ok else {"status": "error", "error": f"HTTP {r.status_code}"}
+
+        elif action == "remove":
+            task_id = kwargs.get('task_id', '')
+            if not task_id:
+                return {"status": "error", "error": "task_id is required"}
+            r = _req.post(f'{base}/api/local/tasks', json={'action': 'delete', 'taskId': task_id}, timeout=5)
+            return {"status": "success", "removed": task_id} if r.ok else {"status": "error", "error": f"HTTP {r.status_code}"}
+
+        elif action == "review":
+            # Get overview and provide a structured review of task health
+            r = _req.get(f'{base}/api/local/tasks/agent-context', timeout=5)
+            if not r.ok:
+                return {"status": "error", "error": f"HTTP {r.status_code}"}
+            ctx = r.json()
+            review = {
+                "status": "success",
+                "totalActive": ctx.get('totalActive', 0),
+                "overdue": ctx.get('overdue', []),
+                "urgent": ctx.get('urgent', []),
+                "agentTasks": ctx.get('agentTasks', []),
+                "channels": ctx.get('channels', []),
+                "hint": ctx.get('hint', ''),
+                "recentlyCompleted": ctx.get('recentlyCompleted', []),
+            }
+            return review
+
+        else:
+            return {"status": "error", "error": f"Unknown task_board action: {action}. Available: overview, list, add, update, remove, review"}
+
+    except _req.exceptions.ConnectionError:
+        return {"status": "error", "error": "Cannot reach Substrate API. Is the proxy server running?"}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
 # ── Unified dispatchers (OpenClaw-style consolidation) ──────────────────
 
 def _computer_dispatch(action: str, **kwargs) -> Dict[str, Any]:
@@ -711,11 +821,11 @@ def _text_editor_dispatch(action: str, **kwargs) -> Dict[str, Any]:
     elif action == "grep":
         return grep(
             query=kwargs.get("query", ""),
-            path=kwargs.get("path"),
+            path=kwargs.get("path") or ".",
             includes=kwargs.get("includes"),
             fixed_strings=kwargs.get("fixed_strings", False),
-            context_lines=kwargs.get("context_lines"),
-            max_results=kwargs.get("max_results"),
+            context_lines=kwargs.get("context_lines") or 0,
+            max_results=kwargs.get("max_results") or 50,
         )
     else:
         return {"status": "error", "error": f"Unknown text_editor action: {action}. Available: read, write, edit, list, info, grep"}
@@ -1283,6 +1393,39 @@ def _register_default_tools(registry: ToolRegistry) -> None:
                 "model": {"type": "string", "description": "Optional model override"},
                 "wait": {"type": "boolean", "description": "Wait for completion (default false)"},
                 "timeout": {"type": "integer", "description": "Timeout in seconds"},
+            },
+            "required": ["action"],
+        },
+    )
+
+    # ── task_board: user task management ────────────────────────────
+    registry.register(
+        name="task_board",
+        execute=lambda action, **kwargs: _task_board_dispatch(action, **kwargs),
+        description=(
+            "Manage the user's Kanban task board. Use this to check on tasks, add new ones, "
+            "update progress, remove completed work, or review overall task health across all "
+            "project channels (e.g. House, MILLET). "
+            "Actions: overview (smart summary with overdue/urgent/agent tasks), "
+            "list (all tasks, filterable by channel/owner/column/priority), "
+            "add (create a new task), update (edit an existing task), "
+            "remove (delete a task), review (structured task health check)."
+        ),
+        schema={
+            "type": "object",
+            "properties": {
+                "action": {"type": "string", "enum": ["overview", "list", "add", "update", "remove", "review"]},
+                "task_id": {"type": "string", "description": "Task ID (for update/remove)"},
+                "title": {"type": "string", "description": "Task title (for add)"},
+                "description": {"type": "string", "description": "Task description"},
+                "owner": {"type": "string", "enum": ["human", "agent"], "description": "Who owns the task"},
+                "priority": {"type": "string", "enum": ["critical", "high", "medium", "low"]},
+                "schedule": {"type": "string", "enum": ["immediate", "scheduled", "recurring", "whenever"]},
+                "column": {"type": "string", "enum": ["backlog", "in_progress", "done"], "description": "Board column/status"},
+                "channel": {"type": "string", "description": "Project channel name (e.g. House, MILLET)"},
+                "due_date": {"type": "string", "description": "Due date (YYYY-MM-DD)"},
+                "progress": {"type": "integer", "description": "Progress percentage 0-100"},
+                "status_note": {"type": "string", "description": "Status update note"},
             },
             "required": ["action"],
         },

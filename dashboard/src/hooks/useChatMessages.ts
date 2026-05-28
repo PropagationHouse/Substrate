@@ -104,8 +104,30 @@ export function useChatMessages({ rpc, currentSessionRef }: UseChatMessagesDeps)
   const allMessagesRef = useRef<ChatMsg[]>([]);
   const visibleCountRef = useRef(DEFAULT_VISIBLE_COUNT);
 
-  /** Apply the windowed view of messages to React state. */
+  /** Apply the windowed view of messages to React state.
+   *  Automatically preserves locally-created thinking bubbles that are missing
+   *  from the incoming array (they only exist client-side, never in gateway history). */
   const applyMessageWindow = useCallback((all: ChatMsg[], resetVisibleWindow = false) => {
+    // ── Preserve thinking bubbles from previous state ──
+    const prev = allMessagesRef.current;
+    if (prev.length > 0) {
+      const incomingIds = new Set(all.filter(m => m.msgId).map(m => m.msgId));
+      const lostThinking = prev.filter(m => m.isThinking && m.msgId && !incomingIds.has(m.msgId));
+      if (lostThinking.length > 0) {
+        // Re-insert thinking bubbles at their chronological positions
+        const merged = [...all];
+        for (const thinkMsg of lostThinking) {
+          // Find insertion point: right before the first message with a later timestamp
+          const insertAt = merged.findIndex(m => m.timestamp > thinkMsg.timestamp);
+          if (insertAt >= 0) {
+            merged.splice(insertAt, 0, thinkMsg);
+          } else {
+            merged.push(thinkMsg);
+          }
+        }
+        all = merged;
+      }
+    }
     allMessagesRef.current = all;
 
     if (resetVisibleWindow) {

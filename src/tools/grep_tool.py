@@ -166,7 +166,7 @@ def grep(
         Dict with matches grouped by file, including line numbers and content
     """
     try:
-        search_path = _resolve_search_path(path)
+        search_path = _resolve_search_path(path or ".")
         
         if not os.path.exists(search_path):
             return {
@@ -187,9 +187,9 @@ def grep(
                 "error": f"Invalid regex pattern: {e}",
             }
         
-        # Clamp parameters
-        context_lines = max(0, min(5, context_lines))
-        max_results = max(1, min(MAX_MATCHES, max_results))
+        # Clamp parameters (defend against None from dispatch layer)
+        context_lines = max(0, min(5, context_lines or 0))
+        max_results = max(1, min(MAX_MATCHES, max_results or 50))
         
         # Collect files
         files = _collect_files(search_path, includes)

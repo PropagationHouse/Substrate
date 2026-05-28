@@ -41,7 +41,7 @@ except ImportError:
 
 def list_processes(
     name_filter: Optional[str] = None,
-    limit: int = 50,
+    limit: Optional[int] = 50,
 ) -> Dict[str, Any]:
     """
     List running processes.
@@ -53,6 +53,7 @@ def list_processes(
     Returns:
         Dict with process list
     """
+    limit = limit or 50
     if not HAS_PSUTIL:
         return {
             "status": "error",

@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.2.20] — 2026-05-27
+
+### Electron Display & Thinking Bubbles
+
+#### Fixed
+- **Electron app only showing avatar** — Chatbar, buttons, and radial menu were invisible on launch. Root cause: `debug_renderer.js` used wrong CSS selector `#chat-input-container` (ID) instead of `.chat-input-container` (class), so the chatbar was never preserved during cleanup cycles. Added `ensureChatbarVisible()` safety function that runs every 3s to enforce visibility (respects widget mode). Also relaxed the `setInterval` override that was blocking legitimate intervals from `desktop_widget.js`.
+- **Thinking bubbles vanish on final answer** — Client-side thinking messages were lost whenever `applyMessageWindow` reloaded the message list from the gateway (which never includes thinking). Fixed by preserving locally-created thinking bubbles across reloads in `useChatMessages.ts`.
+- **Tool dispatch crashes** — `list_processes` and `grep` could crash when the agent passed `None` for `limit`/`context_lines`/`max_results`; hardened both dispatch layer and tool functions to coerce `None` to defaults.
+- **File edit crash on non-UTF-8 files** — `edit_file` now uses `errors='replace'` to handle binary/mixed-encoding files gracefully.
+
+#### Changed
+- **Bash output truncation** — Increased `MAX_RETURN_LINES` from 200 to 500 in `exec_tool.py` to reduce output truncation for the agent.
+
+---
+
 ## [1.2.19] — 2026-05-27
 
 ### Tasks Board Subchannel Filtering

@@ -205,8 +205,8 @@ TAIL_CHARS = 2000             # Always keep last 2K chars regardless of truncati
 FINISHED_SESSION_TTL_SEC = 1800  # Auto-prune finished sessions after 30 minutes
 
 # Output truncation for LLM return (prevents context blowout)
-MAX_RETURN_LINES = 200        # Max lines returned to the agent
-MAX_RETURN_BYTES = 50_000     # Max bytes returned to the agent (~50KB)
+MAX_RETURN_LINES = 500        # Max lines returned to the agent
+MAX_RETURN_BYTES = 80_000     # Max bytes returned to the agent (~80KB)
 TEMP_DIR = os.path.join(WORKSPACE_DIR, 'temp')
 
 
