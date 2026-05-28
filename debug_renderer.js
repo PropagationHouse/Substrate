@@ -1,7 +1,7 @@
 // Minimal chat renderer with streaming effects and avatars
 console.log("Streaming chat renderer loaded");
 
-document.addEventListener('DOMContentLoaded', function() {
+function _initDebugRenderer() {
     console.log("Streaming chat renderer initialized");
 
     // Initialize Mermaid.js with dark theme
@@ -917,12 +917,13 @@ document.addEventListener('DOMContentLoaded', function() {
         } catch(e) {}
         
         const inputContainer = document.getElementById('input-container');
+        const chatBar = document.querySelector('.chat-input-container');
+        
         if (inputContainer) {
             inputContainer.style.display = 'flex';
             inputContainer.style.visibility = 'visible';
             inputContainer.style.opacity = '1';
         }
-        const chatBar = document.querySelector('.chat-input-container');
         if (chatBar) {
             chatBar.style.display = 'flex';
             chatBar.style.visibility = 'visible';
@@ -2584,4 +2585,11 @@ document.addEventListener('DOMContentLoaded', function() {
     setInterval(ensureAvatarVisible, 2000);
     
     console.log("Streaming chat renderer with avatars setup complete");
-});
+}
+
+// Run immediately if DOM is already ready (script loads late), otherwise wait
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _initDebugRenderer);
+} else {
+    _initDebugRenderer();
+}

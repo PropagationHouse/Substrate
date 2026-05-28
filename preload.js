@@ -74,7 +74,6 @@ contextBridge.exposeInMainWorld(
 contextBridge.exposeInMainWorld(
     'electron',
     {
-        ...contextBridge.exposeInMainWorld.arguments[1],
         updateConfigPanel: (config) => {
             console.log("updateConfigPanel called with config:", config);
             if (!config) {
