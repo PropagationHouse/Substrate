@@ -1441,10 +1441,22 @@
         localStorage.setItem(_MIGRATION_KEY, '1');
     }
 
+    // v1.2.20 migration: reset widget state so chatbar is visible by default.
+    // Users upgrading from earlier versions may have stale widget-enabled state.
+    const _MIG_120_KEY = 'substrate:dwMigrated120';
+    if (!localStorage.getItem(_MIG_120_KEY)) {
+        localStorage.removeItem(ENABLED_KEY);
+        localStorage.setItem(_MIG_120_KEY, '1');
+    }
+
     // Initialize on DOM ready — respect the user's stored preference
-    document.addEventListener('DOMContentLoaded', function() {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(checkEnabled, 1500);
+        });
+    } else {
         setTimeout(checkEnabled, 1500);
-    });
+    }
 
     // Expose global functions
     window.dwCycleFont = cycleFont;
