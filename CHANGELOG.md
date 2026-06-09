@@ -6,6 +6,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [1.3.0] — 2026-06-09
+
+### Media Suite Consolidation, Mobile Dashboard & File Browser
+
+#### Added
+- **Media Suite consolidated into Substrate** — Flask workbench app moved from external `CascadeProjects/` into `media_suite/` within the Substrate repo; proxy auto-starts from the new location
+- **Mobile dashboard (Capacitor)** — Full mobile-optimized layout with `MobileWorkbench`, `MobileTasksView`, `MobilePeripheralsView`, and `MobilePairing` components; phone detection via `useIsPhone` hook
+- **Capacitor config** — `capacitor.config.ts` enables building the dashboard as a native Android APK
+- **File browser** — `FileTreePanel`, `FileTreeNode`, `TabbedContentArea` with binary/media file viewers, open-files hook, and file-type utilities
+- **Glass Workbench** — Shadow DOM component embedding the Flask Media Suite in desktop view
+- **Glass Chess** — Shadow DOM component embedding the chess game in desktop view
+- **Background & Server settings** — `BackgroundSettings.tsx`, `ServerSettings.tsx`, `SimulatedGlassBackdrop.tsx` for UI customization
+- **TTS stream player** — `ttsStreamPlayer.ts` for streaming text-to-speech audio
+- **Notes tab** — `NotesTab.tsx` + `useNotes` hook for workspace note-taking
+- **API base & fetch interceptor** — `apiBase.ts` resolves remote server URL for Capacitor; `fetchInterceptor.ts` rewrites relative paths and attaches auth tokens
+
+#### Fixed
+- **"Error saving to project board"** — `saveContent()` in `script_v2.js` threw a false error notification when `loadMediaItems()`/`renderAll()` failed after a successful save. Modal now closes immediately on save, refresh is wrapped in silent try/catch
+- **Modal not closing after save** — `closeModal('contentModal')` moved before the refresh calls so it always executes regardless of downstream errors
+- **Non-200 response blocking save flow** — Removed premature `return` in `!response.ok` branch; item saves successfully despite non-200
+- **Proxy auto-start path** — Removed stale `CascadeProjects` fallback; `media_suite/app.py` is now the primary candidate
+
+#### Changed
+- **Proxy server** — Auto-start candidate list simplified to `media_suite/` and `workbench/` (CascadeProjects path removed)
+- **Dashboard package** — Updated dependencies for Capacitor, mobile components, and file browser features
+
+---
+
 ## [1.2.20] — 2026-05-27
 
 ### Electron Display & Thinking Bubbles

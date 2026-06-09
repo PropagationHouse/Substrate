@@ -7,7 +7,9 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   Folder, FileText, ChevronRight, Save, X, Loader2, ArrowLeft,
   Image, Code, FileJson, FileType, Music, Film, Database, Settings, Layers, Search,
+  StickyNote,
 } from 'lucide-react';
+import { NotesTab } from '@/features/workspace/tabs/NotesTab';
 
 interface DirEntry {
   name: string;
@@ -63,7 +65,10 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)}M`;
 }
 
+type PanelView = 'files' | 'notes';
+
 export function WorkspacePanel({ onFileHover, onOpenFile, initialPath }: WorkspacePanelProps) {
+  const [panelView, setPanelView] = useState<PanelView>('files');
   const [currentPath, setCurrentPath] = useState('');
   const [entries, setEntries] = useState<DirEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -163,6 +168,41 @@ export function WorkspacePanel({ onFileHover, onOpenFile, initialPath }: Workspa
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
+      {/* Panel view toggle: Files / Notes */}
+      <div className="flex items-center gap-1 px-3 py-1.5 border-b border-white/[0.06] shrink-0">
+        <button
+          onClick={() => setPanelView('files')}
+          className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] uppercase tracking-wider font-medium transition-all ${
+            panelView === 'files'
+              ? 'bg-white/[0.08] text-white/80 shadow-sm shadow-white/[0.02]'
+              : 'text-white/30 hover:text-white/50 hover:bg-white/[0.03]'
+          }`}
+        >
+          <Folder size={11} />
+          Files
+        </button>
+        <button
+          onClick={() => setPanelView('notes')}
+          className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] uppercase tracking-wider font-medium transition-all ${
+            panelView === 'notes'
+              ? 'bg-white/[0.08] text-white/80 shadow-sm shadow-white/[0.02]'
+              : 'text-white/30 hover:text-white/50 hover:bg-white/[0.03]'
+          }`}
+        >
+          <StickyNote size={11} />
+          Notes
+        </button>
+      </div>
+
+      {/* Notes view */}
+      {panelView === 'notes' && (
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <NotesTab />
+        </div>
+      )}
+
+      {/* Files view */}
+      {panelView === 'files' && (<>
       {/* Toolbar: search + view toggle + stats */}
       <div className="flex items-center gap-2 px-3 py-2 border-b border-white/[0.04] shrink-0">
         {!editFile && (
@@ -663,6 +703,7 @@ export function WorkspacePanel({ onFileHover, onOpenFile, initialPath }: Workspa
           )}
         </div>
       )}
+      </>)}
     </div>
   );
 }

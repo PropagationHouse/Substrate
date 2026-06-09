@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Storyboard Template - Media Planning Suite</title>
+    <link href="/css/styles.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .storyboard-scene {
+            @apply glass-card p-6 mb-6;
+        }
+        
+        .scene-number {
+            @apply text-2xl font-bold text-primary-400 mb-4;
+        }
+        
+        .scene-content {
+            @apply grid grid-cols-1 lg:grid-cols-2 gap-6;
+        }
+        
+        .visual-panel {
+            @apply bg-glass-background rounded-lg p-4 min-h-[300px];
+        }
+        
+        .audio-panel {
+            @apply bg-glass-background rounded-lg p-4;
+        }
+        
+        .scene-image {
+            @apply w-full h-64 object-cover rounded-lg mb-4;
+        }
+        
+        .upload-area {
+            @apply border-2 border-dashed border-glass-border rounded-lg p-8 text-center cursor-pointer hover:border-primary-400 transition-colors;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 min-h-screen text-white">
+    <div class="container mx-auto px-4 py-8">
+        <!-- Header -->
+        <div class="glass-card p-6 mb-8">
+            <div class="flex justify-between items-center">
+                <div>
+                    <h1 class="text-3xl font-bold gradient-text mb-2">Storyboard</h1>
+                    <p class="text-gray-300">Media Plan: <span id="plan-title">Loading...</span></p>
+                </div>
+                <div class="flex space-x-4">
+                    <button onclick="addScene()" class="glass-button bg-gradient-to-r from-blue-500 to-purple-500">
+                        <i class="fas fa-plus mr-2"></i>Add Scene
+                    </button>
+                    <button onclick="exportStoryboard()" class="glass-button">
+                        <i class="fas fa-download mr-2"></i>Export PDF
+                    </button>
+                    <button onclick="previewStoryboard()" class="glass-button">
+                        <i class="fas fa-play mr-2"></i>Preview
+                    </button>
+                    <button onclick="window.close()" class="glass-button">
+                        <i class="fas fa-times mr-2"></i>Close
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Storyboard Container -->
+        <div id="storyboard-container" class="space-y-6">
+            <!-- Scenes will be populated here -->
+        </div>
+
+        <!-- Add Scene Modal -->
+        <div id="add-scene-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
+            <div class="glass-card max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+                <div class="p-6">
+                    <h3 class="text-2xl font-bold mb-6">Add New Scene</h3>
+                    <form id="scene-form" class="space-y-4">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Scene Number</label>
+                                <input type="number" id="scene-number" class="brand-input" min="1" required>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Scene Title</label>
+                                <input type="text" id="scene-title" class="brand-input" required>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Scene Description</label>
+                            <textarea id="scene-description" rows="3" class="brand-input" placeholder="Describe what happens in this scene..."></textarea>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Visual Notes</label>
+                                <textarea id="visual-notes" rows="4" class="brand-input" placeholder="Camera angles, composition, lighting, visual effects..."></textarea>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Audio Notes</label>
+                                <textarea id="audio-notes" rows="4" class="brand-input" placeholder="Dialogue, music, sound effects, voiceover..."></textarea>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Duration</label>
+                            <input type="text" id="scene-duration" class="brand-input" placeholder="e.g., 30 seconds, 1:30">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Scene Visual</label>
+                            <div class="upload-area" onclick="document.getElementById('scene-image').click()">
+                                <i class="fas fa-image text-4xl text-gray-400 mb-2"></i>
+                                <p class="text-gray-300">Click to upload scene visual</p>
+                                <p class="text-sm text-gray-400">Recommended: 16:9 aspect ratio</p>
+                                <input type="file" id="scene-image" accept="image/*" class="hidden">
+                            </div>
+                            <div id="image-preview" class="mt-4 hidden">
+                                <img id="preview-img" class="w-full h-64 object-cover rounded-lg">
+                            </div>
+                        </div>
+                        
+                        <div class="flex justify-end space-x-4">
+                            <button type="button" onclick="closeSceneModal()" class="glass-button">
+                                Cancel
+                            </button>
+                            <button type="submit" class="glass-button bg-gradient-to-r from-blue-500 to-purple-500">
+                                <i class="fas fa-save mr-2"></i>Save Scene
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Preview Modal -->
+        <div id="preview-modal" class="fixed inset-0 bg-black bg-opacity-90 hidden z-50 flex items-center justify-center p-4">
+            <div class="max-w-6xl w-full">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-2xl font-bold gradient-text">Storyboard Preview</h3>
+                    <button onclick="closePreview()" class="glass-button">
+                        <i class="fas fa-times mr-2"></i>Close Preview
+                    </button>
+                </div>
+                
+                <div id="preview-content" class="bg-black rounded-lg overflow-hidden">
+                    <!-- Preview content will be populated here -->
+                </div>
+                
+                <div class="flex justify-center items-center space-x-4 mt-6">
+                    <button onclick="previousScene()" class="glass-button">
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+                    <span id="scene-counter" class="text-lg font-medium">1 / 1</span>
+                    <button onclick="nextScene()" class="glass-button">
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Storyboard Management
+        let planId = new URLSearchParams(window.location.search).get('plan_id');
+        let scenes = [];
+        let currentPreviewScene = 0;
+
+        async function loadStoryboard() {
+            try {
+                const response = await fetch(`/api/storyboards?plan_id=${planId}`);
+                scenes = await response.json();
+                
+                // Load plan details
+                const planResponse = await fetch(`/api/media-plans/${planId}`);
+                const plan = await planResponse.json();
+                document.getElementById('plan-title').textContent = plan.title;
+                
+                renderStoryboard();
+            } catch (error) {
+                console.error('Error loading storyboard:', error);
+            }
+        }
+
+        function renderStoryboard() {
+            const container = document.getElementById('storyboard-container');
+            
+            if (scenes.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-12">
+                        <i class="fas fa-film text-6xl text-gray-400 mb-4"></i>
+                        <h3 class="text-xl font-bold mb-2">No Scenes Yet</h3>
+                        <p class="text-gray-400 mb-4">Start building your storyboard by adding your first scene.</p>
+                        <button onclick="addScene()" class="glass-button bg-gradient-to-r from-blue-500 to-purple-500">
+                            <i class="fas fa-plus mr-2"></i>Add Your First Scene
+                        </button>
+                    </div>
+                `;
+                return;
+            }
+
+            // Sort scenes by scene number
+            scenes.sort((a, b) => a.scene_number - b.scene_number);
+
+            container.innerHTML = scenes.map(scene => `
+                <div class="storyboard-scene" data-scene-id="${scene.id}">
+                    <div class="flex justify-between items-start mb-4">
+                        <div class="scene-number">Scene ${scene.scene_number}</div>
+                        <div class="flex space-x-2">
+                            <button onclick="editScene('${scene.id}')" class="glass-button px-3 py-2">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button onclick="deleteScene('${scene.id}')" class="glass-button px-3 py-2">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                            <button onclick="moveSceneUp('${scene.id}')" class="glass-button px-3 py-2">
+                                <i class="fas fa-arrow-up"></i>
+                            </button>
+                            <button onclick="moveSceneDown('${scene.id}')" class="glass-button px-3 py-2">
+                                <i class="fas fa-arrow-down"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <h3 class="text-xl font-bold mb-4">${scene.title}</h3>
+                    
+                    <div class="scene-content">
+                        <div class="visual-panel">
+                            ${scene.image_path ? 
+                                `<img src="${scene.image_path}" alt="${scene.title}" class="scene-image">` :
+                                `<div class="upload-area mb-4">
+                                    <i class="fas fa-image text-3xl text-gray-400 mb-2"></i>
+                                    <p class="text-gray-400">No visual uploaded</p>
+                                </div>`
+                            }
+                            
+                            <div>
+                                <h4 class="font-medium mb-2 text-primary-400">Visual Notes</h4>
+                                <p class="text-sm text-gray-300">${scene.visual_notes || 'No visual notes yet.'}</p>
+                            </div>
+                        </div>
+                        
+                        <div class="audio-panel">
+                            <div class="mb-4">
+                                <h4 class="font-medium mb-2 text-primary-400">Scene Description</h4>
+                                <p class="text-sm text-gray-300">${scene.description || 'No description yet.'}</p>
+                            </div>
+                            
+                            <div class="mb-4">
+                                <h4 class="font-medium mb-2 text-primary-400">Audio Notes</h4>
+                                <p class="text-sm text-gray-300">${scene.audio_notes || 'No audio notes yet.'}</p>
+                            </div>
+                            
+                            <div>
+                                <h4 class="font-medium mb-2 text-primary-400">Duration</h4>
+                                <p class="text-sm text-gray-300">${scene.duration || 'Not specified'}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function addScene() {
+            document.getElementById('add-scene-modal').classList.remove('hidden');
+            document.getElementById('scene-form').reset();
+            
+            // Set next scene number
+            const nextSceneNumber = scenes.length > 0 ? 
+                Math.max(...scenes.map(s => s.scene_number)) + 1 : 1;
+            document.getElementById('scene-number').value = nextSceneNumber;
+        }
+
+        function closeSceneModal() {
+            document.getElementById('add-scene-modal').classList.add('hidden');
+        }
+
+        function closePreview() {
+            document.getElementById('preview-modal').classList.add('hidden');
+        }
+
+        async function saveScene(e) {
+            e.preventDefault();
+            
+            const sceneData = {
+                plan_id: planId,
+                scene_number: parseInt(document.getElementById('scene-number').value),
+                title: document.getElementById('scene-title').value,
+                description: document.getElementById('scene-description').value,
+                visual_notes: document.getElementById('visual-notes').value,
+                audio_notes: document.getElementById('audio-notes').value,
+                duration: document.getElementById('scene-duration').value
+            };
+
+            try {
+                const response = await fetch('/api/storyboards', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(sceneData)
+                });
+
+                if (response.ok) {
+                    const newScene = await response.json();
+                    scenes.push(newScene);
+                    renderStoryboard();
+                    closeSceneModal();
+                    showNotification('Scene added successfully!', 'success');
+                } else {
+                    throw new Error('Failed to add scene');
+                }
+            } catch (error) {
+                showNotification(error.message, 'error');
+            }
+        }
+
+        async function deleteScene(sceneId) {
+            if (!confirm('Are you sure you want to delete this scene?')) return;
+
+            try {
+                const response = await fetch(`/api/storyboards/${sceneId}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    scenes = scenes.filter(scene => scene.id !== sceneId);
+                    renderStoryboard();
+                    showNotification('Scene deleted successfully!', 'success');
+                } else {
+                    throw new Error('Failed to delete scene');
+                }
+            } catch (error) {
+                showNotification(error.message, 'error');
+            }
+        }
+
+        function previewStoryboard() {
+            if (scenes.length === 0) {
+                showNotification('No scenes to preview', 'info');
+                return;
+            }
+
+            currentPreviewScene = 0;
+            renderPreview();
+            document.getElementById('preview-modal').classList.remove('hidden');
+        }
+
+        function renderPreview() {
+            const scene = scenes[currentPreviewScene];
+            const content = document.getElementById('preview-content');
+            const counter = document.getElementById('scene-counter');
+            
+            counter.textContent = `${currentPreviewScene + 1} / ${scenes.length}`;
+            
+            content.innerHTML = `
+                <div class="aspect-video bg-black flex items-center justify-center">
+                    ${scene.image_path ? 
+                        `<img src="${scene.image_path}" alt="${scene.title}" class="max-w-full max-h-full object-contain">` :
+                        `<div class="text-center">
+                            <i class="fas fa-image text-6xl text-gray-400 mb-4"></i>
+                            <p class="text-gray-400">No visual uploaded</p>
+                        </div>`
+                    }
+                </div>
+                
+                <div class="p-6 bg-gradient-to-b from-black to-gray-900">
+                    <h2 class="text-3xl font-bold mb-4">Scene ${scene.scene_number}: ${scene.title}</h2>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <h3 class="text-xl font-semibold mb-3 text-primary-400">Visual</h3>
+                            <p class="text-gray-300 mb-4">${scene.description || 'No description'}</p>
+                            <p class="text-gray-300">${scene.visual_notes || 'No visual notes'}</p>
+                        </div>
+                        
+                        <div>
+                            <h3 class="text-xl font-semibold mb-3 text-primary-400">Audio</h3>
+                            <p class="text-gray-300">${scene.audio_notes || 'No audio notes'}</p>
+                            <p class="text-sm text-gray-400 mt-2">Duration: ${scene.duration || 'Not specified'}</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function previousScene() {
+            if (currentPreviewScene > 0) {
+                currentPreviewScene--;
+                renderPreview();
+            }
+        }
+
+        function nextScene() {
+            if (currentPreviewScene < scenes.length - 1) {
+                currentPreviewScene++;
+                renderPreview();
+            }
+        }
+
+        function exportStoryboard() {
+            // This would generate a PDF export
+            window.print();
+        }
+
+        function showNotification(message, type = 'info') {
+            const notification = document.createElement('div');
+            notification.className = `fixed top-4 right-4 z-50 glass-card p-4 max-w-sm transform translate-x-full transition-transform duration-300`;
+            
+            const colors = {
+                success: 'text-green-400',
+                error: 'text-red-400',
+                info: 'text-blue-400'
+            };
+            
+            notification.innerHTML = `
+                <div class="flex items-center space-x-3">
+                    <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'} ${colors[type]}"></i>
+                    <p class="flex-1">${message}</p>
+                </div>
+            `;
+            
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.classList.remove('translate-x-full');
+            }, 100);
+            
+            setTimeout(() => {
+                notification.classList.add('translate-x-full');
+                setTimeout(() => {
+                    document.body.removeChild(notification);
+                }, 300);
+            }, 3000);
+        }
+
+        // Image preview
+        document.getElementById('scene-image').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    document.getElementById('preview-img').src = e.target.result;
+                    document.getElementById('image-preview').classList.remove('hidden');
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // Event listeners
+        document.getElementById('scene-form').addEventListener('submit', saveScene);
+
+        // Initialize
+        loadStoryboard();
+    </script>
+</body>
+</html>

@@ -1,6 +1,5 @@
 import { ChevronRight, ChevronDown, Loader2 } from 'lucide-react';
 import { FileIcon, FolderIcon } from './utils/fileIcons';
-import { isImageFile } from './utils/fileTypes';
 import type { TreeEntry } from './types';
 
 interface FileTreeNodeProps {
@@ -67,7 +66,7 @@ export function FileTreeNode({
     }
   };
 
-  const canOpen = !isDir && (!entry.binary || isImageFile(entry.name));
+  const canOpen = !isDir;
 
   const handleDoubleClick = () => {
     if (canOpen && !isRenaming) {
@@ -91,7 +90,7 @@ export function FileTreeNode({
       <div
         className={`flex items-center gap-1 py-[2px] pr-2 cursor-pointer select-none text-[0.8rem] leading-5 hover:bg-muted/50 ${
           isSelected ? 'bg-muted/70 text-foreground' : 'text-muted-foreground'
-        } ${entry.binary && !canOpen ? 'opacity-50' : ''} ${
+        }  ${
           isDropTarget ? 'bg-primary/15 ring-1 ring-primary/40' : ''
         } ${isDragSource ? 'opacity-50' : ''}`}
         style={{ paddingLeft: depth * 16 + 8 }}

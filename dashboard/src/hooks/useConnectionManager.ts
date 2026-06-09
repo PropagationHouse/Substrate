@@ -10,6 +10,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useGateway, saveConfig } from '@/contexts/GatewayContext';
 import { getSessionToken } from '@/features/auth/useAuth';
+import { isCapacitor, getServerUrl } from '@/lib/apiBase';
 
 export interface ConnectionManagerState {
   dialogOpen: boolean;
@@ -57,6 +58,21 @@ export function useConnectionManager(): ConnectionManagerState {
     let authChecked = false;
     let authNoPassword = false;
 
+    // On Capacitor with no server URL configured, don't try to connect at all.
+    // The app runs standalone until the user pairs with a server.
+    const capacitor = isCapacitor();
+    const serverUrl = getServerUrl();
+    if (capacitor && !serverUrl) {
+      console.debug('[useConnectionManager] Capacitor standalone mode — no server configured');
+      return () => {};
+    }
+
+    // Build the WS URL: use configured server URL on Capacitor, otherwise same-origin
+    const wsTarget = serverUrl
+      ? `${serverUrl.replace(/^http/, 'ws')}/ws`
+      : LOCAL_WS;
+    let capacitorRetries = 0;
+
     // Check once whether the server requires auth at all
     fetch('/api/auth/status').then(r => r.json()).then(d => {
       authNoPassword = !d.configured || !d.authEnabled;
@@ -76,17 +92,24 @@ export function useConnectionManager(): ConnectionManagerState {
       if (!token && !authNoPassword) {
         return;
       }
-      console.debug('[useConnectionManager] attempting connect…', { hasToken: !!token, authNoPassword, state });
+      console.debug('[useConnectionManager] attempting connect…', { hasToken: !!token, authNoPassword, state, wsTarget });
       busy = true;
       try {
-        saveConfig(LOCAL_WS, token);
-        await connectRef.current(LOCAL_WS, token);
+        saveConfig(wsTarget, token);
+        await connectRef.current(wsTarget, token);
         console.debug('[useConnectionManager] connected successfully');
         setDialogOpen(false);
         if (id) { clearInterval(id); id = null; }
       } catch (e) {
         console.debug('[useConnectionManager] connect failed:', e);
-        // retry on next tick
+        // On Capacitor, stop retrying after a few failures to avoid battery drain
+        if (capacitor) {
+          capacitorRetries++;
+          if (capacitorRetries >= 5) {
+            console.debug('[useConnectionManager] Capacitor: stopping reconnect after 5 attempts');
+            if (id) { clearInterval(id); id = null; }
+          }
+        }
       } finally {
         busy = false;
       }

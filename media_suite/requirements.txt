@@ -1,0 +1,13 @@
+Flask==3.0.0
+Flask-SQLAlchemy==3.1.1
+Flask-Limiter==3.5.0
+Flask-SocketIO==5.3.6
+python-socketio==5.11.0
+python-engineio==4.9.0
+python-dotenv==1.0.0
+google-generativeai>=0.8.0
+feedparser==6.0.10
+beautifulsoup4==4.12.2
+requests==2.31.0
+lxml==4.9.3
+gunicorn==21.2.0

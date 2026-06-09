@@ -67,6 +67,9 @@ conversation_history.json
 *.direct_fix_bak
 *.weather_bak
 
+# Test scripts (workspace)
+workspace/chess_game/_test_final.py
+
 # Temp / debug / cruft
 temp/
 rss_fetch.py
@@ -113,6 +116,24 @@ config.json
 
 # Binaries
 *.exe
+*.apk
+
+# Android / Capacitor (APK is a separate product)
+dashboard/android/
+
+# Media Suite runtime data (instance DB, stroke data)
+media_suite/instance/
+media_suite/data/
+media_suite/*.db
+media_suite/.env
+media_suite/flask_stderr.log
+media_suite/package-lock.json
+media_suite/node_modules/
+
+# Temp fix scripts
+fix_media_suite.py
+fix_save_error.py
+gedcom_py_files.txt
 
 # Legacy / duplicate
 python_scripts/

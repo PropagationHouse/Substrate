@@ -1,5 +1,6 @@
 import { useRef, useCallback, useState, useEffect } from 'react';
 import type { GatewayMessage, GatewayEvent, GatewayResponse } from '@/types';
+import { getServerUrl } from '@/lib/apiBase';
 
 type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'reconnecting';
 
@@ -130,8 +131,16 @@ export function useWebSocket(): UseWebSocketReturn {
       try {
         // Connect to Substrate's /ws gateway via Vite proxy.
         // The Vite dev server proxies /ws to Substrate's backend.
-        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${wsProtocol}//${window.location.host}/ws`;
+        const serverUrl = getServerUrl();
+        let wsUrl: string;
+        if (serverUrl) {
+          const parsed = new URL(serverUrl);
+          const wsProtocol = parsed.protocol === 'https:' ? 'wss:' : 'ws:';
+          wsUrl = `${wsProtocol}//${parsed.host}/ws`;
+        } else {
+          const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+          wsUrl = `${wsProtocol}//${window.location.host}/ws`;
+        }
         console.debug('[WS] Connecting to', wsUrl, 'token-length=', token?.length ?? 0);
         ws = new WebSocket(wsUrl);
       } catch (e: unknown) {

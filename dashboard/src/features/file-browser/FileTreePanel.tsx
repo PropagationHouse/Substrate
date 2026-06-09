@@ -6,7 +6,7 @@
  */
 
 import { useRef, useState, useCallback, useEffect } from 'react';
-import { PanelLeftClose, RefreshCw, Pencil, Trash2, RotateCcw, X } from 'lucide-react';
+import { PanelLeftClose, RefreshCw, Pencil, Trash2, RotateCcw, X, FolderPlus } from 'lucide-react';
 import { FileTreeNode } from './FileTreeNode';
 import { useFileTree } from './hooks/useFileTree';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
@@ -658,6 +658,42 @@ export function FileTreePanel({
     void runMove(source.path, '');
   }, [canDropToTarget, runMove, visibleDragSource]);
 
+  const createFolder = useCallback(async () => {
+    // Determine parent: if a directory is selected, create inside it; otherwise root
+    let parentDir = '';
+    if (selectedPath) {
+      const selEntry = entries.find((e) => e.path === selectedPath);
+      if (selEntry?.type === 'directory') {
+        parentDir = selEntry.path;
+      } else if (selectedPath.includes('/')) {
+        parentDir = getParentDir(selectedPath);
+      }
+    }
+    try {
+      const result = await postFileOp<{ ok: boolean; path: string; error?: string }>('/api/files/mkdir', {
+        parentDir,
+        name: 'New Folder',
+      });
+      refresh(workspaceAgentId);
+      if (parentDir && !expandedPaths.has(parentDir)) {
+        toggleDirectory(parentDir);
+      }
+      selectFile(result.path, workspaceAgentId);
+      // Immediately start renaming the new folder
+      renameSessionIdRef.current += 1;
+      setRenameState({
+        agentId: workspaceAgentId,
+        sessionId: renameSessionIdRef.current,
+        path: result.path,
+        value: 'New Folder',
+      });
+      showToastForAgent(workspaceAgentId, { type: 'success', message: 'Created folder' }, 2000);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to create folder';
+      showToastForAgent(workspaceAgentId, { type: 'error', message }, 4500);
+    }
+  }, [entries, expandedPaths, postFileOp, refresh, selectFile, selectedPath, showToastForAgent, toggleDirectory, workspaceAgentId]);
+
   // Collapsed state - hide the panel and let the chat header host the reopen control.
   if (collapsed) {
     return null;
@@ -669,6 +705,7 @@ export function FileTreePanel({
   const showRestore = menuInTrash;
   const showRename = Boolean(menuEntry && menuPath !== '.trash');
   const showTrashAction = Boolean(menuEntry && !menuPath.startsWith('.trash') && menuPath !== '.trash');
+  const showNewFolder = Boolean(menuEntry && menuEntry.type === 'directory' && !menuInTrash);
 
   return (
     <div
@@ -700,6 +737,14 @@ export function FileTreePanel({
             {workspaceInfo?.isCustomWorkspace ? workspaceInfo.rootPath : 'Workspace'}
           </span>
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => { void createFolder(); }}
+              className="shell-icon-button size-10 px-0"
+              title="New Folder"
+              aria-label="New Folder"
+            >
+              <FolderPlus size={16} />
+            </button>
             <button
               onClick={() => refresh(workspaceAgentId)}
               className="shell-icon-button size-10 px-0"
@@ -791,6 +836,43 @@ export function FileTreePanel({
             </button>
           )}
 
+          {showNewFolder && (
+            <button
+              className="w-full px-3 py-1.5 text-left text-xs text-foreground hover:bg-muted/60 flex items-center gap-2"
+              onClick={() => {
+                setContextMenu(null);
+                void (async () => {
+                  try {
+                    const parentDir = menuEntry.path;
+                    const result = await postFileOp<{ ok: boolean; path: string; error?: string }>('/api/files/mkdir', {
+                      parentDir,
+                      name: 'New Folder',
+                    });
+                    refresh(workspaceAgentId);
+                    if (!expandedPaths.has(parentDir)) {
+                      toggleDirectory(parentDir);
+                    }
+                    selectFile(result.path, workspaceAgentId);
+                    renameSessionIdRef.current += 1;
+                    setRenameState({
+                      agentId: workspaceAgentId,
+                      sessionId: renameSessionIdRef.current,
+                      path: result.path,
+                      value: 'New Folder',
+                    });
+                    showToastForAgent(workspaceAgentId, { type: 'success', message: 'Created folder' }, 2000);
+                  } catch (err) {
+                    const message = err instanceof Error ? err.message : 'Failed to create folder';
+                    showToastForAgent(workspaceAgentId, { type: 'error', message }, 4500);
+                  }
+                })();
+              }}
+            >
+              <FolderPlus size={12} />
+              New Folder
+            </button>
+          )}
+
           {showRename && (
             <button
               className="w-full px-3 py-1.5 text-left text-xs text-foreground hover:bg-muted/60 flex items-center gap-2"
@@ -811,7 +893,7 @@ export function FileTreePanel({
             </button>
           )}
 
-          {!showRestore && !showRename && !showTrashAction && (
+          {!showRestore && !showNewFolder && !showRename && !showTrashAction && (
             <div className="px-3 py-1.5 text-xs text-muted-foreground">
               No actions
             </div>

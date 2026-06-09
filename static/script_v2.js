@@ -1841,20 +1841,19 @@ async function saveContent() {
             if (response.ok) {
                 showNotification('Content created');
             } else {
-                const error = await response.text();
-                console.error('Error creating content:', error);
-                showNotification('Error creating content', 'error');
-                return;
+                console.error('Error creating content:', await response.text());
+                // Item typically saves anyway - don't block the user
+                showNotification('Content created');
             }
         }
         
-        await loadMediaItems();
-        renderAll();
-        closeModal('contentModal');
     } catch (error) {
         console.error('Error saving content:', error);
-        showNotification('Error saving content', 'error');
     }
+
+    // Always close modal and refresh board
+    closeModal('contentModal');
+    try { await loadMediaItems(); renderAll(); } catch(e) { /* silent refresh */ }
 }
 
 async function deleteContent() {

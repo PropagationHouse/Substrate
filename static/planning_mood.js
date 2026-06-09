@@ -212,6 +212,90 @@ function initDrawCanvas() {
     drawCanvas.addEventListener('pointerup', stopDrawing);
     drawCanvas.addEventListener('pointerleave', stopDrawing);
     drawCanvas.style.touchAction = 'none';
+
+    // -- Palm rejection state --
+    moodBoardState._activeStylusId = null;
+
+    // -- Multi-finger tap gestures: 2-finger = undo, 3-finger = redo --
+    var _tapFingerCount = 0;
+    var _tapTimer = null;
+    var _tapMoved = false;
+    var _tapStartPositions = [];
+
+    drawCanvas.addEventListener('touchstart', function(e) {
+        if (!moodBoardState.drawMode) return;
+        _tapFingerCount = e.touches.length;
+        _tapMoved = false;
+        _tapStartPositions = Array.from(e.touches).map(function(t) { return { x: t.clientX, y: t.clientY }; });
+        if (_tapTimer) clearTimeout(_tapTimer);
+    }, { passive: true });
+
+    drawCanvas.addEventListener('touchmove', function(e) {
+        if (!moodBoardState.drawMode) return;
+        for (var i = 0; i < e.touches.length && i < _tapStartPositions.length; i++) {
+            var dx = e.touches[i].clientX - _tapStartPositions[i].x;
+            var dy = e.touches[i].clientY - _tapStartPositions[i].y;
+            if (Math.abs(dx) > 15 || Math.abs(dy) > 15) { _tapMoved = true; break; }
+        }
+    }, { passive: true });
+
+    drawCanvas.addEventListener('touchend', function(e) {
+        if (!moodBoardState.drawMode || _tapMoved) return;
+        if (e.touches.length === 0) {
+            var count = _tapFingerCount;
+            _tapTimer = setTimeout(function() {
+                if (count === 2) { drawUndo(); }
+                else if (count === 3) { drawRedo(); }
+                _tapFingerCount = 0;
+            }, 80);
+        }
+    }, { passive: true });
+
+    // -- Pinch-to-zoom for selected images --
+    var _imgPinchActive = false;
+    var _imgPinchStartDist = 0;
+    var _imgPinchStartScales = {};
+    var _moodBoardEl = document.getElementById('moodBoard');
+
+    if (_moodBoardEl) {
+        _moodBoardEl.addEventListener('touchstart', function(e) {
+            if (moodBoardState.drawMode) return;
+            if (e.touches.length === 2 && moodBoardState.selectedImages.size > 0) {
+                var dx = e.touches[0].clientX - e.touches[1].clientX;
+                var dy = e.touches[0].clientY - e.touches[1].clientY;
+                _imgPinchStartDist = Math.hypot(dx, dy);
+                _imgPinchActive = true;
+                _imgPinchStartScales = {};
+                moodBoardState.selectedImages.forEach(function(sid) {
+                    var imgData = state.moodBoardImages.find(function(i) { return i.id === sid; });
+                    if (imgData) _imgPinchStartScales[sid] = imgData.scale || 1;
+                });
+            }
+        }, { passive: true });
+
+        _moodBoardEl.addEventListener('touchmove', function(e) {
+            if (!_imgPinchActive || e.touches.length !== 2) return;
+            var dx = e.touches[0].clientX - e.touches[1].clientX;
+            var dy = e.touches[0].clientY - e.touches[1].clientY;
+            var dist = Math.hypot(dx, dy);
+            var ratio = dist / _imgPinchStartDist;
+            moodBoardState.selectedImages.forEach(function(sid) {
+                var imgData = state.moodBoardImages.find(function(i) { return i.id === sid; });
+                if (!imgData) return;
+                var startScale = _imgPinchStartScales[sid] || 1;
+                imgData.scale = Math.max(0.1, Math.min(5, startScale * ratio));
+                var el = document.querySelector('[data-id="' + sid + '"]');
+                if (el) el.style.transform = 'rotate(' + (imgData.rotation || 0) + 'deg) scale(' + imgData.scale + ')';
+            });
+        }, { passive: true });
+
+        _moodBoardEl.addEventListener('touchend', function(e) {
+            if (_imgPinchActive && e.touches.length < 2) {
+                _imgPinchActive = false;
+                saveMoodBoardState();
+            }
+        }, { passive: true });
+    }
 }
 
 function toggleDrawMode() {
@@ -292,6 +376,13 @@ function startDrawing(e) {
     e.preventDefault();
     e.stopPropagation();
 
+    // Palm rejection: if a stylus is active, ignore touch input
+    if (e.pointerType === 'pen') {
+        moodBoardState._activeStylusId = e.pointerId;
+    } else if (e.pointerType === 'touch' && moodBoardState._activeStylusId !== null) {
+        return; // Stylus active - reject palm touch
+    }
+
     // Handle selection tool mode
     if (moodBoardState.activeTool === 'select') {
         startSelection(e);
@@ -322,6 +413,8 @@ function startDrawing(e) {
 
 function draw(e) {
     if (!moodBoardState.drawMode) return;
+    // Palm rejection: ignore touch while stylus is active
+    if (e.pointerType === 'touch' && moodBoardState._activeStylusId !== null) return;
     // Handle selection tool drag
     if (moodBoardState.activeTool === 'select' && moodBoardState.isSelecting) {
         dragSelection(e);
@@ -349,7 +442,11 @@ function draw(e) {
     moodBoardState.currentPressure = pressure;
 }
 
-function stopDrawing() {
+function stopDrawing(e) {
+    // Clear stylus tracking when pen lifts
+    if (e && e.pointerType === 'pen') {
+        moodBoardState._activeStylusId = null;
+    }
     // Handle selection tool release
     if (moodBoardState.activeTool === 'select' && moodBoardState.isSelecting) {
         endSelection();
@@ -630,9 +727,11 @@ function renderFullStroke(ctx, stroke, zoom, panX, panY) {
 
     ctx.beginPath();
 
-    // Rounded start cap
+    // Rounded start cap - smaller radius to avoid visible dot artifact
     const startW = widths[0] / 2;
-    ctx.arc(screenPts[0].x, screenPts[0].y, startW, 0, Math.PI * 2);
+    if (screenPts.length > 3 && startW > 0.8) {
+        ctx.arc(screenPts[0].x, screenPts[0].y, Math.min(startW * 0.6, startW), 0, Math.PI * 2);
+    }
 
     // Left side (forward) using bezier curves through midpoints
     ctx.moveTo(leftSide[0].x, leftSide[0].y);
@@ -2553,8 +2652,32 @@ function setBrushTaper(val) {
     if (label) label.textContent = val;
 }
 
+function ensureSelectionElements() {
+    var moodBoard = document.getElementById('moodBoard');
+    if (!moodBoard) return;
+    if (!document.getElementById('drawSelectionOverlay')) {
+        var overlay = document.createElement('div');
+        overlay.id = 'drawSelectionOverlay';
+        overlay.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:60;display:none;';
+        moodBoard.appendChild(overlay);
+    }
+    if (!document.getElementById('drawSelectionActions')) {
+        var actions = document.createElement('div');
+        actions.id = 'drawSelectionActions';
+        actions.style.cssText = 'position:absolute;display:none;flex-direction:row;gap:6px;z-index:70;padding:4px;background:rgba(0,0,0,0.75);border:1px solid rgba(255,255,255,0.15);border-radius:8px;backdrop-filter:blur(8px);';
+        actions.innerHTML = 
+            '<button class="draw-tool-btn small" onclick="exportSelectionPNG(true)" title="Save as transparent PNG" style="font-size:0.7rem;padding:4px 8px;">PNG (transparent)</button>' +
+            '<button class="draw-tool-btn small" onclick="exportSelectionPNG(false)" title="Save PNG with background" style="font-size:0.7rem;padding:4px 8px;">PNG (bg)</button>' +
+            '<button class="draw-tool-btn small" onclick="selectionToWorkbenchImage()" title="Add to workbench" style="font-size:0.7rem;padding:4px 8px;">To Workbench</button>' +
+            '<button class="draw-tool-btn small" onclick="moveSelectedStrokes()" title="Move selected strokes" style="font-size:0.7rem;padding:4px 8px;">Move</button>' +
+            '<button class="draw-tool-btn small" onclick="cancelSelection()" title="Cancel" style="font-size:0.7rem;padding:4px 8px;">Cancel</button>';
+        moodBoard.appendChild(actions);
+    }
+}
+
 function setDrawTool(tool) {
     moodBoardState.activeTool = tool;
+    ensureSelectionElements();
     // Update UI: deactivate brush buttons when in select mode
     document.querySelectorAll('.draw-tool-btn[data-brush]').forEach(b => {
         b.classList.toggle('active', tool === 'draw' && b.dataset.brush === moodBoardState.brushType);
@@ -2564,11 +2687,16 @@ function setDrawTool(tool) {
 
     // Show/hide selection overlay
     const overlay = document.getElementById('drawSelectionOverlay');
-    if (overlay) overlay.style.display = tool === 'select' ? 'block' : 'none';
+    if (overlay) {
+        overlay.style.display = tool === 'select' ? 'block' : 'none';
+        overlay.style.pointerEvents = tool === 'select' ? 'auto' : 'none';
+    }
 
     // Update cursor
     const drawCanvas = moodBoardState.drawCanvas;
     if (drawCanvas) drawCanvas.style.cursor = tool === 'select' ? 'crosshair' : 'crosshair';
+
+    if (tool !== 'select') cancelSelection();
 }
 
 // Override setBrushType to also set tool back to draw
@@ -2677,6 +2805,7 @@ function mergeDrawLayers() {
 // ============================================================
 
 function startSelection(e) {
+    ensureSelectionElements();
     const rect = moodBoardState.drawCanvas.getBoundingClientRect();
     moodBoardState.isSelecting = true;
     moodBoardState.selStartX = e.clientX - rect.left;
@@ -2722,6 +2851,8 @@ function endSelection() {
         cancelSelection();
         return;
     }
+    ensureSelectionElements();
+    var hits = getStrokesInSelection();
     // Show action buttons near selection
     const r = moodBoardState.selectionRect;
     const actions = document.getElementById('drawSelectionActions');
@@ -2729,6 +2860,15 @@ function endSelection() {
         actions.style.display = 'flex';
         actions.style.left = r.x + 'px';
         actions.style.top = (r.y + r.h + 8) + 'px';
+        // Show stroke count so user knows what's selected
+        var countEl = actions.querySelector('.sel-stroke-count');
+        if (!countEl) {
+            countEl = document.createElement('span');
+            countEl.className = 'sel-stroke-count';
+            countEl.style.cssText = 'font-size:0.65rem;color:rgba(255,255,255,0.5);padding:4px 4px;white-space:nowrap;';
+            actions.insertBefore(countEl, actions.firstChild);
+        }
+        countEl.textContent = hits.length + ' stroke' + (hits.length !== 1 ? 's' : '');
     }
 }
 
@@ -2742,6 +2882,143 @@ function cancelSelection() {
     }
     const actions = document.getElementById('drawSelectionActions');
     if (actions) actions.style.display = 'none';
+}
+
+// ─── Move/resize strokes within selection ───
+
+function getStrokesInSelection() {
+    var sel = moodBoardState.selectionRect;
+    if (!sel) return [];
+    var zoom = moodBoardState.zoom;
+    var panX = moodBoardState.panX;
+    var panY = moodBoardState.panY;
+    var worldX = (sel.x - panX) / zoom;
+    var worldY = (sel.y - panY) / zoom;
+    var worldW = sel.w / zoom;
+    var worldH = sel.h / zoom;
+    var result = [];
+    var layer = getActiveLayer();
+    if (!layer) return result;
+    layer.strokes.forEach(function(stroke, idx) {
+        var inside = stroke.points.some(function(p) {
+            return p.x >= worldX && p.x <= worldX + worldW &&
+                   p.y >= worldY && p.y <= worldY + worldH;
+        });
+        if (inside) result.push({ stroke: stroke, index: idx });
+    });
+    return result;
+}
+
+function moveSelectedStrokes() {
+    var sel = moodBoardState.selectionRect;
+    if (!sel) { showNotification('No selection', 'error'); return; }
+    var hits = getStrokesInSelection();
+    if (hits.length === 0) { showNotification('No strokes in selection', 'error'); return; }
+
+    // Enter move mode — track drag on the overlay
+    moodBoardState._moveStrokes = hits.map(function(h) { return h.stroke; });
+    moodBoardState._moveActive = true;
+    moodBoardState._moveStartX = null;
+    moodBoardState._moveStartY = null;
+
+    pushDrawUndo();
+
+    var overlay = document.getElementById('drawSelectionOverlay');
+    if (overlay) {
+        overlay.style.pointerEvents = 'auto';
+        overlay.style.cursor = 'move';
+    }
+
+    var selRect = overlay ? overlay.querySelector('.draw-selection-rect') : null;
+    if (selRect) selRect.style.cursor = 'move';
+
+    var actions = document.getElementById('drawSelectionActions');
+    if (actions) actions.style.display = 'none';
+
+    showNotification('Drag to move selected strokes, tap to confirm');
+
+    function onMoveDown(e) {
+        moodBoardState._moveStartX = e.clientX;
+        moodBoardState._moveStartY = e.clientY;
+        e.preventDefault();
+    }
+
+    function onMoveMove(e) {
+        if (moodBoardState._moveStartX === null) return;
+        var dx = (e.clientX - moodBoardState._moveStartX) / moodBoardState.zoom;
+        var dy = (e.clientY - moodBoardState._moveStartY) / moodBoardState.zoom;
+        moodBoardState._moveStrokes.forEach(function(stroke) {
+            stroke.points.forEach(function(p) { p.x += dx; p.y += dy; });
+        });
+        moodBoardState._moveStartX = e.clientX;
+        moodBoardState._moveStartY = e.clientY;
+        // Move selection rect too
+        if (moodBoardState.selectionRect) {
+            moodBoardState.selectionRect.x += dx * moodBoardState.zoom;
+            moodBoardState.selectionRect.y += dy * moodBoardState.zoom;
+            if (selRect) {
+                selRect.style.left = moodBoardState.selectionRect.x + 'px';
+                selRect.style.top = moodBoardState.selectionRect.y + 'px';
+            }
+        }
+        redrawAllStrokes();
+    }
+
+    function onMoveUp(e) {
+        if (moodBoardState._moveStartX === null) {
+            // Tap to confirm (no drag started)
+            finishMove();
+            return;
+        }
+        moodBoardState._moveStartX = null;
+        moodBoardState._moveStartY = null;
+        finishMove();
+    }
+
+    function finishMove() {
+        moodBoardState._moveActive = false;
+        moodBoardState._moveStrokes = null;
+        if (overlay) {
+            overlay.removeEventListener('pointerdown', onMoveDown);
+            overlay.removeEventListener('pointermove', onMoveMove);
+            overlay.removeEventListener('pointerup', onMoveUp);
+            overlay.style.cursor = 'crosshair';
+        }
+        cancelSelection();
+        redrawAllStrokes();
+        saveStrokesToBackend();
+        showNotification('Strokes moved');
+    }
+
+    if (overlay) {
+        overlay.addEventListener('pointerdown', onMoveDown);
+        overlay.addEventListener('pointermove', onMoveMove);
+        overlay.addEventListener('pointerup', onMoveUp);
+    }
+}
+
+function resizeSelectedStrokes(scaleFactor) {
+    var sel = moodBoardState.selectionRect;
+    if (!sel) return;
+    var hits = getStrokesInSelection();
+    if (hits.length === 0) return;
+    pushDrawUndo();
+    var zoom = moodBoardState.zoom;
+    var panX = moodBoardState.panX;
+    var panY = moodBoardState.panY;
+    // Center of selection in world coords
+    var cx = (sel.x + sel.w / 2 - panX) / zoom;
+    var cy = (sel.y + sel.h / 2 - panY) / zoom;
+    hits.forEach(function(h) {
+        h.stroke.points.forEach(function(p) {
+            p.x = cx + (p.x - cx) * scaleFactor;
+            p.y = cy + (p.y - cy) * scaleFactor;
+        });
+        h.stroke.brushSize = h.stroke.brushSize * scaleFactor;
+    });
+    redrawAllStrokes();
+    saveStrokesToBackend();
+    showNotification('Strokes resized');
 }
 
 // exportSelectionPNG and selectionToWorkbenchImage are defined in the SELECTION EXPORT section below
@@ -3002,6 +3279,9 @@ window.toggleLayerVisibility = toggleLayerVisibility;
 window.exportSelectionPNG = exportSelectionPNG;
 window.selectionToWorkbenchImage = selectionToWorkbenchImage;
 window.cancelSelection = cancelSelection;
+window.moveSelectedStrokes = moveSelectedStrokes;
+window.resizeSelectedStrokes = resizeSelectedStrokes;
+window.ensureSelectionElements = ensureSelectionElements;
 // Fresh canvas
 window.openFreshCanvas = openFreshCanvas;
 // Radial menu
@@ -3529,8 +3809,10 @@ function _fetchAndRedraw() {
 // SELECTION EXPORT — frame an area and export as PNG
 // ============================================================
 function exportSelectionPNG(transparent) {
+    // Default to transparent if not specified
+    if (transparent === undefined) transparent = true;
     const sel = moodBoardState.selectionRect;
-    if (!sel) { showNotification('No selection — draw a frame first', 'error'); return; }
+    if (!sel) { showNotification('No selection — use the Select tool to draw a frame first', 'error'); return; }
     const zoom = moodBoardState.zoom;
     const panX = moodBoardState.panX;
     const panY = moodBoardState.panY;

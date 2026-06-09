@@ -24,6 +24,9 @@ import {
   Film,
   Clock,
   Crown,
+  Server,
+  StickyNote,
+  Settings,
 } from 'lucide-react';
 import { useGateway } from '@/contexts/GatewayContext';
 import { useSessionContext } from '@/contexts/SessionContext';
@@ -39,9 +42,18 @@ import { FileEditorPanel } from '@/components/FileEditorPanel';
 import { ResearchPanel } from '@/components/ResearchPanel';
 import { FloatingWindow } from '@/components/FloatingWindow';
 import { KanbanBoard } from '@/components/KanbanBoard';
+import { NotesTab } from '@/features/workspace/tabs/NotesTab';
 import { CircuitsView } from '@/components/CircuitsView';
 import { AgentStatsTab } from '@/components/AgentStatsTab';
+import { GlassChess } from '@/components/GlassChess';
+import { SimulatedGlassBackdrop } from '@/components/SimulatedGlassBackdrop';
+import { BackgroundSettings, applyBackgroundSettings, loadBgImage } from '@/components/BackgroundSettings';
 import type { GatewayEvent } from '@/types';
+import { ServerSettings } from '@/components/ServerSettings';
+import { isCapacitor, getServerUrl } from '@/lib/apiBase';
+import { MobileSetupScreen, MobilePairingModal } from '@/components/MobilePairing';
+import { MobileLayout } from '@/components/mobile/MobileLayout';
+import { useIsPhone } from '@/hooks/useIsPhone';
 import '@/glass.css';
 
 interface AppProps {
@@ -402,6 +414,7 @@ export default function App({ onLogout }: AppProps) {
   } = useChat();
 
   useConnectionManager(); // auto-connect
+  const isPhone = useIsPhone();
 
   const workspaceAgentId = useMemo(
     () => getWorkspaceAgentId(currentSession),
@@ -592,6 +605,15 @@ export default function App({ onLogout }: AppProps) {
   const [tasksTab, setTasksTab] = useState<'board' | 'circuits'>('board');
   const [mediaSuiteOpen, setMediaSuiteOpen] = useState(false);
   const [chessOpen, setChessOpen] = useState(false);
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [bgSettingsOpen, setBgSettingsOpen] = useState(false);
+  const [serverSettingsOpen, setServerSettingsOpen] = useState(false);
+  const [mobilePairingOpen, setMobilePairingOpen] = useState(false);
+  const [mobileSetupDone, setMobileSetupDone] = useState(() => {
+    // Skip setup screen if we already have a server URL or aren't on Capacitor
+    if (!isCapacitor()) return true;
+    return !!getServerUrl();
+  });
   const [booted, setBooted] = useState(false);
 
   useEffect(() => {
@@ -599,11 +621,17 @@ export default function App({ onLogout }: AppProps) {
     if (savedOpacity) {
       document.documentElement.style.setProperty('--glass-bg', `rgba(15, 15, 25, ${savedOpacity})`);
     }
-    const savedBgGif = localStorage.getItem('substrate:bg-gif');
-    if (savedBgGif) {
-      document.documentElement.style.setProperty('--substrate-bg-image', `url(${savedBgGif})`);
-    }
+    // Apply background settings (color, blur, overlay) from localStorage
+    applyBackgroundSettings();
   }, []);
+
+  // Once main layout mounts, apply settings and load background image from server
+  useEffect(() => {
+    if (booted) {
+      applyBackgroundSettings();
+      loadBgImage();
+    }
+  }, [booted]);
 
   // Chat bridge: track which iframe sent a research-chat-request so we can stream responses back
   const researchChatSourceRef = useRef<Window | null>(null);
@@ -767,14 +795,30 @@ export default function App({ onLogout }: AppProps) {
   }, []);
 
   // Boot after first connection + load chat history
+  // On Capacitor: boot immediately (standalone mode), load history if/when connected
+  const historyLoadedRef = useRef(false);
   useEffect(() => {
-    if (connectionState === 'connected' && !booted) {
-      setBooted(true);
-      loadHistory();
-      // Tell clock widget that auth has passed
-      window.dispatchEvent(new Event('substrate:authenticated'));
+    if (connectionState === 'connected') {
+      if (!booted) setBooted(true);
+      if (!historyLoadedRef.current) {
+        historyLoadedRef.current = true;
+        loadHistory();
+        window.dispatchEvent(new Event('substrate:authenticated'));
+      }
     }
   }, [connectionState, booted, loadHistory]);
+
+  // Capacitor: always boot after a short timeout even without server connection
+  useEffect(() => {
+    if (!isCapacitor()) return;
+    const timer = setTimeout(() => {
+      if (!booted) {
+        setBooted(true);
+        console.debug('[App] Capacitor standalone boot — no server connection');
+      }
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [booted]);
 
   // Derive agent state
   const agentState = useMemo(() => {
@@ -791,6 +835,16 @@ export default function App({ onLogout }: AppProps) {
     return 'idle';
   }, [agentStatus, currentSession, isGenerating]);
 
+  // Dispatch emotion events so mobile widget + desktop clock_widget.js can show animations
+  useEffect(() => {
+    const emotion = isGenerating
+      ? (processingStage === 'thinking' ? 'searching' : 'speaking')
+      : 'idle';
+    window.dispatchEvent(new CustomEvent('substrate:agent-emotion', {
+      detail: { status: emotion, emotion }
+    }));
+  }, [isGenerating, processingStage]);
+
   const streamingText = useMemo(() => stream?.html || '', [stream]);
   const streamingRawText = useMemo(() => stream?.rawText || '', [stream]);
 
@@ -806,6 +860,16 @@ export default function App({ onLogout }: AppProps) {
       ? { variant: 'warning' as const, icon: Loader2, label: 'Reconnecting…' }
       : { variant: 'error' as const, icon: WifiOff, label: 'Disconnected' };
 
+  // Capacitor first launch: show pairing/setup screen
+  if (isCapacitor() && !mobileSetupDone) {
+    return (
+      <MobileSetupScreen
+        onSkip={() => setMobileSetupDone(true)}
+        onPaired={() => { setMobileSetupDone(true); window.location.reload(); }}
+      />
+    );
+  }
+
   // Loading state
   if (!booted) {
     return (
@@ -820,14 +884,67 @@ export default function App({ onLogout }: AppProps) {
               : 'Waiting for connection…'}
           </div>
           <Loader2 size={18} className="text-indigo-400/50 animate-spin" />
+
+          {/* Server settings button — essential for mobile/Capacitor first launch */}
+          <button
+            onClick={() => setServerSettingsOpen(true)}
+            className="mt-4 flex items-center gap-2 px-4 py-2 rounded-xl bg-white/[0.06] border border-white/[0.1] text-white/60 hover:text-white/80 hover:bg-white/[0.1] transition-all text-xs font-medium"
+          >
+            <Server size={14} />
+            Configure Server
+          </button>
+
         </div>
+        <ServerSettings open={serverSettingsOpen} onClose={() => setServerSettingsOpen(false)} />
       </div>
+    );
+  }
+
+  // ─── Phone Layout — minimal bottom-tab navigation ──────────────
+  if (isPhone) {
+    return (
+      <MobileLayout
+        messages={messages}
+        isStreaming={isGenerating}
+        streamingText={streamingText}
+        streamingRawText={streamingRawText}
+        processingStage={processingStage}
+        onSend={onChatSend}
+        agentName={agentName || 'Substrate'}
+        connectionState={connectionState}
+      />
     );
   }
 
   // ─── Main Layout — graph is the ONLY view ───────────────────────
   return (
     <div className="substrate-bg h-screen flex flex-col overflow-hidden relative" data-substrate-app style={{ zIndex: 1 }}>
+      {/* Background image layer — uses <img> to avoid CSS url() data URL issues */}
+      <img
+        id="substrate-bg-img"
+        alt=""
+        style={{
+          position: 'absolute',
+          inset: '-30px',
+          width: 'calc(100% + 60px)',
+          height: 'calc(100% + 60px)',
+          objectFit: 'cover',
+          objectPosition: 'center',
+          zIndex: 0,
+          pointerEvents: 'none',
+          display: 'none',
+        }}
+      />
+      {/* Dark overlay with adjustable opacity */}
+      <div id="substrate-bg-overlay" style={{
+        position: 'absolute',
+        inset: 0,
+        zIndex: 1,
+        background: '#0a0a1a',
+        opacity: 0.55,
+        pointerEvents: 'none',
+      }} />
+
       {/* Top Bar — minimal */}
       <header className="relative z-20 flex items-center justify-between px-5 py-2.5 border-b border-white/[0.04]">
         <div className="flex items-center gap-3">
@@ -915,6 +1032,21 @@ export default function App({ onLogout }: AppProps) {
             <Film size={15} />
           </button>
 
+          {/* Notes toggle */}
+          <button
+            onClick={() => setNotesOpen(o => !o)}
+            className={`
+              relative w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200
+              ${notesOpen
+                ? 'bg-purple-500/20 border border-purple-400/25 text-purple-300'
+                : 'bg-white/[0.04] border border-white/[0.06] text-white/40 hover:text-white/60 hover:bg-white/[0.06]'
+              }
+            `}
+            title="Notes"
+          >
+            <StickyNote size={15} />
+          </button>
+
           {/* Chess toggle */}
           <button
             onClick={() => setChessOpen(o => !o)}
@@ -943,6 +1075,30 @@ export default function App({ onLogout }: AppProps) {
             title="Tasks"
           >
             <LayoutGrid size={15} />
+          </button>
+
+          {/* Background settings */}
+          <button
+            onClick={() => setBgSettingsOpen(true)}
+            className={`
+              relative w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200
+              ${bgSettingsOpen
+                ? 'bg-pink-500/20 border border-pink-400/25 text-pink-300'
+                : 'bg-white/[0.04] border border-white/[0.06] text-white/40 hover:text-white/60 hover:bg-white/[0.06]'
+              }
+            `}
+            title="Settings"
+          >
+            <Settings size={15} />
+          </button>
+
+          {/* Mobile sync / server connection */}
+          <button
+            onClick={() => isCapacitor() ? setServerSettingsOpen(true) : setMobilePairingOpen(true)}
+            className="relative w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200 bg-white/[0.04] border border-white/[0.06] text-white/40 hover:text-white/60 hover:bg-white/[0.06]"
+            title={isCapacitor() ? 'Server Connection' : 'Mobile Sync'}
+          >
+            <Server size={15} />
           </button>
 
           {/* Chat toggle with hover flyout */}
@@ -1134,6 +1290,22 @@ export default function App({ onLogout }: AppProps) {
           </FloatingWindow>
         </div>
 
+        {/* Notes — Standalone FloatingWindow */}
+        <div className={notesOpen ? '' : 'hidden'}>
+          <FloatingWindow
+            id="notes-panel"
+            title="Notes"
+            titleIcon={<StickyNote size={13} className="text-purple-400" />}
+            defaultWidth={560}
+            defaultHeight={640}
+            minWidth={380}
+            minHeight={350}
+            onClose={() => setNotesOpen(false)}
+          >
+            <NotesTab />
+          </FloatingWindow>
+        </div>
+
         {/* Chat Day Preview Panel */}
         <div
           className={`
@@ -1302,7 +1474,7 @@ export default function App({ onLogout }: AppProps) {
           </FloatingWindow>
         </div>
 
-        {/* Media Suite — iframe FloatingWindow */}
+        {/* Media Suite / Workbench — iframe with glassmorphic blur layer */}
         <div className={mediaSuiteOpen ? '' : 'hidden'}>
           <FloatingWindow
             id="media-suite"
@@ -1314,17 +1486,25 @@ export default function App({ onLogout }: AppProps) {
             minHeight={400}
             onClose={() => setMediaSuiteOpen(false)}
           >
-            <iframe
-              src={`http://${window.location.hostname}:5000`}
-              className="w-full h-full border-none"
-              allow="clipboard-write; fullscreen"
-              allowFullScreen
-              style={{ background: '#1a1a2e' }}
-            />
+            <div className="relative w-full h-full">
+              <SimulatedGlassBackdrop />
+              <iframe
+                src={(() => {
+                  const srv = getServerUrl();
+                  return srv ? `${srv}/media-suite/` : '/media-suite/';
+                })()}
+                className="relative w-full h-full border-none"
+                style={{ zIndex: 1, background: 'transparent' }}
+                allow="clipboard-write; fullscreen"
+                allowFullScreen
+                // @ts-ignore
+                allowtransparency="true"
+              />
+            </div>
           </FloatingWindow>
         </div>
 
-        {/* Glass Chess — iframe FloatingWindow */}
+        {/* Glass Chess — Native Shadow DOM (true glassmorphic transparency) */}
         <div className={chessOpen ? '' : 'hidden'}>
           <FloatingWindow
             id="glass-chess"
@@ -1336,12 +1516,7 @@ export default function App({ onLogout }: AppProps) {
             minHeight={480}
             onClose={() => setChessOpen(false)}
           >
-            <iframe
-              src={`http://${window.location.hostname}:5050`}
-              className="w-full h-full border-none"
-              allow="clipboard-write"
-              style={{ background: '#1a1a2e' }}
-            />
+            <GlassChess />
           </FloatingWindow>
         </div>
 
@@ -1385,6 +1560,13 @@ export default function App({ onLogout }: AppProps) {
           'text-red-400/50'
         }`}>{connectionState}</span>
       </footer>
+
+      {/* Background settings modal */}
+      <BackgroundSettings open={bgSettingsOpen} onClose={() => setBgSettingsOpen(false)} />
+      {/* Server connection settings modal */}
+      <ServerSettings open={serverSettingsOpen} onClose={() => setServerSettingsOpen(false)} />
+      {/* Mobile pairing modal */}
+      <MobilePairingModal open={mobilePairingOpen} onClose={() => setMobilePairingOpen(false)} />
     </div>
   );
 }

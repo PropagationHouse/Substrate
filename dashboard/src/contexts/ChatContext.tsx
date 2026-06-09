@@ -39,6 +39,7 @@ import {
   updateHighestSeq,
 } from '@/features/chat/operations';
 import { generateMsgId } from '@/features/chat/types';
+import { renderMarkdown } from '@/utils/helpers';
 import type { ImageAttachment, ChatMsg } from '@/features/chat/types';
 import type { RecoveryReason, RunState } from '@/features/chat/operations';
 
@@ -251,6 +252,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   // broadcast_raw() sends the raw send_message_to_frontend payloads over the
   // already-authenticated gateway WS as 'substrate_raw' events.
   const rawStreamBufRef = useRef('');
+  const thinkingBufRef = useRef('');
   const rawRunIdRef = useRef<string | null>(null);
 
   // ─── Subscribe to streaming events ────────────────────────────────────────
@@ -264,10 +266,43 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         const rawType = raw.type as string | undefined;
         const result = raw.result as string | undefined;
 
+        // Voice audio — play Kokoro TTS audio on this client
+        if (rawType === 'voice-audio' && typeof raw.url === 'string') {
+          window.dispatchEvent(new CustomEvent('substrate:voice-audio', { detail: { url: raw.url } }));
+          return;
+        }
+
         // Skip non-chat noise
         if (raw.suppress_chat) return;
         if (rawType === 'config' || rawType === 'config_update' || rawType === 'avatar' || rawType === 'avatar_emotions') return;
-        if (rawType === 'thinking_start' || rawType === 'thinking_delta' || rawType === 'thinking_end') return;
+        // ── Accumulate thinking content for the collapsible thinking bubble ──
+        if (rawType === 'thinking_start') {
+          thinkingBufRef.current = '';
+          return;
+        }
+        if (rawType === 'thinking_delta') {
+          const chunk = (raw.content as string) || '';
+          if (chunk) thinkingBufRef.current += chunk;
+          return;
+        }
+        if (rawType === 'thinking_end') {
+          const thinkingText = thinkingBufRef.current.trim();
+          thinkingBufRef.current = '';
+          if (thinkingText) {
+            const thinkingMsg: ChatMsg = {
+              msgId: generateMsgId(),
+              role: 'assistant',
+              html: renderMarkdown(thinkingText),
+              rawText: thinkingText,
+              timestamp: new Date(),
+              isThinking: true,
+              thinkingDurationMs: streamHook.getThinkingDuration(rawRunIdRef.current || '') ?? undefined,
+            };
+            msgHook.setAllMessages(prev => [...prev, thinkingMsg]);
+            msgHook.setMessages((prev: ChatMsg[]) => [...prev, thinkingMsg]);
+          }
+          return;
+        }
         if (typeof result === 'string' && (result.startsWith('[SILENT]') || result === 'CIRCUITS_OK' || result === 'HEARTBEAT_OK')) return;
         if (!status && !rawType) return;
 
@@ -316,6 +351,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           streamHook.setProcessingStage('thinking');
           streamHook.setLastEventTimestamp(Date.now());
           rawStreamBufRef.current = '';
+          thinkingBufRef.current = '';
           if (!rawRunIdRef.current) rawRunIdRef.current = 'raw-' + Date.now();
           streamHook.startThinking(rawRunIdRef.current);
           return;

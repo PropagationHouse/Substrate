@@ -1,0 +1,142 @@
+<!-- Planning Tool Modal -->
+<div class="modal" id="planningModal">
+    <div class="modal-overlay"></div>
+    <div class="modal-container modal-large">
+        <div class="modal-header">
+            <h2 id="planningModalTitle">Planning Tool</h2>
+            <button class="close-btn" id="closePlanningBtn">✕</button>
+        </div>
+        
+        <div class="modal-body">
+            <!-- Planning Content Area (shown by default) -->
+            <div class="planning-content" id="planningContent">
+                <!-- Shot List -->
+                <div class="planning-section" id="shotlistSection" style="display: none;">
+                    <div class="shot-list">
+                        <div class="shot-list-header">
+                            <h3>Shot List</h3>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <button class="btn-ghost btn-sm" id="aiAssistShotlistBtn">
+                                    <span>✨</span> AI Assist
+                                </button>
+                                <button class="btn-ghost" onclick="addShot()">+ Add Shot</button>
+                            </div>
+                        </div>
+                        <div id="shotListItems"></div>
+                    </div>
+                </div>
+                
+                <!-- Storyboard -->
+                <div class="planning-section" id="storyboardSection" style="display: none;">
+                    <div class="storyboard">
+                        <div class="storyboard-header">
+                            <h3>Storyboard</h3>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <button class="btn-ghost btn-sm" id="aiAssistStoryboardBtn">
+                                    <span>✨</span> AI Assist
+                                </button>
+                                <button class="btn-ghost" onclick="addFrame()">+ Add Frame</button>
+                            </div>
+                        </div>
+                        <div class="storyboard-grid" id="storyboardFrames"></div>
+                    </div>
+                </div>
+                
+                <!-- Script -->
+                <div class="planning-section" id="scriptSection" style="display: none;">
+                    <div class="script-editor">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                            <h3>Script</h3>
+                            <button class="btn-ghost btn-sm" id="aiAssistScriptBtn">
+                                <span>✨</span> AI Assist
+                            </button>
+                        </div>
+                        <textarea id="scriptContent" class="premium-textarea" rows="15" placeholder="Write your script here..."></textarea>
+                        <div class="script-meta">
+                            <span id="wordCount">0 words</span>
+                            <span id="readTime">~0 sec read time</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Caption -->
+                <div class="planning-section" id="captionSection" style="display: none;">
+                    <div class="caption-editor">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                            <h3>Caption</h3>
+                            <button class="btn-ghost btn-sm" id="aiAssistCaptionBtn">
+                                <span>✨</span> AI Assist
+                            </button>
+                        </div>
+                        <textarea id="captionContent" class="premium-textarea" rows="8" placeholder="Write your caption..."></textarea>
+                        <div class="caption-meta">
+                            <span id="charCount">0 characters</span>
+                            <div class="caption-suggestions">
+                                <button class="btn-ghost btn-sm" onclick="addHashtags()">+ Add Hashtags</button>
+                                <button class="btn-ghost btn-sm" onclick="addEmojis()">+ Add Emojis</button>
+                                <button class="btn-ghost btn-sm" onclick="addCTA()">+ Add CTA</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Mood Board Link -->
+                <div class="planning-section" id="moodboardSection" style="display: none;">
+                    <div class="moodboard-link">
+                        <h3>Mood Board Reference</h3>
+                        <p>Select images from your mood board to associate with this content</p>
+                        <div class="moodboard-preview" id="moodboardPreview">
+                            <!-- Will show selected mood board images -->
+                        </div>
+                        <button class="btn-primary" onclick="openMoodBoardSelector()">
+                            <span>🎨</span> Browse Mood Board
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="modal-actions">
+            <button class="btn-ghost" id="cancelPlanningBtn">Cancel</button>
+            <button class="btn-primary" id="savePlanningBtn">Save</button>
+        </div>
+    </div>
+</div>
+
+<!-- Image Generation Modal -->
+<div class="modal" id="imageGenModal">
+    <div class="modal-overlay"></div>
+    <div class="modal-container">
+        <div class="modal-header">
+            <h2>Generate Image</h2>
+            <button class="close-btn" id="closeImageGenBtn">✕</button>
+        </div>
+        
+        <div class="modal-body">
+            <div class="form-field">
+                <label>Image Prompt</label>
+                <textarea id="imagePrompt" class="premium-textarea" rows="4" placeholder="Describe the image you want to generate..."></textarea>
+            </div>
+            
+            <div class="form-field">
+                <label>Style Reference (Optional)</label>
+                <div class="style-reference-grid" id="styleReferenceGrid">
+                    <!-- Will show mood board images to use as style reference -->
+                </div>
+            </div>
+            
+            <div class="ai-assist-section">
+                <button class="btn-ghost" id="improvePromptBtn">
+                    <span>✨</span> AI Improve Prompt
+                </button>
+            </div>
+        </div>
+        
+        <div class="modal-actions">
+            <button class="btn-ghost" id="cancelImageGenBtn">Cancel</button>
+            <button class="btn-primary" id="generateImageBtn">
+                <span>✨</span> Generate
+            </button>
+        </div>
+    </div>
+</div>

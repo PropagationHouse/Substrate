@@ -10,7 +10,9 @@ import { type ReactNode, lazy, Suspense } from 'react';
 import { Loader2, AlertTriangle, X } from 'lucide-react';
 import { EditorTabBar } from './EditorTabBar';
 import { ImageViewer } from './ImageViewer';
-import { isImageFile } from './utils/fileTypes';
+import { MediaViewer } from './MediaViewer';
+import { isImageFile, isAudioFile, isVideoFile, isBinaryFile } from './utils/fileTypes';
+import { BinaryFileViewer } from './BinaryFileViewer';
 import type { OpenFile } from './types';
 
 // Lazy-load CodeMirror editor — keeps it out of the initial bundle
@@ -101,6 +103,10 @@ export function TabbedContentArea({
           >
             {isImageFile(file.name) ? (
               <ImageViewer file={file} agentId={workspaceAgentId} />
+            ) : isAudioFile(file.name) || isVideoFile(file.name) ? (
+              <MediaViewer file={file} agentId={workspaceAgentId} />
+            ) : isBinaryFile(file.name) ? (
+              <BinaryFileViewer file={file} />
             ) : (
               <Suspense fallback={<EditorFallback />}>
                 <FileEditor

@@ -1156,13 +1156,15 @@ export function ForceGraph({ agentName, agentState, model, memories, files, mess
             ctx.fill();
           }
 
-          const showLabel = isKey || isExtGlow || gs < 2.5 || n.kind === 'model' || n.pulse;
-          if (showLabel && (lit || isExtGlow)) {
+          const zoomedIn = gs > 2.5;
+          const showLabel = isKey || isExtGlow || zoomedIn || n.kind === 'model' || n.pulse;
+          if (showLabel && (lit || isExtGlow || zoomedIn)) {
             const fs = Math.max(((isKey || isExtGlow) ? 9 : 7) / gs, 2);
             ctx.font = `${(isKey || isExtGlow) ? 'bold ' : ''}${fs}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
             ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-            ctx.fillStyle = `rgba(255,255,255,${isExtGlow ? 0.95 : isKey ? 0.85 : 0.6})`;
-            const maxC = isExtGlow ? 30 : isKey ? 20 : 14;
+            const labelAlpha = isExtGlow ? 0.95 : isKey ? 0.85 : zoomedIn && !lit ? 0.5 : 0.6;
+            ctx.fillStyle = `rgba(255,255,255,${labelAlpha})`;
+            const maxC = isExtGlow ? 30 : zoomedIn ? 24 : isKey ? 20 : 14;
             const txt = n.label.length > maxC ? n.label.slice(0, maxC) + '…' : n.label;
             ctx.fillText(txt, n.x, n.y + (isExtGlow ? baseR * 1.8 : baseR) + fs * 0.7);
           }

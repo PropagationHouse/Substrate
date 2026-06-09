@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Media Planning Suite - Premium Media Production Management</title>
+    <meta name="description" content="End-to-end media planning and production tool for businesses and agencies">
+    <link href="/css/styles.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        /* Additional glassmorphic effects */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="50" cy="50" r="1" fill="white" opacity="0.3"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
+            pointer-events: none;
+            z-index: 1;
+        }
+        
+        .main-content {
+            position: relative;
+            z-index: 10;
+        }
+        
+        .floating-shapes {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            z-index: 0;
+        }
+        
+        .shape {
+            position: absolute;
+            border-radius: 50%;
+            background: linear-gradient(45deg, rgba(59, 130, 246, 0.1), rgba(147, 51, 234, 0.1));
+            animation: float 20s infinite ease-in-out;
+        }
+        
+        .shape:nth-child(1) {
+            width: 300px;
+            height: 300px;
+            top: 10%;
+            left: 10%;
+            animation-delay: 0s;
+        }
+        
+        .shape:nth-child(2) {
+            width: 200px;
+            height: 200px;
+            top: 60%;
+            right: 10%;
+            animation-delay: 5s;
+        }
+        
+        .shape:nth-child(3) {
+            width: 150px;
+            height: 150px;
+            bottom: 10%;
+            left: 30%;
+            animation-delay: 10s;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 min-h-screen text-white">
+    <!-- Floating shapes background -->
+    <div class="floating-shapes">
+        <div class="shape"></div>
+        <div class="shape"></div>
+        <div class="shape"></div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <!-- Navigation -->
+        <nav class="glass-card fixed top-4 left-4 right-4 z-50 mx-auto max-w-7xl">
+            <div class="flex items-center justify-between px-6 py-4">
+                <div class="flex items-center space-x-4">
+                    <div class="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-500 rounded-xl flex items-center justify-center">
+                        <i class="fas fa-film text-white"></i>
+                    </div>
+                    <h1 class="text-2xl font-bold gradient-text">Media Planning Suite</h1>
+                </div>
+                <div class="flex items-center space-x-6">
+                    <button onclick="showSection('dashboard')" class="nav-btn glass-button px-4 py-2">
+                        <i class="fas fa-home mr-2"></i>Dashboard
+                    </button>
+                    <button onclick="showSection('business-profile')" class="nav-btn glass-button px-4 py-2">
+                        <i class="fas fa-building mr-2"></i>Business Profile
+                    </button>
+                    <button onclick="showSection('media-plans')" class="nav-btn glass-button px-4 py-2">
+                        <i class="fas fa-calendar-alt mr-2"></i>Media Plans
+                    </button>
+                    <button onclick="showSection('research')" class="nav-btn glass-button px-4 py-2">
+                        <i class="fas fa-search mr-2"></i>Research
+                    </button>
+                    <button onclick="showSection('brand-assets')" class="nav-btn glass-button px-4 py-2">
+                        <i class="fas fa-palette mr-2"></i>Brand Assets
+                    </button>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Container -->
+        <div class="container mx-auto px-4 pt-24 pb-12">
+            <!-- Dashboard Section -->
+            <section id="dashboard" class="section">
+                <div class="mb-8">
+                    <h2 class="text-4xl font-bold mb-4 gradient-text">Media Production Dashboard</h2>
+                    <p class="text-gray-300 text-lg">Manage your entire media production workflow from concept to completion</p>
+                </div>
+
+                <!-- Quick Stats -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                    <div class="media-card">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="w-12 h-12 bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl flex items-center justify-center">
+                                <i class="fas fa-briefcase text-white text-xl"></i>
+                            </div>
+                            <span class="text-3xl font-bold text-blue-400" id="business-count">0</span>
+                        </div>
+                        <h3 class="text-lg font-semibold mb-1">Business Profiles</h3>
+                        <p class="text-gray-400 text-sm">Active businesses</p>
+                    </div>
+
+                    <div class="media-card">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="w-12 h-12 bg-gradient-to-r from-purple-500 to-purple-600 rounded-xl flex items-center justify-center">
+                                <i class="fas fa-clipboard-list text-white text-xl"></i>
+                            </div>
+                            <span class="text-3xl font-bold text-purple-400" id="plan-count">0</span>
+                        </div>
+                        <h3 class="text-lg font-semibold mb-1">Media Plans</h3>
+                        <p class="text-gray-400 text-sm">Active campaigns</p>
+                    </div>
+
+                    <div class="media-card">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="w-12 h-12 bg-gradient-to-r from-green-500 to-green-600 rounded-xl flex items-center justify-center">
+                                <i class="fas fa-camera text-white text-xl"></i>
+                            </div>
+                            <span class="text-3xl font-bold text-green-400" id="shot-count">0</span>
+                        </div>
+                        <h3 class="text-lg font-semibold mb-1">Shot Lists</h3>
+                        <p class="text-gray-400 text-sm">Planned shots</p>
+                    </div>
+
+                    <div class="media-card">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="w-12 h-12 bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl flex items-center justify-center">
+                                <i class="fas fa-calendar text-white text-xl"></i>
+                            </div>
+                            <span class="text-3xl font-bold text-orange-400" id="scheduled-count">0</span>
+                        </div>
+                        <h3 class="text-lg font-semibold mb-1">Scheduled</h3>
+                        <p class="text-gray-400 text-sm">This month</p>
+                    </div>
+                </div>
+
+                <!-- Recent Activity -->
+                <div class="glass-card p-6">
+                    <h3 class="text-2xl font-bold mb-6 gradient-text">Recent Activity</h3>
+                    <div id="recent-activity" class="space-y-4">
+                        <!-- Activity items will be populated here -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- Business Profile Section -->
+            <section id="business-profile" class="section hidden">
+                <div class="mb-8">
+                    <h2 class="text-4xl font-bold mb-4 gradient-text">Business Profile</h2>
+                    <p class="text-gray-300 text-lg">Tell us about your business to personalize your media planning experience</p>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <!-- Profile Form -->
+                    <div class="glass-card p-6">
+                        <h3 class="text-2xl font-bold mb-6">Business Information</h3>
+                        <form id="business-form" class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Business Name</label>
+                                <input type="text" id="business-name" class="brand-input" required>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Industry</label>
+                                <select id="business-industry" class="brand-input">
+                                    <option value="">Select Industry</option>
+                                    <option value="retail">Retail</option>
+                                    <option value="restaurant">Restaurant & Food</option>
+                                    <option value="tech">Technology</option>
+                                    <option value="healthcare">Healthcare</option>
+                                    <option value="education">Education</option>
+                                    <option value="entertainment">Entertainment</option>
+                                    <option value="professional">Professional Services</option>
+                                    <option value="other">Other</option>
+                                </select>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Business Description</label>
+                                <textarea id="business-description" rows="4" class="brand-input" placeholder="Describe your business, what you do, and what makes you unique..."></textarea>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Website</label>
+                                <input type="url" id="business-website" class="brand-input" placeholder="https://yourwebsite.com">
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Target Audience</label>
+                                <textarea id="target-audience" rows="3" class="brand-input" placeholder="Describe your ideal customers..."></textarea>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Products/Services Offerings</label>
+                                <textarea id="business-offerings" rows="3" class="brand-input" placeholder="List your main products or services..."></textarea>
+                            </div>
+                            
+                            <button type="submit" class="glass-button w-full bg-gradient-to-r from-blue-500 to-purple-500 text-white">
+                                <i class="fas fa-save mr-2"></i>Save Business Profile
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- Brand Settings -->
+                    <div class="glass-card p-6">
+                        <h3 class="text-2xl font-bold mb-6">Brand Identity</h3>
+                        <form id="brand-form" class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Brand Colors (comma-separated hex codes)</label>
+                                <input type="text" id="brand-colors" class="brand-input" placeholder="#3B82F6, #8B5CF6, #10B981">
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Brand Fonts</label>
+                                <input type="text" id="brand-fonts" class="brand-input" placeholder="Inter, Montserrat, Playfair Display">
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Logo Upload</label>
+                                <input type="file" id="logo-upload" accept="image/*" class="brand-input">
+                            </div>
+                            
+                            <div id="logo-preview" class="hidden">
+                                <img id="logo-image" class="w-32 h-32 object-contain rounded-lg">
+                            </div>
+                        </form>
+
+                        <!-- Saved Profiles -->
+                        <div class="mt-8">
+                            <h4 class="text-xl font-bold mb-4">Saved Profiles</h4>
+                            <div id="saved-profiles" class="space-y-3">
+                                <!-- Profiles will be populated here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Media Plans Section -->
+            <section id="media-plans" class="section hidden">
+                <div class="mb-8">
+                    <h2 class="text-4xl font-bold mb-4 gradient-text">Media Plans</h2>
+                    <p class="text-gray-300 text-lg">Create comprehensive media production plans with shot lists, storyboards, and schedules</p>
+                </div>
+
+                <!-- Create New Plan -->
+                <div class="glass-card p-6 mb-8">
+                    <h3 class="text-2xl font-bold mb-6">Create New Media Plan</h3>
+                    <form id="media-plan-form" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Plan Title</label>
+                            <input type="text" id="plan-title" class="brand-input" required>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Business Profile</label>
+                            <select id="plan-business" class="brand-input" required>
+                                <option value="">Select Business</option>
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Start Date</label>
+                            <input type="date" id="plan-start" class="brand-input" required>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium mb-2">End Date</label>
+                            <input type="date" id="plan-end" class="brand-input" required>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Total Budget ($)</label>
+                            <input type="number" id="plan-budget" class="brand-input" placeholder="5000">
+                        </div>
+                        
+                        <div class="md:col-span-2">
+                            <label class="block text-sm font-medium mb-2">Description</label>
+                            <textarea id="plan-description" rows="3" class="brand-input" placeholder="Describe your media campaign goals and objectives..."></textarea>
+                        </div>
+                        
+                        <div class="md:col-span-2">
+                            <button type="submit" class="glass-button bg-gradient-to-r from-blue-500 to-purple-500 text-white">
+                                <i class="fas fa-plus mr-2"></i>Create Media Plan
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Existing Plans -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="media-plans-grid">
+                    <!-- Plans will be populated here -->
+                </div>
+            </section>
+
+            <!-- Research Section -->
+            <section id="research" class="section hidden">
+                <div class="mb-8">
+                    <h2 class="text-4xl font-bold mb-4 gradient-text">Research & Insights</h2>
+                    <p class="text-gray-300 text-lg">Research your industry, competitors, and trends to inform your media strategy</p>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <!-- Search Interface -->
+                    <div class="glass-card p-6">
+                        <h3 class="text-2xl font-bold mb-6">Industry Research</h3>
+                        <form id="research-form" class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Research Topic</label>
+                                <input type="text" id="research-query" class="brand-input" placeholder="e.g., restaurant marketing trends, video content for tech companies...">
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Business Profile</label>
+                                <select id="research-business" class="brand-input">
+                                    <option value="">Select Business</option>
+                                </select>
+                            </div>
+                            
+                            <button type="submit" class="glass-button bg-gradient-to-r from-blue-500 to-purple-500 text-white">
+                                <i class="fas fa-search mr-2"></i>Research Topic
+                            </button>
+                        </form>
+
+                        <!-- Research Results -->
+                        <div id="research-results" class="mt-6 space-y-4">
+                            <!-- Results will be populated here -->
+                        </div>
+                    </div>
+
+                    <!-- Saved Research -->
+                    <div class="glass-card p-6">
+                        <h3 class="text-2xl font-bold mb-6">Saved Research</h3>
+                        <div id="saved-research" class="space-y-4">
+                            <!-- Saved research will be populated here -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Brand Assets Section -->
+            <section id="brand-assets" class="section hidden">
+                <div class="mb-8">
+                    <h2 class="text-4xl font-bold mb-4 gradient-text">Brand Assets</h2>
+                    <p class="text-gray-300 text-lg">Manage your brand assets including logos, colors, fonts, and style guides</p>
+                </div>
+
+                <!-- Upload Assets -->
+                <div class="glass-card p-6 mb-8">
+                    <h3 class="text-2xl font-bold mb-6">Upload Brand Assets</h3>
+                    <form id="asset-form" class="space-y-4">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Asset Type</label>
+                                <select id="asset-type" class="brand-input">
+                                    <option value="logo">Logo</option>
+                                    <option value="color-palette">Color Palette</option>
+                                    <option value="font">Font File</option>
+                                    <option value="template">Template</option>
+                                    <option value="image">Brand Image</option>
+                                    <option value="document">Brand Guidelines</option>
+                                </select>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Asset Name</label>
+                                <input type="text" id="asset-name" class="brand-input" required>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Business Profile</label>
+                            <select id="asset-business" class="brand-input">
+                                <option value="">Select Business</option>
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Upload File</label>
+                            <input type="file" id="asset-file" class="brand-input" accept="image/*,.pdf,.doc,.docx">
+                        </div>
+                        
+                        <button type="submit" class="glass-button bg-gradient-to-r from-blue-500 to-purple-500 text-white">
+                            <i class="fas fa-upload mr-2"></i>Upload Asset
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Assets Gallery -->
+                <div id="assets-gallery" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <!-- Assets will be populated here -->
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <!-- Media Plan Modal -->
+    <div id="media-plan-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 flex items-center justify-center p-4">
+        <div class="glass-card max-w-6xl w-full max-h-[90vh] overflow-y-auto">
+            <div class="p-6">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-2xl font-bold gradient-text">Media Plan Details</h3>
+                    <button onclick="closeModal('media-plan-modal')" class="text-gray-400 hover:text-white">
+                        <i class="fas fa-times text-xl"></i>
+                    </button>
+                </div>
+                
+                <div id="modal-content">
+                    <!-- Modal content will be populated here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/app.js"></script>
+</body>
+</html>

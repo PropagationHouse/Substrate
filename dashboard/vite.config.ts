@@ -2,7 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
-import { readFileSync, existsSync, statSync, writeFileSync, mkdirSync, readdirSync } from 'fs'
+import { readFileSync, existsSync, statSync, writeFileSync, mkdirSync, readdirSync, unlinkSync } from 'fs'
 
 const pkg = JSON.parse(readFileSync('./package.json', 'utf-8'))
 
@@ -829,6 +829,67 @@ function substrateLocalPlugin() {
           res.end(JSON.stringify({ ok: true, items: data?.items || [], briefs: data?.briefs || [] }))
         }
       })
+      // 9) Background image — server-side storage (no localStorage size limit, supports GIFs)
+      const bgDir = path.join(workspaceRoot, 'data')
+      const bgMeta = () => {
+        // Find any file matching bg-image.* in data/
+        const exts = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.svg']
+        for (const ext of exts) {
+          const p = path.join(bgDir, `bg-image${ext}`)
+          if (existsSync(p)) return { path: p, ext }
+        }
+        return null
+      }
+
+      server.middlewares.use('/api/local/bg-image', (req: any, res: any) => {
+        if (req.method === 'GET') {
+          const found = bgMeta()
+          if (!found) { res.statusCode = 404; res.end(''); return }
+          const mimeMap: Record<string, string> = {
+            '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+            '.gif': 'image/gif', '.webp': 'image/webp', '.bmp': 'image/bmp', '.svg': 'image/svg+xml',
+          }
+          res.setHeader('Content-Type', mimeMap[found.ext] || 'application/octet-stream')
+          res.setHeader('Cache-Control', 'no-cache')
+          res.end(readFileSync(found.path))
+          return
+        }
+
+        if (req.method === 'DELETE') {
+          const found = bgMeta()
+          if (found) { try { unlinkSync(found.path) } catch {} }
+          res.setHeader('Content-Type', 'application/json')
+          res.end(JSON.stringify({ ok: true }))
+          return
+        }
+
+        if (req.method === 'POST') {
+          const contentType = req.headers['content-type'] || ''
+          const extMap: Record<string, string> = {
+            'image/png': '.png', 'image/jpeg': '.jpg', 'image/gif': '.gif',
+            'image/webp': '.webp', 'image/bmp': '.bmp', 'image/svg+xml': '.svg',
+          }
+          const ext = extMap[contentType] || '.png'
+          // Remove any existing bg-image file first
+          const old = bgMeta()
+          if (old) { try { unlinkSync(old.path) } catch {} }
+          // Collect raw binary body
+          const chunks: Buffer[] = []
+          req.on('data', (chunk: Buffer) => { chunks.push(chunk) })
+          req.on('end', () => {
+            const buf = Buffer.concat(chunks)
+            mkdirSync(bgDir, { recursive: true })
+            writeFileSync(path.join(bgDir, `bg-image${ext}`), buf)
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify({ ok: true, size: buf.length }))
+          })
+          return
+        }
+
+        res.statusCode = 405
+        res.end('{"error":"method not allowed"}')
+      })
+
       // ── Media Suite API proxy (middleware takes priority over generic /api proxy) ──
       server.middlewares.use((req: any, res: any, next: any) => {
         if (!req.url?.startsWith('/api/media-suite/')) return next()
@@ -876,8 +937,8 @@ function substrateLocalPlugin() {
   }
 }
 
-export default defineConfig({
-  base: process.env.NODE_ENV === 'production' ? '/dashboard/' : '/',
+export default defineConfig(({ command }) => ({
+  base: process.env.CAPACITOR === '1' ? './' : command === 'build' ? '/dashboard/' : '/',
   plugins: [react(), tailwindcss(), substrateLocalPlugin()],
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
@@ -911,6 +972,7 @@ export default defineConfig({
   },
   build: {
     sourcemap: false,
+    cssCodeSplit: false,
     rollupOptions: {
       input: {
         main: path.resolve(__dirname, 'index.html'),
@@ -927,4 +989,4 @@ export default defineConfig({
     },
     chunkSizeWarningLimit: 600,
   },
-})
+}))

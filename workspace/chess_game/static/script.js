@@ -12,12 +12,105 @@ document.addEventListener('DOMContentLoaded', () => {
         'P': '\u2659', 'R': '\u2656', 'N': '\u2658', 'B': '\u2657', 'Q': '\u2655', 'K': '\u2654'
     };
 
+    // Unicode icons (works everywhere, no font dependencies)
+    const _IC = {
+        backStep:  '\u23EE',   // ⏮
+        chevLeft:  '\u25C0',   // ◀
+        play:      '\u25B6',   // ▶
+        chevRight: '\u25B6',   // ▶
+        fwdStep:   '\u23ED',   // ⏭
+        pause:     '\u23F8',   // ⏸
+        desktop:   '\uD83D\uDDA5\uFE0F',  // 🖥️
+    };
+
     function squareToAlgebraic(index) {
         const file = String.fromCharCode('a'.charCodeAt(0) + (index % 8));
         const rank = 8 - Math.floor(index / 8);
         return file + rank;
     }
 
+
+
+    // ── Touch drag state ──
+    let touchDragPiece = null;
+    let touchDragClone = null;
+    let touchFromIndex = null;
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let touchMoved = false;
+
+    function onTouchStart(e) {
+        if (gameForfeited) return;
+        const square = e.target.closest('.square');
+        if (!square) return;
+        const piece = square.querySelector('.piece');
+        if (!piece || !piece.classList.contains('draggable')) return;
+
+        touchFromIndex = parseInt(square.dataset.index);
+        touchDragPiece = piece;
+        touchMoved = false;
+        const touch = e.touches[0];
+        touchStartX = touch.clientX;
+        touchStartY = touch.clientY;
+
+        touchDragClone = piece.cloneNode(true);
+        touchDragClone.style.position = 'fixed';
+        touchDragClone.style.pointerEvents = 'none';
+        touchDragClone.style.zIndex = '9999';
+        touchDragClone.style.opacity = '0';
+        touchDragClone.style.transform = 'translate(-50%, -50%) scale(1.3)';
+        touchDragClone.style.transition = 'opacity 0.1s';
+        touchDragClone.style.fontSize = '2.5rem';
+        document.body.appendChild(touchDragClone);
+        touchDragClone.style.left = touch.clientX + 'px';
+        touchDragClone.style.top = touch.clientY + 'px';
+    }
+
+    function onTouchMove(e) {
+        if (touchFromIndex === null || !touchDragClone) return;
+        e.preventDefault();
+        const touch = e.touches[0];
+        const dx = touch.clientX - touchStartX;
+        const dy = touch.clientY - touchStartY;
+
+        if (!touchMoved && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
+            touchMoved = true;
+            touchDragClone.style.opacity = '0.85';
+            if (touchDragPiece) touchDragPiece.style.opacity = '0.3';
+        }
+
+        if (touchMoved) {
+            touchDragClone.style.left = touch.clientX + 'px';
+            touchDragClone.style.top = touch.clientY + 'px';
+        }
+    }
+
+    function onTouchEnd(e) {
+        if (touchFromIndex === null) return;
+
+        if (touchMoved && touchDragClone) {
+            const touch = e.changedTouches[0];
+            touchDragClone.style.display = 'none';
+            const dropTarget = document.elementFromPoint(touch.clientX, touch.clientY);
+            touchDragClone.style.display = '';
+            const toSquare = dropTarget ? dropTarget.closest('.square') : null;
+
+            if (toSquare) {
+                const toIndex = parseInt(toSquare.dataset.index);
+                if (toIndex !== touchFromIndex) {
+                    const move = uciFromIndices(touchFromIndex, toIndex);
+                    makeMove(move);
+                }
+            }
+        }
+
+        if (touchDragPiece) touchDragPiece.style.opacity = '1';
+        if (touchDragClone) touchDragClone.remove();
+        touchDragPiece = null;
+        touchDragClone = null;
+        touchFromIndex = null;
+        touchMoved = false;
+    }
 
     function createBoard() {
         chessboard.innerHTML = '';
@@ -32,6 +125,9 @@ document.addEventListener('DOMContentLoaded', () => {
             square.addEventListener('dragover', e => e.preventDefault());
             square.addEventListener('drop', onDrop);
             square.addEventListener('click', onSquareClick);
+            square.addEventListener('touchstart', onTouchStart, {passive: false});
+            square.addEventListener('touchmove', onTouchMove, {passive: false});
+            square.addEventListener('touchend', onTouchEnd, {passive: false});
             chessboard.appendChild(square);
             squares.push(square);
         }
@@ -249,17 +345,29 @@ document.addEventListener('DOMContentLoaded', () => {
         squares.forEach(sq => sq.classList.remove('selected'));
     }
 
+    let lastShownStatus = null;
+
     function handleGameState(data) {
         const overlay = document.getElementById('game-status-overlay');
         const text = document.getElementById('game-status-text');
         if (!overlay || !text) return;
-        if (data.is_checkmate) {
+
+        let status = null;
+        if (data.is_checkmate) status = 'checkmate';
+        else if (data.is_game_over) status = 'gameover';
+        else if (data.is_check) status = 'check';
+
+        // Only flash once per state change
+        if (status === lastShownStatus) return;
+        lastShownStatus = status;
+
+        if (status === 'checkmate') {
             text.textContent = 'Checkmate!';
             overlay.classList.remove('hidden');
-        } else if (data.is_game_over) {
+        } else if (status === 'gameover') {
             text.textContent = 'Game Over';
             overlay.classList.remove('hidden');
-        } else if (data.is_check) {
+        } else if (status === 'check') {
             text.textContent = 'Check!';
             overlay.classList.remove('hidden');
             setTimeout(() => overlay.classList.add('hidden'), 2000);
@@ -278,20 +386,17 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await response.json();
             if (data.status === 'success') {
                 addMoveToHistory(move, 'You');
-                
-                // Render player's move first
-                await renderPieces(true, data.player_fen);
+                await renderPieces(true, data.fen);
 
-                if (data.ai_move) {
-                    // Wait for player's move animation to finish
-                    await new Promise(resolve => setTimeout(resolve, 450));
-
-                    // Highlight the AI's destination square
-                    await animateAIMove(data.ai_move);
-
-                    // Render AI's move
-                    addMoveToHistory(data.ai_move, 'AI');
-                    await renderPieces(true, data.fen);
+                if (data.need_ai) {
+                    // Show thinking indicator, then fetch AI move in separate request
+                    const aiResp = await fetch('/ai-move', {method: 'POST'});
+                    const aiData = await aiResp.json();
+                    if (aiData.ai_move) {
+                        await animateAIMove(aiData.ai_move);
+                        addMoveToHistory(aiData.ai_move, 'AI');
+                        await renderPieces(true, aiData.fen);
+                    }
                 }
             } else {
                 console.warn('Move rejected:', data.message);
@@ -548,11 +653,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         
                         ${hasAnimation ? `
                         <div class="animation-controls-row">
-                            <button class="anim-btn" id="anim-reset" title="Reset Animation"><i class="fas fa-backward-step"></i></button>
-                            <button class="anim-btn" id="anim-prev" title="Previous Move"><i class="fas fa-chevron-left"></i></button>
-                            <button class="anim-btn" id="anim-play-pause" title="Play/Pause"><i class="fas fa-play"></i></button>
-                            <button class="anim-btn" id="anim-next" title="Next Move"><i class="fas fa-chevron-right"></i></button>
-                            <button class="anim-btn" id="anim-end" title="Jump to End"><i class="fas fa-forward-step"></i></button>
+                            <button class="anim-btn" id="anim-reset" title="Reset Animation">${_IC.backStep}</button>
+                            <button class="anim-btn" id="anim-prev" title="Previous Move">${_IC.chevLeft}</button>
+                            <button class="anim-btn" id="anim-play-pause" title="Play/Pause">${_IC.play}</button>
+                            <button class="anim-btn" id="anim-next" title="Next Move">${_IC.chevRight}</button>
+                            <button class="anim-btn" id="anim-end" title="Jump to End">${_IC.fwdStep}</button>
                             <div class="anim-indicator" id="anim-indicator">Move 0 / ${slide.fens.length - 1}</div>
                         </div>
                         ` : ''}
@@ -592,7 +697,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         indicatorEl.textContent = `Move ${playbackIdx} / ${slide.fens.length - 1}`;
                     }
                     if (playPauseBtn) {
-                        playPauseBtn.innerHTML = isPlaying ? '<i class="fas fa-pause"></i>' : '<i class="fas fa-play"></i>';
+                        playPauseBtn.innerHTML = isPlaying ? _IC.pause : _IC.play;
                     }
                 }
 
@@ -603,7 +708,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     isPlaying = false;
                     if (playPauseBtn) {
-                        playPauseBtn.innerHTML = '<i class="fas fa-play"></i>';
+                        playPauseBtn.innerHTML = _IC.play;
                     }
                 }
 
@@ -613,7 +718,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     isPlaying = true;
                     if (playPauseBtn) {
-                        playPauseBtn.innerHTML = '<i class="fas fa-pause"></i>';
+                        playPauseBtn.innerHTML = _IC.pause;
                     }
                     timer = setInterval(() => {
                         if (playbackIdx < slide.fens.length - 1) {
@@ -728,7 +833,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             const presentationHeader = document.querySelector('#active-presentation').parentNode.querySelector('h3');
             if (presentationHeader) {
-                presentationHeader.innerHTML = `<i class="fas fa-desktop"></i> Active Chess Presentation: ${lesson.title || title}`;
+                presentationHeader.innerHTML = `${_IC.desktop} Active Chess Presentation: ${lesson.title || title}`;
             }
             
             renderSlide(currentSlideIndex);

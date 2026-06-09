@@ -1,4 +1,4 @@
-﻿from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 import chess
 import requests
@@ -15,8 +15,8 @@ def make_ai_move():
         return None
     try:
         fen = board.fen()
-        url = f"https://stockfish.online/api/s/v2.php?fen={fen}&depth=10"
-        response = requests.get(url).json()
+        url = f"https://stockfish.online/api/s/v2.php?fen={fen}&depth=8"
+        response = requests.get(url, timeout=5).json()
         if response.get('success'):
             bestmove = response['bestmove'].split(' ')[1]
             move = chess.Move.from_uci(bestmove)
@@ -48,15 +48,10 @@ def make_move():
         move = chess.Move.from_uci(move_uci)
         if move in board.legal_moves:
             board.push(move)
-            player_fen = board.fen()
-            ai_move_uci = None
-            if not board.is_game_over():
-                ai_move_uci = make_ai_move()
             return jsonify({
-                'player_fen': player_fen,
-                'fen': board.fen(),
                 'status': 'success',
-                'ai_move': ai_move_uci,
+                'fen': board.fen(),
+                'need_ai': not board.is_game_over(),
                 'is_check': board.is_check(),
                 'is_checkmate': board.is_checkmate(),
                 'is_game_over': board.is_game_over(),
@@ -66,6 +61,19 @@ def make_move():
             return jsonify({'status': 'error', 'message': 'Illegal move'}), 400
     except:
         return jsonify({'status': 'error', 'message': 'Invalid move format'}), 400
+
+@app.route('/ai-move', methods=['POST'])
+def trigger_ai_move():
+    ai_uci = make_ai_move()
+    return jsonify({
+        'status': 'success',
+        'ai_move': ai_uci,
+        'fen': board.fen(),
+        'is_check': board.is_check(),
+        'is_checkmate': board.is_checkmate(),
+        'is_game_over': board.is_game_over(),
+        'result': board.result() if board.is_game_over() else None
+    })
 
 @app.route('/analyze', methods=['GET'])
 def analyze_position():
@@ -144,6 +152,11 @@ def analyze_position():
         print("Analyze Error:", e)
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
+@app.route('/forfeit', methods=['POST'])
+def forfeit_game():
+    result = '0-1'  # Player forfeits, black wins
+    return jsonify({'status': 'forfeited', 'result': result, 'fen': board.fen()})
+
 @app.route('/reset', methods=['POST'])
 def reset_board():
     board.reset()
@@ -164,4 +177,4 @@ def get_learning_profile():
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', debug=False, port=5050)
+    app.run(host='0.0.0.0', debug=False, port=5050, threaded=True)

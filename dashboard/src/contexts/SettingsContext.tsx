@@ -3,6 +3,7 @@ import { createContext, useContext, useCallback, useRef, useState, useEffect, us
 import { useTTS, migrateTTSProvider, type TTSProvider } from '@/features/tts/useTTS';
 import { type ThemeName, applyTheme, themeNames } from '@/lib/themes';
 import { type FontName, applyFont, fontNames } from '@/lib/fonts';
+import { applyBackgroundSettings } from '@/components/BackgroundSettings';
 
 export type STTProvider = 'local' | 'openai';
 export type STTInputMode = 'browser' | 'local' | 'hybrid';
@@ -311,9 +312,11 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     document.documentElement.style.setProperty('--glass-bg', `rgba(15, 15, 25, ${opacity})`);
   }, []);
 
-  const setBackgroundGif = useCallback((gifUrl: string) => {
-    localStorage.setItem('substrate:bg-gif', gifUrl);
-    document.documentElement.style.setProperty('--substrate-bg-image', `url(${gifUrl})`);
+  const setBackgroundGif = useCallback((_gifUrl: string) => {
+    // Legacy — background images are now stored server-side via /api/local/bg-image
+    try { localStorage.removeItem('substrate:bg-image'); } catch {}
+    try { localStorage.removeItem('substrate:bg-gif'); } catch {}
+    applyBackgroundSettings();
   }, []);
 
   const setEditorFontSize = useCallback((size: number) => {

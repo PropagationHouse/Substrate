@@ -1,0 +1,854 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Media Planning Suite</title>
+    <link rel="stylesheet" href="/static/style_v2.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="glass-background"></div>
+    
+    <!-- Single Landscape Layout -->
+    <div class="app-layout">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="brand">
+                <h1 class="editable-title" data-key="appTitle">Media Suite</h1>
+            </div>
+            
+            <!-- Workspace Switcher -->
+            <div class="workspace-switcher" id="workspaceSwitcher">
+                <div class="workspace-active" id="activeWorkspace">
+                    <span class="workspace-icon" id="wsIcon" onclick="toggleWorkspaceMenu()">🎬</span>
+                    <span class="workspace-name editable-title" id="wsName" data-key="wsName">Main Studio</span>
+                    <span class="workspace-arrow" onclick="toggleWorkspaceMenu()">▾</span>
+                </div>
+                <div class="workspace-dropdown" id="workspaceDropdown">
+                    <div class="workspace-list" id="workspaceList"></div>
+                    <div class="workspace-actions">
+                        <button class="workspace-action-btn" onclick="openCreateWorkspaceModal()">+ New Channel</button>
+                    </div>
+                </div>
+            </div>
+            
+            <nav class="nav-menu" id="navMenu">
+                <div class="nav-item" draggable="true" data-module="kanbanModule">
+                    <span class="drag-handle">⋮⋮</span>
+                    <span class="nav-icon">📋</span>
+                    <span class="nav-label">Board</span>
+                </div>
+                <div class="nav-item" draggable="true" data-module="timelineModule">
+                    <span class="drag-handle">⋮⋮</span>
+                    <span class="nav-icon">📅</span>
+                    <span class="nav-label">Timeline</span>
+                </div>
+                <div class="nav-item" draggable="true" data-module="contentModule">
+                    <span class="drag-handle">⋮⋮</span>
+                    <span class="nav-icon">📝</span>
+                    <span class="nav-label">Projects</span>
+                </div>
+                <div class="nav-item" draggable="true" data-module="researchModule">
+                    <span class="drag-handle">⋮⋮</span>
+                    <span class="nav-icon">🔬</span>
+                    <span class="nav-label">Research</span>
+                </div>
+                <div class="nav-item" draggable="true" data-module="moodBoardModule">
+                    <span class="drag-handle">⋮⋮</span>
+                    <span class="nav-icon">🎨</span>
+                    <span class="nav-label">Workbench</span>
+                </div>
+                <div class="nav-item" draggable="true" data-module="dayPlannerModule">
+                    <span class="drag-handle">⋮⋮</span>
+                    <span class="nav-icon">📆</span>
+                    <span class="nav-label">Planner</span>
+                </div>
+                <div class="nav-item" draggable="true" data-module="assetsModule">
+                    <span class="drag-handle">⋮⋮</span>
+                    <span class="nav-icon">📁</span>
+                    <span class="nav-label">Assets</span>
+                </div>
+            </nav>
+            
+            <div class="sidebar-footer">
+                <button class="nav-item" id="settingsBtn">
+                    <span class="nav-icon">⚙️</span>
+                    <span class="nav-label">Settings</span>
+                </button>
+            </div>
+        </aside>
+        
+        <!-- Main Content Area - Single Scrollable Page -->
+        <main class="main-content">
+            <!-- Global Actions -->
+            <div class="global-actions" id="globalActions">
+            </div>
+            
+            <!-- Module: Kanban Board -->
+            <section class="module" id="kanbanModule" data-order="0">
+                <div class="module-header">
+                    <h2 class="editable-title" data-key="kanbanTitle">📋 Project Board</h2>
+                    <div class="module-actions" style="display:flex;gap:0.5rem;align-items:center;">
+                        <button class="btn-ghost" style="font-size:0.8rem;padding:0.25rem 0.6rem;" onclick="toggleKanbanSelectMode()">☑ Select</button>
+                        <button class="module-toggle">−</button>
+                    </div>
+                </div>
+                <div class="module-content">
+                    <div class="kanban-board" id="kanbanBoard">
+                        <!-- Will be populated by JS -->
+                    </div>
+                </div>
+            </section>
+            
+            <!-- Module: Timeline Calendar -->
+            <section class="module" id="timelineModule" data-order="1">
+                <div class="module-header">
+                    <h2 class="editable-title" data-key="timelineTitle">📅 Project Timeline</h2>
+                    <button class="module-toggle">−</button>
+                </div>
+                <div class="module-content">
+                    <div class="timeline-calendar" id="timelineCalendar">
+                        <!-- Will be populated by JS -->
+                    </div>
+                </div>
+            </section>
+            
+            <!-- Module: Day Planner -->
+            <section class="module" id="dayPlannerModule" data-order="2">
+                <div class="module-header">
+                    <h2 class="editable-title" data-key="plannerTitle">📆 Day Planner</h2>
+                    <div class="module-actions" style="display:flex;gap:0.5rem;align-items:center;">
+                        <button class="btn-ghost" style="font-size:0.8rem;" onclick="switchPlannerView('day')">Day</button>
+                        <button class="btn-ghost" style="font-size:0.8rem;" onclick="switchPlannerView('week')">Week</button>
+                    </div>
+                    <button class="module-toggle">−</button>
+                </div>
+                <div class="module-content">
+                    <!-- Progress Tracker -->
+                    <div class="progress-bar-widget" id="progressTracker"></div>
+                    <!-- Planner Content -->
+                    <div id="dayPlannerContent"></div>
+                </div>
+            </section>
+            
+            <!-- Module: Multimedia Projects -->
+            <section class="module" id="contentModule" data-order="3">
+                <div class="module-header">
+                    <h2 class="editable-title" data-key="contentTitle2">📝 Projects</h2>
+                    <div class="module-actions">
+                        <input type="text" class="search-input" placeholder="Search projects...">
+                        <div class="custom-select">
+                            <div class="select-trigger" id="statusFilterTrigger">
+                                <span>All Status</span>
+                                <span class="select-arrow">▼</span>
+                            </div>
+                            <div class="select-options" id="statusFilterOptions">
+                                <div class="select-option" data-value="all">All Status</div>
+                                <div class="select-option" data-value="not_started">Not Started</div>
+                                <div class="select-option" data-value="in_progress">In Progress</div>
+                                <div class="select-option" data-value="done">Done</div>
+                            </div>
+                        </div>
+                    </div>
+                    <button class="module-toggle">−</button>
+                </div>
+                <div class="module-content">
+                    <!-- Add Project + Brainstorm Chat Bar -->
+                    <div style="display:flex;gap:0.5rem;margin-bottom:1rem;align-items:center;">
+                        <button class="btn-primary" style="white-space:nowrap;padding:0.5rem 0.9rem;font-size:0.85rem;" onclick="openContentModal()">+ New Project</button>
+                        <div style="flex:1;display:flex;gap:0.4rem;align-items:center;background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.15);border-radius:10px;padding:0.35rem 0.5rem;">
+                            <span style="font-size:0.85rem;">💡</span>
+                            <input type="text" id="brainstormChatInput" class="premium-input" placeholder="Ask AI for project ideas..." style="flex:1;margin:0;border:none;background:transparent;padding:0.3rem 0.4rem;" onkeydown="if(event.key==='Enter')brainstormChat()">
+                            <label style="display:flex;align-items:center;gap:0.25rem;font-size:0.7rem;color:#94a3b8;cursor:pointer;white-space:nowrap;" title="Converse: back-and-forth chat. One-shot: generate ideas immediately.">
+                                <input type="checkbox" id="brainstormModeToggle" style="width:14px;height:14px;accent-color:#8b5cf6;">
+                                <span id="brainstormModeLabel">Chat</span>
+                            </label>
+                            <button class="btn-primary" id="brainstormSendBtn" style="padding:0.3rem 0.65rem;font-size:0.8rem;" onclick="brainstormChat()">Send</button>
+                        </div>
+                    </div>
+                    <div id="brainstormThinking" style="display:none;padding:0.4rem 0.75rem;color:#a78bfa;font-size:0.8rem;margin-bottom:0.5rem;"><span class="brainstorm-dots">●</span> Thinking...</div>
+                    <div id="brainstormChatLog" style="max-height:180px;overflow-y:auto;margin-bottom:0.75rem;display:none;"></div>
+                    <div id="brainstormIdeasList" style="margin-bottom:0.75rem;"></div>
+                    <div class="content-grid" id="contentGrid">
+                        <!-- Project cards will be populated here -->
+                    </div>
+                </div>
+            </section>
+            
+            <!-- Module: Research -->
+            <section class="module" id="researchModule" data-order="3">
+                <div class="module-header">
+                    <h2 class="editable-title" data-key="researchTitle">🔬 Industry Research</h2>
+                    <div class="module-actions">
+                        <button class="btn-ghost" id="researchSettingsBtn">
+                            <span>⚙️</span> Sources
+                        </button>
+                        <button class="btn-ghost" id="refreshResearchBtn">
+                            <span>🔄</span> Fetch News
+                        </button>
+                    </div>
+                    <button class="module-toggle">−</button>
+                </div>
+                <div class="module-content">
+                    <!-- Research Search Bar -->
+                    <div class="research-search-bar" style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
+                        <input type="text" id="researchSearchInput" class="premium-input" placeholder="Search topics, trends, competitors..." style="flex: 1;">
+                        <button class="btn-primary" id="researchSearchBtn">🔍 Search</button>
+                        <button class="btn-ghost" onclick="openSubstrateResearch()" title="Open Substrate Intelligence Hub for deep research">🧠 Deep Research</button>
+                        <button class="btn-ghost" id="aiResearchBtn">✨ AI Brief</button>
+                    </div>
+                    
+                    <!-- Research Tabs -->
+                    <div class="research-tabs" style="display: flex; gap: 0.5rem; margin-bottom: 1rem; border-bottom: 1px solid var(--glass-border); padding-bottom: 0.5rem;">
+                        <button class="research-tab active" data-tab="feed" onclick="switchResearchTab('feed')">📰 News Feed</button>
+                        <button class="research-tab" data-tab="search" onclick="switchResearchTab('search')">🔍 Search Results</button>
+                        <button class="research-tab" data-tab="pinned" onclick="switchResearchTab('pinned')">📌 Pinned</button>
+                        <button class="research-tab" data-tab="briefs" onclick="switchResearchTab('briefs')">📋 AI Briefs</button>
+                    </div>
+                    
+                    <!-- Active Interests/Keywords Display -->
+                    <div id="researchKeywordsBar" style="display: flex; flex-wrap: wrap; gap: 0.35rem; margin-bottom: 1rem;"></div>
+                    
+                    <div class="research-grid" id="researchGrid">
+                        <!-- Research articles will be populated here -->
+                    </div>
+                </div>
+            </section>
+            
+            <!-- Module: Mood Board -->
+            <section class="module" id="moodBoardModule" data-order="4">
+                <div class="module-header">
+                    <h2 class="editable-title" data-key="moodBoardTitle">🎨 Workbench</h2>
+                    <div class="module-actions">
+                        <button class="btn-ghost" id="uploadMoodImageBtn">
+                            <span>📷</span> Upload Image
+                        </button>
+                        <button class="btn-ghost" id="generateMoodImageBtn">
+                            <span>✨</span> Generate Image
+                        </button>
+                        <button class="btn-ghost" id="fullscreenMoodBtn">
+                            <span>⛶</span> Fullscreen
+                        </button>
+                    </div>
+                    <button class="module-toggle">−</button>
+                </div>
+                <div class="module-content">
+                    <div class="workbench-board-bar" id="boardBar" style="display:flex;align-items:center;gap:6px;padding:4px 8px;background:rgba(255,255,255,0.04);border-bottom:1px solid rgba(255,255,255,0.08);overflow-x:auto;flex-shrink:0;">
+                        <div id="boardTabs" style="display:flex;gap:4px;flex:1;overflow-x:auto;"></div>
+                        <button onclick="createNewBoard()" style="background:rgba(255,255,255,0.08);border:1px dashed rgba(255,255,255,0.2);color:rgba(255,255,255,0.5);border-radius:6px;padding:3px 10px;cursor:pointer;font-size:0.75rem;white-space:nowrap;" title="New Board">+ Board</button>
+                    </div>
+                    <div class="mood-board" id="moodBoard">
+                        <div class="mood-board-controls">
+                            <button class="mood-board-control-btn" onclick="addTextToCanvas()">📝 Text</button>
+                            <button class="mood-board-control-btn" id="drawModeBtn" onclick="toggleDrawMode()">✏️ Draw</button>
+                            <button class="mood-board-control-btn" onclick="zoomMoodBoard(1.2)">+</button>
+                            <button class="mood-board-control-btn" onclick="zoomMoodBoard(0.8)">−</button>
+                            <button class="mood-board-control-btn" onclick="resetMoodBoardView()">⟲</button>
+                            <button class="mood-board-control-btn" onclick="mediaWallDeselectAll()">Deselect</button>
+                            <div class="mood-board-zoom-info" id="moodZoomInfo">100%</div>
+                        </div>
+                        <!-- Drawing Menu (shown when draw mode active) -->
+                        <div class="radial-draw-menu" id="drawToolbar" style="display:none;">
+                            <!-- Center Hub -->
+                            <button class="rdm-hub" id="rdmHub" onclick="toggleRadialMenu()" title="Pen Menu">
+                                <span class="rdm-hub-icon" id="rdmHubIcon">🖊️</span>
+                                <canvas class="rdm-hub-preview" id="rdmHubPreview" width="40" height="40"></canvas>
+                            </button>
+                            <!-- Panels (open above hub) -->
+                            <div class="rdm-ring" id="rdmRing">
+                                <!-- Row 1: Brushes + Actions -->
+                                <div class="rdm-sector" data-sector="brushes">
+                                    <button class="rdm-sec-btn active" data-brush="pen" onclick="setBrushType('pen')" title="Pen">🖊️</button>
+                                    <button class="rdm-sec-btn" data-brush="pencil" onclick="setBrushType('pencil')" title="Pencil">✏️</button>
+                                    <button class="rdm-sec-btn" data-brush="marker" onclick="setBrushType('marker')" title="Marker">🖍️</button>
+                                    <button class="rdm-sec-btn" data-brush="spray" onclick="setBrushType('spray')" title="Spray">💨</button>
+                                    <button class="rdm-sec-btn" data-brush="eraser" onclick="setBrushType('eraser')" title="Eraser">🧽</button>
+                                    <span class="rdm-divider"></span>
+                                    <button class="rdm-sec-btn" onclick="drawUndo()" title="Undo (Ctrl+Z)">↩</button>
+                                    <button class="rdm-sec-btn" onclick="drawRedo()" title="Redo (Ctrl+Y)">↪</button>
+                                    <button class="rdm-sec-btn" onclick="drawClear()" title="Clear">🗑</button>
+                                    <button class="rdm-sec-btn" data-tool="select" onclick="setDrawTool('select')" title="Select region">⬚</button>
+                                    <button class="rdm-sec-btn" onclick="openFreshCanvas()" title="Fresh Canvas">📄</button>
+                                </div>
+                                <!-- Row 2: Colors + Quick Size -->
+                                <div class="rdm-sector" data-sector="colors">
+                                    <input type="color" id="brushColorPicker" value="#4ade80" onchange="setBrushColor(this.value)" class="rdm-color-picker">
+                                    <span class="rdm-swatch" style="background:#fff" onclick="setBrushColor('#ffffff')"></span>
+                                    <span class="rdm-swatch active" style="background:#4ade80" onclick="setBrushColor('#4ade80')"></span>
+                                    <span class="rdm-swatch" style="background:#f87171" onclick="setBrushColor('#f87171')"></span>
+                                    <span class="rdm-swatch" style="background:#60a5fa" onclick="setBrushColor('#60a5fa')"></span>
+                                    <span class="rdm-swatch" style="background:#fbbf24" onclick="setBrushColor('#fbbf24')"></span>
+                                    <span class="rdm-swatch" style="background:#a855f7" onclick="setBrushColor('#a855f7')"></span>
+                                    <span class="rdm-swatch" style="background:#000" onclick="setBrushColor('#000000')"></span>
+                                    <span class="rdm-divider"></span>
+                                    <button class="rdm-sec-btn qsize" onclick="setBrushSize(1)" title="1px">·</button>
+                                    <button class="rdm-sec-btn qsize" onclick="setBrushSize(3)" title="3px">•</button>
+                                    <button class="rdm-sec-btn qsize" onclick="setBrushSize(8)" title="8px">●</button>
+                                    <button class="rdm-sec-btn qsize" onclick="setBrushSize(20)" title="20px">⬤</button>
+                                    <button class="rdm-sec-btn qsize" onclick="setBrushSize(50)" title="50px"><span style="font-size:1.4em">⬤</span></button>
+                                </div>
+                                <!-- Row 3: Sliders -->
+                                <div class="rdm-sector rdm-sector-panel" data-sector="controls">
+                                    <div class="rdm-slider-row"><label>Size</label><input type="range" id="brushSizeSlider" min="1" max="80" value="3" oninput="setBrushSize(this.value)" class="rdm-slider"><span id="brushSizeLabel" class="rdm-val">3</span></div>
+                                    <div class="rdm-slider-row"><label>Min%</label><input type="range" id="brushMinSizeSlider" min="1" max="100" value="10" oninput="setBrushMinSize(this.value)" class="rdm-slider"><span id="brushMinSizeLabel" class="rdm-val">10%</span></div>
+                                    <div class="rdm-slider-row"><label>Opacity</label><input type="range" id="brushOpacitySlider" min="5" max="100" value="100" oninput="setBrushOpacity(this.value)" class="rdm-slider"><span id="brushOpacityLabel" class="rdm-val">100</span></div>
+                                    <div class="rdm-slider-row"><label>Flow</label><input type="range" id="brushFlowSlider" min="5" max="100" value="100" oninput="setBrushFlow(this.value)" class="rdm-slider"><span id="brushFlowLabel" class="rdm-val">100</span></div>
+                                    <div class="rdm-slider-row"><label>Smooth</label><input type="range" id="brushSmoothSlider" min="0" max="10" value="3" oninput="setBrushSmoothing(this.value)" class="rdm-slider"><span id="brushSmoothLabel" class="rdm-val">3</span></div>
+                                    <div class="rdm-slider-row"><label>Taper</label><input type="range" id="brushTaperSlider" min="0" max="20" value="8" oninput="setBrushTaper(this.value)" class="rdm-slider"><span id="brushTaperLabel" class="rdm-val">8</span></div>
+                                    <button class="rdm-sec-btn small" id="pressureToggle" onclick="togglePressureSensitivity()" title="Pressure sensitivity">📐 Pressure</button>
+                                </div>
+                                <!-- Row 4: Layers -->
+                                <div class="rdm-sector rdm-sector-panel" data-sector="layers">
+                                    <div class="rdm-layer-header">
+                                        <span>Layers</span>
+                                        <button class="rdm-sec-btn tiny" onclick="addDrawLayer()" title="Add">+</button>
+                                        <button class="rdm-sec-btn tiny" onclick="removeDrawLayer()" title="Remove">−</button>
+                                        <button class="rdm-sec-btn tiny" onclick="mergeDrawLayers()" title="Merge">⊞</button>
+                                    </div>
+                                    <div class="rdm-layer-list" id="drawLayerList"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Selection overlay for crop/export -->
+                        <div class="draw-selection-overlay" id="drawSelectionOverlay" style="display:none;">
+                            <div class="draw-selection-actions" id="drawSelectionActions" style="display:none;">
+                                <button class="draw-sel-btn" onclick="exportSelectionPNG(true)">Export PNG (transparent)</button>
+                                <button class="draw-sel-btn" onclick="exportSelectionPNG(false)">Export PNG (white bg)</button>
+                                <button class="draw-sel-btn" onclick="selectionToWorkbenchImage()">Add to Workbench</button>
+                                <button class="draw-sel-btn cancel" onclick="cancelSelection()">Cancel</button>
+                            </div>
+                        </div>
+                        <!-- Image context menu -->
+                        <div class="mw-context-menu" id="mwContextMenu" style="display:none;"></div>
+                        <div class="mood-board-canvas" id="moodBoardCanvas">
+                            <div class="mood-board-empty">
+                                <p>📌 Drop images here or click Upload to start your Workbench</p>
+                                <p style="font-size: 0.9rem; color: var(--text-tertiary); margin-top: 0.5rem;">Sketch, iterate, generate variations & edit images — all in one place</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- Module: Assets -->
+            <section class="module" id="assetsModule" data-order="5">
+                <div class="module-header">
+                    <h2 class="editable-title" data-key="assetsTitle">📁 Brand Assets</h2>
+                    <button class="btn-ghost" id="uploadAssetBtn">
+                        <span>⬆️</span> Upload
+                    </button>
+                    <button class="module-toggle">−</button>
+                </div>
+                <div class="module-content">
+                    <div class="assets-grid" id="assetsGrid">
+                        <!-- Assets will be populated here -->
+                    </div>
+                </div>
+            </section>
+        </main>
+        
+    </div>
+    
+    <!-- AI Assistant Floating Panel -->
+    <div class="ai-float-panel" id="aiPanel">
+        <div class="ai-float-header" id="aiPanelDragHandle">
+            <h3 style="font-size: 0.95rem; margin: 0;">🤖 AI Assistant</h3>
+            <div style="display:flex;gap:0.35rem;align-items:center;">
+                <button class="ai-float-btn" id="aiPanelMinBtn" title="Minimize">─</button>
+                <button class="ai-float-btn" id="closeAiBtn" title="Close">✕</button>
+            </div>
+        </div>
+        <div class="ai-float-body" id="aiPanelBody">
+            <div class="ai-chat" id="aiChat"></div>
+            <div class="ai-input-area">
+                <input type="text" id="aiInput" placeholder="Ask AI to manage projects, research, delete cards..." class="ai-input">
+                <button class="btn-send" id="sendAiBtn">→</button>
+            </div>
+        </div>
+        <div class="ai-float-resize" id="aiPanelResize"></div>
+    </div>
+    
+    <!-- Content Detail Modal -->
+    <div class="modal" id="contentModal">
+        <div class="modal-overlay"></div>
+        <div class="modal-container">
+            <div class="modal-header">
+                <h2 id="modalTitle">Content Details</h2>
+                <button class="close-btn" id="closeModalBtn">✕</button>
+            </div>
+            
+            <div class="modal-body">
+                <!-- Progress Timeline (Visual Only) -->
+                <div class="form-field">
+                    <label>Status</label>
+                    <div class="custom-select">
+                        <div class="select-trigger" id="contentStatusTrigger">
+                            <span>📋 Not Started</span>
+                            <span class="select-arrow">▼</span>
+                        </div>
+                        <div class="select-options" id="contentStatusOptions">
+                            <div class="select-option" data-value="not_started">📋 Not Started</div>
+                            <div class="select-option" data-value="in_progress">🎬 In Progress</div>
+                            <div class="select-option" data-value="done">✅ Done</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Content Form -->
+                <div class="form-grid">
+                    <div class="form-field">
+                        <label>Title</label>
+                        <input type="text" id="contentTitle" class="premium-input" placeholder="Enter project title...">
+                    </div>
+                    
+                    <div class="form-field">
+                        <label>Type</label>
+                        <div class="custom-select">
+                            <div class="select-trigger" id="contentTypeTrigger">
+                                <span>Image</span>
+                                <span class="select-arrow">▼</span>
+                            </div>
+                            <div class="select-options" id="contentTypeOptions">
+                                <div class="select-option" data-value="Image">Image</div>
+                                <div class="select-option" data-value="Video">Video</div>
+                                <div class="select-option" data-value="Audio">Audio</div>
+                                <div class="select-option" data-value="Other">Other</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-field">
+                        <label>Channel</label>
+                        <div class="custom-select">
+                            <div class="select-trigger" id="contentChannelTrigger">
+                                <span>None</span>
+                                <span class="select-arrow">▼</span>
+                            </div>
+                            <div class="select-options" id="contentChannelOptions">
+                                <div class="select-option" data-value="none">None</div>
+                                <div class="select-option" data-value="youtube">YouTube</div>
+                                <div class="select-option" data-value="instagram">Instagram</div>
+                                <div class="select-option" data-value="linkedin">LinkedIn</div>
+                                <div class="select-option" data-value="tiktok">TikTok</div>
+                                <div class="select-option" data-value="twitter">Twitter/X</div>
+                                <div class="select-option" data-value="other">Other</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-field full-width">
+                        <label>Description</label>
+                        <textarea id="contentDescription" class="premium-textarea" rows="3" placeholder="What's this project about?"></textarea>
+                    </div>
+                    
+                    <div class="form-field full-width">
+                        <label>Caption</label>
+                        <textarea id="contentCaption" class="premium-textarea" rows="4" placeholder="Ready-to-post caption..."></textarea>
+                    </div>
+                    
+                    <div class="form-field">
+                        <label>Publish Date</label>
+                        <div class="date-picker-wrapper">
+                            <input type="text" id="publishDate" class="premium-input" placeholder="Select date..." readonly>
+                            <div class="mini-calendar" id="miniCalendar" style="display: none;">
+                                <!-- Mini calendar will be populated by JS -->
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-field">
+                        <label>Status</label>
+                        <div class="custom-select">
+                            <div class="select-trigger" id="contentStatusTrigger">
+                                <span>Idea</span>
+                                <span class="select-arrow">▼</span>
+                            </div>
+                            <div class="select-options" id="contentStatusOptions">
+                                <div class="select-option" data-value="idea">💡 Idea</div>
+                                <div class="select-option" data-value="research">🔬 Research</div>
+                                <div class="select-option" data-value="script">✍️ Script</div>
+                                <div class="select-option" data-value="shoot">📸 Shoot</div>
+                                <div class="select-option" data-value="edit">✂️ Edit</div>
+                                <div class="select-option" data-value="ready">✅ Ready</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Content Planning Tools (Collapsible) -->
+                <div class="planning-tools">
+                    <div class="collapsible-header" onclick="this.parentElement.classList.toggle('collapsed')" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;padding:0.5rem 0;">
+                        <h3 style="margin:0;">Planning Tools</h3>
+                        <span class="collapse-arrow" style="transition:transform 0.2s;font-size:0.8rem;">▼</span>
+                    </div>
+                    <div class="collapsible-body">
+                        <div class="planning-grid">
+                            <button class="planning-btn" onclick="openPlanningTool('shotlist')">
+                                <span class="planning-icon">📋</span>
+                                <span class="planning-label">Shot List</span>
+                                <span class="planning-status" id="shotlistStatus"></span>
+                            </button>
+                            <button class="planning-btn" onclick="openPlanningTool('storyboard')">
+                                <span class="planning-icon">🎬</span>
+                                <span class="planning-label">Storyboard</span>
+                                <span class="planning-status" id="storyboardStatus"></span>
+                            </button>
+                            <button class="planning-btn" onclick="openPlanningTool('script')">
+                                <span class="planning-icon">📝</span>
+                                <span class="planning-label">Script</span>
+                                <span class="planning-status" id="scriptStatus"></span>
+                            </button>
+                            <button class="planning-btn" onclick="openPlanningTool('caption')">
+                                <span class="planning-icon">💬</span>
+                                <span class="planning-label">Caption</span>
+                                <span class="planning-status" id="captionStatus"></span>
+                            </button>
+                            <button class="planning-btn" onclick="openPlanningTool('moodboard')">
+                                <span class="planning-icon">🎨</span>
+                                <span class="planning-label">Workbench</span>
+                                <span class="planning-status" id="moodboardStatus"></span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Per-Card AI Chat -->
+                <div class="card-chat-section">
+                    <div class="collapsible-header" onclick="this.parentElement.classList.toggle('collapsed')" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;padding:0.5rem 0;">
+                        <h3 style="margin:0;">🤖 Card AI Chat</h3>
+                        <span class="collapse-arrow" style="transition:transform 0.2s;font-size:0.8rem;">▼</span>
+                    </div>
+                    <div class="collapsible-body">
+                        <div id="cardChatMessages" style="max-height:200px;overflow-y:auto;display:flex;flex-direction:column;gap:0.5rem;margin-bottom:0.75rem;padding:0.5rem;background:rgba(0,0,0,0.2);border-radius:10px;min-height:60px;">
+                            <p style="color:var(--text-tertiary);font-size:0.8rem;text-align:center;margin:auto;">Ask AI to edit this card's description, caption, shot list, etc.</p>
+                        </div>
+                        <div style="display:flex;gap:0.5rem;">
+                            <input type="text" id="cardChatInput" class="premium-input" placeholder="e.g. Write a script for this reel..." style="flex:1;font-size:0.85rem;">
+                            <button class="btn-primary" onclick="sendCardChat()" style="padding:0.5rem 1rem;font-size:0.85rem;">Send</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="modal-actions">
+                    <button class="btn-ghost" id="deleteContentBtn">Delete</button>
+                    <button class="btn-primary" id="saveContentBtn">Save Changes</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Research Settings Modal -->
+    <div class="modal" id="researchSettingsModal">
+        <div class="modal-overlay"></div>
+        <div class="modal-container">
+            <div class="modal-header">
+                <h2>Research Settings</h2>
+                <button class="close-btn" id="closeResearchSettingsBtn">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="settings-section">
+                    <h3>Interests & Keywords</h3>
+                    <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem;">These keywords filter your news feeds and inform AI research briefs.</p>
+                    <div style="display: flex; gap: 0.5rem; margin-bottom: 0.75rem;">
+                        <input type="text" id="addInterestInput" class="premium-input" placeholder="Add interest (e.g., AI filmmaking, drone photography)">
+                        <button class="btn-primary" id="addInterestBtn">+ Add</button>
+                    </div>
+                    <div id="interestsList" style="display: flex; flex-wrap: wrap; gap: 0.5rem;"></div>
+                </div>
+                
+                <div class="settings-section" style="margin-top: 1.5rem;">
+                    <h3>News Sources</h3>
+                    <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem;">RSS feeds used for news fetching. Toggle sources on/off or add custom ones.</p>
+                    <div style="display: flex; gap: 0.5rem; margin-bottom: 0.75rem;">
+                        <input type="text" id="addSourceName" class="premium-input" placeholder="Source name" style="flex: 0.4;">
+                        <input type="text" id="addSourceUrl" class="premium-input" placeholder="RSS feed URL" style="flex: 0.6;">
+                        <button class="btn-primary" id="addSourceBtn">+ Add</button>
+                    </div>
+                    <div style="display:flex;gap:0.5rem;margin-bottom:0.75rem;">
+                        <input type="text" id="sourceSuggestInput" class="premium-input" placeholder="e.g. vegan baking, AI marketing, indie filmmaking..." style="flex:1;">
+                        <button class="btn-ghost" onclick="suggestSourcesFromInput()">✨ Find Sources</button>
+                    </div>
+                    <div id="sourceSuggestions"></div>
+                    <div id="sourcesList"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Settings Modal -->
+    <div class="modal" id="settingsModal">
+        <div class="modal-overlay"></div>
+        <div class="modal-container">
+            <div class="modal-header">
+                <h2>Settings</h2>
+                <button class="close-btn" id="closeSettingsBtn">✕</button>
+            </div>
+            
+            <div class="modal-body">
+                <div class="settings-section">
+                    <h3>AI Model</h3>
+                    <div class="custom-select">
+                        <div class="select-trigger" id="aiModelTrigger">
+                            <span>Loading models...</span>
+                            <span class="select-arrow">▼</span>
+                        </div>
+                        <div class="select-options" id="aiModelOptions">
+                            <!-- Will be populated by JS -->
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="settings-section">
+                    <h3>Brand Profile</h3>
+                    <input type="text" id="brandName" class="premium-input" placeholder="Brand name">
+                    <input type="text" id="brandIndustry" class="premium-input" placeholder="Industry">
+                    <textarea id="brandDescription" class="premium-textarea" rows="2" placeholder="Brand description..."></textarea>
+                    <input type="text" id="brandTargetAudience" class="premium-input" placeholder="Target audience (e.g., young professionals, parents)">
+                    <textarea id="brandKeywords" class="premium-textarea" rows="2" placeholder="Keywords for content discovery..."></textarea>
+                    <button class="btn-primary" id="saveBrandProfileBtn" style="margin-top: 0.5rem; width: 100%;">Save Brand Profile</button>
+                    <div id="brandProfileStatus" style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.25rem;"></div>
+                </div>
+                
+                <div class="settings-section">
+                    <h3>Theme</h3>
+                    <div class="theme-grid">
+                        <button class="theme-option active" data-theme="forest">Forest</button>
+                        <button class="theme-option" data-theme="ocean">Ocean</button>
+                        <button class="theme-option" data-theme="sunset">Sunset</button>
+                        <button class="theme-option" data-theme="midnight">Midnight</button>
+                    </div>
+                    
+                    <h4 style="margin-top:1rem;font-size:0.85rem;color:var(--text-secondary);">Custom Accent Color</h4>
+                    <div style="display:flex;gap:0.5rem;align-items:center;margin-top:0.4rem;">
+                        <input type="color" id="customAccentColor" value="#4ade80" style="width:36px;height:36px;border:none;background:none;cursor:pointer;border-radius:6px;">
+                        <button class="btn-ghost" style="font-size:0.8rem;" onclick="applyCustomAccent()">Apply</button>
+                        <button class="btn-ghost" style="font-size:0.8rem;" onclick="resetAccentColor()">Reset</button>
+                    </div>
+                    
+                    <h4 style="margin-top:1rem;font-size:0.85rem;color:var(--text-secondary);">Background Color</h4>
+                    <div style="display:flex;gap:0.5rem;align-items:center;margin-top:0.4rem;">
+                        <input type="color" id="customBgColor" value="#0a0a0f" style="width:36px;height:36px;border:none;background:none;cursor:pointer;border-radius:6px;">
+                        <button class="btn-ghost" style="font-size:0.8rem;" onclick="applyCustomBgColor()">Apply</button>
+                        <button class="btn-ghost" style="font-size:0.8rem;" onclick="resetBgColor()">Reset</button>
+                    </div>
+                    
+                    <h4 style="margin-top:1rem;font-size:0.85rem;color:var(--text-secondary);">Background Image</h4>
+                    <div style="display:flex;gap:0.5rem;align-items:center;margin-top:0.4rem;flex-wrap:wrap;">
+                        <button class="btn-ghost" style="font-size:0.8rem;" onclick="document.getElementById('bgImageUpload').click()">Upload Image</button>
+                        <button class="btn-ghost" style="font-size:0.8rem;" onclick="generateThemeBackground()">✨ Generate</button>
+                        <button class="btn-ghost" style="font-size:0.8rem;" onclick="clearCustomBackground()">Clear</button>
+                        <input type="file" id="bgImageUpload" accept="image/*" style="display:none;" onchange="uploadCustomBackground(event)">
+                    </div>
+                    <div id="bgPreview" style="margin-top:0.5rem;border-radius:8px;overflow:hidden;max-height:80px;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Planning Modals -->
+    <!-- Planning Tool Modal -->
+    <div class="modal" id="planningModal">
+        <div class="modal-overlay"></div>
+        <div class="modal-container modal-large">
+            <div class="modal-header">
+                <h2 id="planningModalTitle">Planning Tool</h2>
+                <button class="close-btn" id="closePlanningBtn">✕</button>
+            </div>
+            
+            <div class="modal-body">
+                <!-- Planning Content Area (shown immediately) -->
+                <div class="planning-content" id="planningContent">
+                    <!-- Shot List -->
+                    <div class="planning-section" id="shotlistSection" style="display: none;">
+                        <div class="shot-list">
+                            <div class="shot-list-header">
+                                <h3>Shot List</h3>
+                                <div style="display: flex; gap: 0.5rem;">
+                                    <button class="btn-ghost btn-sm" id="aiAssistShotlistBtn">
+                                        <span>✨</span> AI Assist
+                                    </button>
+                                    <button class="btn-ghost" onclick="addShot()">+ Add Shot</button>
+                                </div>
+                            </div>
+                            <div id="shotListItems"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- Storyboard -->
+                    <div class="planning-section" id="storyboardSection" style="display: none;">
+                        <div class="storyboard">
+                            <div class="storyboard-header">
+                                <h3>Storyboard</h3>
+                                <div style="display: flex; gap: 0.5rem;">
+                                    <button class="btn-ghost btn-sm" id="aiAssistStoryboardBtn">
+                                        <span>✨</span> AI Assist
+                                    </button>
+                                    <button class="btn-ghost" onclick="addFrame()">+ Add Frame</button>
+                                </div>
+                            </div>
+                            <div class="storyboard-grid" id="storyboardFrames"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- Script -->
+                    <div class="planning-section" id="scriptSection" style="display: none;">
+                        <div class="script-editor">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                                <h3>Script</h3>
+                                <button class="btn-ghost btn-sm" id="aiAssistScriptBtn">
+                                    <span>✨</span> AI Assist
+                                </button>
+                            </div>
+                            <textarea id="scriptContent" class="premium-textarea" rows="15" placeholder="Write your script here..."></textarea>
+                            <div class="script-meta">
+                                <span id="wordCount">0 words</span>
+                                <span id="readTime">~0 sec read time</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Caption -->
+                    <div class="planning-section" id="captionSection" style="display: none;">
+                        <div class="caption-editor">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                                <h3>Caption</h3>
+                                <button class="btn-ghost btn-sm" id="aiAssistCaptionBtn">
+                                    <span>✨</span> AI Assist
+                                </button>
+                            </div>
+                            <textarea id="captionContent" class="premium-textarea" rows="8" placeholder="Write your caption..."></textarea>
+                            <div class="caption-meta">
+                                <span id="charCount">0 characters</span>
+                                <div class="caption-suggestions">
+                                    <button class="btn-ghost btn-sm" onclick="addHashtags()">+ Add Hashtags</button>
+                                    <button class="btn-ghost btn-sm" onclick="addEmojis()">+ Add Emojis</button>
+                                    <button class="btn-ghost btn-sm" onclick="addCTA()">+ Add CTA</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Mood Board Link -->
+                    <div class="planning-section" id="moodboardSection" style="display: none;">
+                        <div class="moodboard-link">
+                            <h3>Mood Board Reference</h3>
+                            <p>Select images from your mood board to associate with this content</p>
+                            <div class="moodboard-preview" id="moodboardPreview"></div>
+                            <button class="btn-primary" onclick="openMoodBoardSelector()">
+                                <span>🎨</span> Browse Mood Board
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="modal-actions">
+                <button class="btn-ghost" id="cancelPlanningBtn">Cancel</button>
+                <button class="btn-primary" id="savePlanningBtn">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Image Generation Modal -->
+    <div class="modal" id="imageGenModal">
+        <div class="modal-overlay"></div>
+        <div class="modal-container">
+            <div class="modal-header">
+                <h2>Generate Image</h2>
+                <button class="close-btn" id="closeImageGenBtn">✕</button>
+            </div>
+            
+            <div class="modal-body">
+                <div class="form-field">
+                    <label>Image Prompt</label>
+                    <textarea id="imagePrompt" class="premium-textarea" rows="4" placeholder="Describe the image you want to generate..."></textarea>
+                </div>
+                
+                <div class="form-field">
+                    <label>Style Reference (Optional)</label>
+                    <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1rem;">Select images from your mood board to influence the style</p>
+                    <div class="style-reference-grid" id="styleReferenceGrid"></div>
+                </div>
+                
+                <div class="ai-assist-section">
+                    <button class="btn-ghost" id="improvePromptBtn">
+                        <span>✨</span> AI Improve Prompt
+                    </button>
+                </div>
+            </div>
+            
+            <div class="modal-actions">
+                <button class="btn-ghost" id="cancelImageGenBtn">Cancel</button>
+                <button class="btn-primary" id="generateImageBtn">
+                    <span>✨</span> Generate
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Create Workspace Modal -->
+    <div class="modal" id="createWorkspaceModal">
+        <div class="modal-overlay" onclick="closeModal('createWorkspaceModal')"></div>
+        <div class="modal-container" style="max-width:460px;">
+            <div class="modal-header">
+                <h2>Create New Channel</h2>
+                <button class="close-btn" onclick="closeModal('createWorkspaceModal')">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="settings-section">
+                    <label style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:0.25rem;display:block;">Channel Name</label>
+                    <input type="text" id="newWsName" class="premium-input" placeholder="e.g. Girlfriend's Bakery, Client X, Side Hustle...">
+                </div>
+                <div class="settings-section" style="margin-top:0.75rem;">
+                    <label style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:0.25rem;display:block;">Icon</label>
+                    <div style="display:flex;gap:0.4rem;flex-wrap:wrap;" id="wsIconPicker">
+                        <button class="ws-icon-opt selected" data-icon="📂" onclick="selectWsIcon(this)">📂</button>
+                        <button class="ws-icon-opt" data-icon="🎬" onclick="selectWsIcon(this)">🎬</button>
+                        <button class="ws-icon-opt" data-icon="🧁" onclick="selectWsIcon(this)">🧁</button>
+                        <button class="ws-icon-opt" data-icon="🎵" onclick="selectWsIcon(this)">🎵</button>
+                        <button class="ws-icon-opt" data-icon="🏋️" onclick="selectWsIcon(this)">🏋️</button>
+                        <button class="ws-icon-opt" data-icon="📸" onclick="selectWsIcon(this)">📸</button>
+                        <button class="ws-icon-opt" data-icon="💼" onclick="selectWsIcon(this)">💼</button>
+                        <button class="ws-icon-opt" data-icon="🎨" onclick="selectWsIcon(this)">🎨</button>
+                        <button class="ws-icon-opt" data-icon="🏠" onclick="selectWsIcon(this)">🏠</button>
+                        <button class="ws-icon-opt" data-icon="🌿" onclick="selectWsIcon(this)">🌿</button>
+                        <button class="ws-icon-opt" data-icon="🚀" onclick="selectWsIcon(this)">🚀</button>
+                        <button class="ws-icon-opt" data-icon="✍️" onclick="selectWsIcon(this)">✍️</button>
+                    </div>
+                </div>
+                <div class="settings-section" style="margin-top:0.75rem;">
+                    <label style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:0.25rem;display:block;">Color</label>
+                    <div style="display:flex;gap:0.4rem;flex-wrap:wrap;" id="wsColorPicker">
+                        <button class="ws-color-opt" data-color="#4ade80" style="background:#4ade80;" onclick="selectWsColor(this)"></button>
+                        <button class="ws-color-opt selected" data-color="#818cf8" style="background:#818cf8;" onclick="selectWsColor(this)"></button>
+                        <button class="ws-color-opt" data-color="#f97316" style="background:#f97316;" onclick="selectWsColor(this)"></button>
+                        <button class="ws-color-opt" data-color="#0ea5e9" style="background:#0ea5e9;" onclick="selectWsColor(this)"></button>
+                        <button class="ws-color-opt" data-color="#f43f5e" style="background:#f43f5e;" onclick="selectWsColor(this)"></button>
+                        <button class="ws-color-opt" data-color="#a78bfa" style="background:#a78bfa;" onclick="selectWsColor(this)"></button>
+                        <button class="ws-color-opt" data-color="#facc15" style="background:#facc15;" onclick="selectWsColor(this)"></button>
+                        <button class="ws-color-opt" data-color="#fb923c" style="background:#fb923c;" onclick="selectWsColor(this)"></button>
+                    </div>
+                </div>
+                <div class="settings-section" style="margin-top:0.75rem;">
+                    <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.8rem;color:var(--text-secondary);cursor:pointer;">
+                        <input type="checkbox" id="newWsCreateBrand" checked style="accent-color:var(--accent);">
+                        Create a dedicated brand profile for this channel
+                    </label>
+                </div>
+                <div id="newWsBrandFields" style="margin-top:0.5rem;">
+                    <input type="text" id="newWsBrandName" class="premium-input" placeholder="Brand name (leave blank to use channel name)">
+                    <input type="text" id="newWsIndustry" class="premium-input" placeholder="Industry (e.g. Bakery, Fitness, Music)" style="margin-top:0.3rem;">
+                    <input type="text" id="newWsAudience" class="premium-input" placeholder="Target audience" style="margin-top:0.3rem;">
+                </div>
+                <button class="btn-primary" style="width:100%;margin-top:1rem;" onclick="createWorkspace()">Create Channel</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/script_v2.js?v=20260515i"></script>
+    <script src="/static/planning_mood.js?v=20260516a"></script>
+</body>
+</html>

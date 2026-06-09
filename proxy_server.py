@@ -28,7 +28,7 @@ from datetime import datetime
 from pathlib import Path
 from io import BytesIO
 from PIL import Image
-from flask import Flask, request, jsonify, send_from_directory, make_response
+from flask import Flask, request, jsonify, send_from_directory, make_response, redirect
 from flask_cors import CORS
 from flask_sock import Sock
 import webbrowser
@@ -126,6 +126,8 @@ _cors_origins = [
     "http://127.0.0.1:5000",
     "https://127.0.0.1:8766",
     "file://",  # Electron
+    "http://substrate.local",  # Capacitor Android WebView
+    "capacitor://localhost",   # Capacitor iOS WebView
 ]
 # Add machine's LAN IP dynamically
 try:
@@ -138,7 +140,10 @@ try:
     _cors_origins.append(f"https://{_local_ip}:8766")
 except Exception:
     pass
-CORS(app, origins=_cors_origins, supports_credentials=True)
+# NOTE: We use manual add_cors_headers / handle_cors_preflight hooks below instead
+# of flask-cors CORS() to avoid interference with WebSocket upgrade requests.
+# CORS(app, origins=_cors_origins, supports_credentials=True)  # DISABLED — see after_request hook
+
 sock = Sock(app)
 
 # ---------------------------------------------------------------------------
@@ -170,7 +175,7 @@ def widget_mode():
 # ---------------------------------------------------------------------------
 # Media Suite proxy — forward /api/media-suite/* to Flask on port 5000
 # ---------------------------------------------------------------------------
-MEDIA_SUITE_URL = os.environ.get('MEDIA_SUITE_URL', 'http://localhost:5000')
+MEDIA_SUITE_URL = os.environ.get('MEDIA_SUITE_URL', 'http://127.0.0.1:5000')
 
 @app.route('/api/media-suite/<path:subpath>', methods=['GET', 'POST', 'PUT', 'DELETE', 'PATCH'])
 def media_suite_proxy(subpath):
@@ -243,17 +248,37 @@ def media_suite_full_proxy(subpath=''):
                 continue
             headers[k] = v
         content_type = resp.headers.get('Content-Type', '')
-        # For HTML responses, rewrite root-relative URLs to go through /media-suite/
+        # For HTML responses, inject a fetch interceptor that rewrites all /api/ calls
         if 'text/html' in content_type:
             html = resp.text
             # Rewrite src="/...", href="/...", action="/..." to /media-suite/...
             html = _re.sub(r'((?:src|href|action)\s*=\s*["\'])/', r'\1/media-suite/', html)
-            # Rewrite fetch('/...) and url('/...') in inline JS/CSS
-            html = html.replace("fetch('/", "fetch('/media-suite/")
-            html = html.replace("fetch(\"/", "fetch(\"/media-suite/")
-            # Rewrite EventSource('/...) to go through proxy
-            html = html.replace("EventSource('/", "EventSource('/media-suite/")
-            html = html.replace("EventSource(\"/", "EventSource(\"/media-suite/")
+            # Inject fetch/EventSource/XMLHttpRequest interceptor to handle JS template literals
+            _interceptor = '''<script>
+(function(){
+  var P="/media-suite";
+  function needs(u){return typeof u==="string"&&u.startsWith("/")&&!u.startsWith(P)&&!u.startsWith("/api/local/");}
+  var _f=window.fetch;
+  window.fetch=function(u,o){
+    if(needs(u))u=P+u;
+    return _f.call(window,u,o);
+  };
+  var _E=window.EventSource;
+  window.EventSource=function(u,o){
+    if(needs(u))u=P+u;
+    return new _E(u,o);
+  };
+  window.EventSource.prototype=_E.prototype;
+  var _X=XMLHttpRequest.prototype.open;
+  XMLHttpRequest.prototype.open=function(m,u){
+    if(needs(u))u=P+u;
+    return _X.apply(this,[m,u].concat(Array.prototype.slice.call(arguments,2)));
+  };
+  // Research module uses this to reach /api/local/* endpoints on the main server
+  window.__SUBSTRATE_DASHBOARD_URL="";
+})();
+</script>'''
+            html = html.replace('<head>', '<head>' + _interceptor, 1)
             headers['Content-Type'] = 'text/html; charset=utf-8'
             return (html, resp.status_code, headers)
         return (resp.content, resp.status_code, headers)
@@ -261,13 +286,102 @@ def media_suite_full_proxy(subpath=''):
         return f"<h2>Media Suite unavailable</h2><p>{e}</p>", 502
 
 # ---------------------------------------------------------------------------
+# Glass Chess fallback — catch bare /state, /move, /reset, /analyze, /learning_profile
+# from iframes where the fetch interceptor may not have loaded yet
+# ---------------------------------------------------------------------------
+_CHESS_FALLBACK_PATHS = ('/state', '/move', '/reset', '/analyze', '/learning_profile', '/forfeit')
+
+@app.route('/state', methods=['GET', 'POST'])
+@app.route('/move', methods=['GET', 'POST'])
+@app.route('/reset', methods=['GET', 'POST'])
+@app.route('/analyze', methods=['GET', 'POST'])
+@app.route('/learning_profile', methods=['GET', 'POST'])
+@app.route('/forfeit', methods=['GET', 'POST'])
+@app.route('/ai-move', methods=['GET', 'POST'])
+@app.route('/ai-status', methods=['GET', 'POST'])
+def chess_fallback_proxy():
+    """Forward bare chess endpoints to the chess app on port 5050."""
+    target = f"http://127.0.0.1:5050{request.path}"
+    if request.query_string:
+        target += f"?{request.query_string.decode()}"
+    try:
+        resp = requests.request(
+            method=request.method,
+            url=target,
+            headers={k: v for k, v in request.headers if k.lower() not in ('host', 'connection')},
+            data=request.get_data(),
+            cookies=request.cookies,
+            timeout=15,
+        )
+        headers = {k: v for k, v in resp.headers.items() if k.lower() not in ('content-encoding', 'transfer-encoding', 'connection')}
+        return (resp.content, resp.status_code, headers)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 502
+
+# ---------------------------------------------------------------------------
+# Glass Chess reverse proxy — serves the chess app under /glass-chess/
+# so it works from any device (mobile, ZeroTier) without direct :5050 access
+# ---------------------------------------------------------------------------
+GLASS_CHESS_URL = os.environ.get('GLASS_CHESS_URL', 'http://127.0.0.1:5050')
+
+@app.route('/glass-chess/')
+@app.route('/glass-chess/<path:subpath>', methods=['GET', 'POST', 'PUT', 'DELETE', 'PATCH'])
+def glass_chess_full_proxy(subpath=''):
+    """Full reverse proxy for Glass Chess."""
+    import re as _re
+    target = f"{GLASS_CHESS_URL}/{subpath}"
+    if request.query_string:
+        target += f"?{request.query_string.decode()}"
+    try:
+        resp = requests.request(
+            method=request.method,
+            url=target,
+            headers={k: v for k, v in request.headers if k.lower() not in ('host', 'connection')},
+            data=request.get_data(),
+            cookies=request.cookies,
+            timeout=30,
+        )
+        headers = {}
+        for k, v in resp.headers.items():
+            kl = k.lower()
+            if kl in ('content-encoding', 'transfer-encoding', 'connection'):
+                continue
+            headers[k] = v
+        content_type = resp.headers.get('Content-Type', '')
+        if 'text/html' in content_type:
+            html = resp.text
+            html = _re.sub(r'((?:src|href|action)\s*=\s*["\'])/', r'\1/glass-chess/', html)
+            # Inject fetch interceptor for JS template literals
+            _interceptor = '''<script>
+(function(){
+  var P="/glass-chess";
+  var _f=window.fetch;
+  window.fetch=function(u,o){
+    if(typeof u==="string"&&u.startsWith("/")&&!u.startsWith(P))u=P+u;
+    return _f.call(window,u,o);
+  };
+  var _X=XMLHttpRequest.prototype.open;
+  XMLHttpRequest.prototype.open=function(m,u){
+    if(typeof u==="string"&&u.startsWith("/")&&!u.startsWith(P))u=P+u;
+    return _X.apply(this,[m,u].concat(Array.prototype.slice.call(arguments,2)));
+  };
+})();
+</script>'''
+            html = html.replace('<head>', '<head>' + _interceptor, 1)
+            headers['Content-Type'] = 'text/html; charset=utf-8'
+            return (html, resp.status_code, headers)
+        return (resp.content, resp.status_code, headers)
+    except Exception as e:
+        return f"<h2>Glass Chess unavailable</h2><p>{e}</p>", 502
+
+# ---------------------------------------------------------------------------
 # Authentication: before_request hook + auth endpoints
 # ---------------------------------------------------------------------------
 # Paths that never require auth (static assets, login, setup, health)
 _AUTH_EXEMPT_PREFIXES = (
-    '/ui', '/dashboard', '/media-suite/', '/static/', '/sw.js', '/manifest.json', '/certs/',
+    '/ui', '/dashboard', '/media-suite/', '/glass-chess/', '/static/', '/sw.js', '/manifest.json', '/certs/',
     '/audio/', '/uploads/', '/api/auth/login', '/api/auth/setup',
-    '/api/auth/login-otp', '/api/auth/electron-login', '/api/auth/status', '/api/test', '/api/debug/',
+    '/api/auth/login-otp', '/api/auth/electron-login', '/api/auth/status', '/api/test', '/api/mobile/', '/api/debug/',
     '/api/substrate', '/api/circuits', '/api/prime',
     '/api/commands',
     '/api/models', '/api/discover-models',
@@ -291,6 +405,45 @@ def _get_agent_config():
     except Exception:
         pass
     return None
+
+
+@app.after_request
+def add_cors_headers(response):
+    """Add CORS headers for mobile (Capacitor) cross-origin requests."""
+    # Skip WebSocket upgrade responses — CORS doesn't apply to WS upgrades
+    if request.headers.get('Upgrade', '').lower() == 'websocket':
+        return response
+    origin = request.headers.get('Origin', '')
+    # Allow Capacitor WebView origins, localhost variants, and LAN IPs
+    allowed_origins = {'http://substrate.local', 'http://localhost', 'http://localhost:3000',
+                       'http://127.0.0.1', 'http://127.0.0.1:3000', 'capacitor://localhost',
+                       'http://localhost:8765', 'http://127.0.0.1:8765', 'file://'}
+    if origin in allowed_origins or origin.startswith('http://10.') or origin.startswith('http://192.168.') or origin.startswith('http://172.'):
+        response.headers['Access-Control-Allow-Origin'] = origin
+        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, Upgrade, Connection'
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+    elif not origin:
+        # No Origin header (same-origin requests)
+        response.headers['Access-Control-Allow-Origin'] = '*'
+    return response
+
+
+@app.before_request
+def handle_cors_preflight():
+    """Handle CORS preflight OPTIONS requests before auth check."""
+    if request.method == 'OPTIONS':
+        origin = request.headers.get('Origin', '')
+        allowed_origins = {'http://substrate.local', 'http://localhost', 'http://localhost:3000',
+                           'http://127.0.0.1', 'http://127.0.0.1:3000', 'capacitor://localhost',
+                           'http://localhost:8765', 'http://127.0.0.1:8765', 'file://'}
+        if origin in allowed_origins or origin.startswith('http://10.') or origin.startswith('http://192.168.') or origin.startswith('http://172.'):
+            resp = app.make_default_options_response()
+            resp.headers['Access-Control-Allow-Origin'] = origin
+            resp.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+            resp.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, Upgrade, Connection'
+            resp.headers['Access-Control-Allow-Credentials'] = 'true'
+            return resp
 
 
 @app.before_request
@@ -6141,6 +6294,7 @@ class ChatAgent:
             
             # Tool execution loop variables (fresh start)
             tool_history = []
+            reasoning_trace = []  # Chain-of-thought log: [{round, thinking, plan, tools, results}]
             round_count = 0
             final_response = ""
             content = ""
@@ -6467,6 +6621,16 @@ class ChatAgent:
                     })
             # Finalize the thinking panel (close spinner, collapse)
             send_message_to_frontend({"type": "thinking_end"})
+            
+            # ── Build reasoning trace entry for this round ──
+            _trace_entry = {
+                "round": round_count,
+                "timestamp": time.time(),
+                "thinking": response.get('thinking', '') or '',
+                "plan": content.strip() if (content and content.strip() and tool_calls) else '',
+                "tools": [],
+                "had_tool_calls": bool(tool_calls),
+            }
             
             # Also stream the plan text as a visible message on round 1
             # so the user sees what the model intends to do
@@ -6812,6 +6976,19 @@ class ChatAgent:
                     
                     tool_history.append({"tool": tname, "args": targs, "result": res, "auto_executed": was_executed})
                     
+                    # ── Append to reasoning trace ──
+                    _tool_trace = {"name": tname, "args_summary": {k: (str(v)[:100] if isinstance(v, str) and len(str(v)) > 100 else v) for k, v in (targs or {}).items()}}
+                    if isinstance(res, dict):
+                        if res.get('error'):
+                            _tool_trace["outcome"] = f"error: {str(res['error'])[:150]}"
+                        elif res.get('success') or res.get('status') == 'success':
+                            _tool_trace["outcome"] = "success"
+                        else:
+                            _tool_trace["outcome"] = str(res.get('output', res.get('status', 'ok')))[:150]
+                    else:
+                        _tool_trace["outcome"] = str(res)[:150]
+                    _trace_entry["tools"].append(_tool_trace)
+                    
                     # Stream result preview
                     rp = ""
                     if isinstance(res, dict):
@@ -6894,6 +7071,19 @@ class ChatAgent:
                         continue
                     
                     tool_history.append({"tool": tname_r, "args": targs_r, "result": res, "auto_executed": True})
+                    
+                    # ── Append to reasoning trace (sequential path) ──
+                    _tool_trace_s = {"name": tname_r, "args_summary": {k: (str(v)[:100] if isinstance(v, str) and len(str(v)) > 100 else v) for k, v in (targs_r or {}).items()}}
+                    if isinstance(res, dict):
+                        if res.get('error'):
+                            _tool_trace_s["outcome"] = f"error: {str(res['error'])[:150]}"
+                        elif res.get('success') or res.get('status') == 'success':
+                            _tool_trace_s["outcome"] = "success"
+                        else:
+                            _tool_trace_s["outcome"] = str(res.get('output', res.get('status', 'ok')))[:150]
+                    else:
+                        _tool_trace_s["outcome"] = str(res)[:150]
+                    _trace_entry["tools"].append(_tool_trace_s)
                     
                     # Stream result preview
                     rp = ""
@@ -9761,6 +9951,92 @@ def api_camera_snapshot():
         logger.error(f"Camera snapshot endpoint error: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
+# ── Remote Peripherals (camera viewing from mobile/remote clients) ──────────
+
+@app.route('/api/peripherals/cameras', methods=['GET'])
+def api_peripherals_cameras():
+    """List available cameras on the host machine."""
+    try:
+        from src.tools.camsnap_tool import list_cameras
+        result = list_cameras()
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'status': 'error', 'error': str(e)}), 500
+
+@app.route('/api/peripherals/camera/frame', methods=['GET'])
+def api_peripherals_camera_frame():
+    """Grab a single JPEG frame from a host camera. Returns image/jpeg binary."""
+    try:
+        from src.tools.camsnap_tool import _pool, _cameras_cache_time
+        import src.tools.camsnap_tool as _camsnap
+        import cv2 as _cv2
+        import time as _time
+        cam_idx = int(request.args.get('index', 0))
+        cam_url = request.args.get('url', None)
+        # Invalidate list_cameras cache so probing doesn't hold camera handles
+        _camsnap._cameras_cache = None
+        _camsnap._cameras_cache_time = 0
+        # Retry up to 3 times — on Windows, DirectShow cameras may need a moment
+        last_err = None
+        for attempt in range(3):
+            try:
+                frame, _ = _pool.grab_frame(cam_idx, cam_url)
+                _, buf = _cv2.imencode('.jpg', frame, [_cv2.IMWRITE_JPEG_QUALITY, 75])
+                resp = make_response(buf.tobytes())
+                resp.headers['Content-Type'] = 'image/jpeg'
+                resp.headers['Cache-Control'] = 'no-cache, no-store'
+                resp.headers['Access-Control-Allow-Origin'] = '*'
+                return resp
+            except Exception as e:
+                last_err = e
+                if attempt < 2:
+                    _time.sleep(0.3)
+        return (f"Error after retries: {last_err}", 500)
+    except Exception as e:
+        return (f"Error: {e}", 500)
+
+@app.route('/api/peripherals/camera/stream', methods=['GET'])
+def api_peripherals_camera_stream():
+    """MJPEG stream from a host camera for live viewing."""
+    try:
+        from src.tools.camsnap_tool import _pool
+        import cv2 as _cv2
+        import time as _time
+        cam_idx = int(request.args.get('index', 0))
+        cam_url = request.args.get('url', None)
+        fps = min(int(request.args.get('fps', 5)), 15)  # Cap at 15fps
+
+        def generate():
+            interval = 1.0 / fps
+            fail_count = 0
+            try:
+                while True:
+                    t0 = _time.monotonic()
+                    try:
+                        frame, _ = _pool.grab_frame(cam_idx, cam_url)
+                        _, buf = _cv2.imencode('.jpg', frame, [_cv2.IMWRITE_JPEG_QUALITY, 65])
+                        yield (b'--frame\r\n'
+                               b'Content-Type: image/jpeg\r\n\r\n' + buf.tobytes() + b'\r\n')
+                        fail_count = 0
+                    except Exception:
+                        fail_count += 1
+                        if fail_count > 5:
+                            break
+                        _time.sleep(0.5)
+                        continue
+                    elapsed = _time.monotonic() - t0
+                    if elapsed < interval:
+                        _time.sleep(interval - elapsed)
+            except GeneratorExit:
+                pass
+
+        from flask import Response as FlaskResponse
+        resp = FlaskResponse(generate(), mimetype='multipart/x-mixed-replace; boundary=frame')
+        resp.headers['Access-Control-Allow-Origin'] = '*'
+        return resp
+    except Exception as e:
+        return (f"Error: {e}", 500)
+
 @app.route('/api/notify', methods=['POST'])
 def api_notify():
     """Push a notification to connected WebUI clients.
@@ -10284,8 +10560,12 @@ def api_files_tree():
                 return jsonify({'ok': False, 'error': 'Directory not found'}), 404
 
         BINARY_EXTS = {'.png','.jpg','.jpeg','.gif','.bmp','.ico','.webp','.svg',
-                       '.mp3','.wav','.ogg','.mp4','.avi','.mov','.zip','.tar',
-                       '.gz','.rar','.7z','.exe','.dll','.so','.bin','.pdf','.woff','.woff2','.ttf','.eot'}
+                       '.mp3','.wav','.ogg','.flac','.aac','.m4a','.opus',
+                       '.mp4','.avi','.mov','.webm','.mkv',
+                       '.zip','.tar','.gz','.rar','.7z',
+                       '.exe','.dll','.so','.bin','.pdf',
+                       '.woff','.woff2','.ttf','.eot',
+                       '.db','.sqlite','.sqlite3'}
         entries = []
         try:
             items = sorted(os.listdir(target_dir))
@@ -10535,9 +10815,600 @@ def api_files_read():
             return jsonify({'ok': False, 'error': f'File too large ({size} bytes)'}), 413
         with open(full_path, 'r', encoding='utf-8', errors='replace') as f:
             content = f.read()
-        return jsonify({'ok': True, 'path': file_path, 'content': content, 'size': size})
+        mtime = int(os.path.getmtime(full_path) * 1000)
+        return jsonify({'ok': True, 'path': file_path, 'content': content, 'size': size, 'mtime': mtime})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
+
+@app.route('/api/files/raw', methods=['GET'])
+def api_files_raw():
+    """Serve a workspace file as raw binary (for audio/image/video playback)."""
+    try:
+        file_path = request.args.get('path', '')
+        if not file_path:
+            return ('path is required', 400)
+        workspace_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'workspace')
+        full_path = os.path.normpath(os.path.join(workspace_dir, file_path))
+        if not full_path.startswith(os.path.normpath(workspace_dir)):
+            return ('Path outside workspace', 403)
+        if not os.path.isfile(full_path):
+            return ('File not found', 404)
+        directory = os.path.dirname(full_path)
+        filename = os.path.basename(full_path)
+        return send_from_directory(directory, filename, as_attachment=False)
+    except Exception as e:
+        return (f"Error: {e}", 500)
+
+@app.route('/api/files/write', methods=['PUT'])
+def api_files_write():
+    """Write content to a workspace file."""
+    try:
+        data = request.get_json(force=True)
+        file_path = data.get('path', '')
+        content = data.get('content', '')
+        if not file_path:
+            return jsonify({'ok': False, 'error': 'path is required'}), 400
+        workspace_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'workspace')
+        full_path = os.path.normpath(os.path.join(workspace_dir, file_path))
+        if not full_path.startswith(os.path.normpath(workspace_dir)):
+            return jsonify({'ok': False, 'error': 'Path outside workspace'}), 403
+        # Check for mtime conflict
+        expected_mtime = data.get('expectedMtime')
+        if expected_mtime and os.path.isfile(full_path):
+            actual_mtime = int(os.path.getmtime(full_path) * 1000)
+            if actual_mtime != expected_mtime:
+                return jsonify({'ok': False, 'error': 'File was modified externally', 'conflict': True}), 409
+        os.makedirs(os.path.dirname(full_path), exist_ok=True)
+        with open(full_path, 'w', encoding='utf-8') as f:
+            f.write(content)
+        mtime = int(os.path.getmtime(full_path) * 1000)
+        return jsonify({'ok': True, 'path': file_path, 'mtime': mtime})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/files/mkdir', methods=['POST'])
+def api_files_mkdir():
+    """Create a new directory in the workspace."""
+    try:
+        data = request.get_json(force=True)
+        parent_dir = data.get('parentDir', '')
+        name = data.get('name', '').strip()
+        if not name:
+            return jsonify({'ok': False, 'error': 'name is required'}), 400
+        workspace_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'workspace')
+        if parent_dir:
+            base_dir = os.path.normpath(os.path.join(workspace_dir, parent_dir))
+            if not base_dir.startswith(os.path.normpath(workspace_dir)):
+                return jsonify({'ok': False, 'error': 'Path outside workspace'}), 403
+        else:
+            base_dir = workspace_dir
+        # Auto-deduplicate: if "New Folder" exists, try "New Folder (2)", etc.
+        candidate = name
+        full_path = os.path.join(base_dir, candidate)
+        counter = 2
+        while os.path.exists(full_path):
+            candidate = f'{name} ({counter})'
+            full_path = os.path.join(base_dir, candidate)
+            counter += 1
+        os.makedirs(full_path, exist_ok=True)
+        rel_path = os.path.relpath(full_path, workspace_dir).replace('\\', '/')
+        return jsonify({'ok': True, 'path': rel_path})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/files/move', methods=['POST'])
+def api_files_move():
+    """Move a file or directory within the workspace."""
+    try:
+        data = request.get_json(force=True)
+        source_path = data.get('sourcePath', '')
+        target_dir_path = data.get('targetDirPath', '')
+        if not source_path:
+            return jsonify({'ok': False, 'error': 'sourcePath is required'}), 400
+        workspace_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'workspace')
+        src_full = os.path.normpath(os.path.join(workspace_dir, source_path))
+        if not src_full.startswith(os.path.normpath(workspace_dir)):
+            return jsonify({'ok': False, 'error': 'Source path outside workspace'}), 403
+        if not os.path.exists(src_full):
+            return jsonify({'ok': False, 'error': 'Source not found'}), 404
+        name = os.path.basename(src_full)
+        if target_dir_path:
+            dst_dir = os.path.normpath(os.path.join(workspace_dir, target_dir_path))
+        else:
+            dst_dir = workspace_dir
+        if not dst_dir.startswith(os.path.normpath(workspace_dir)):
+            return jsonify({'ok': False, 'error': 'Target path outside workspace'}), 403
+        os.makedirs(dst_dir, exist_ok=True)
+        dst_full = os.path.join(dst_dir, name)
+        if os.path.exists(dst_full):
+            return jsonify({'ok': False, 'error': f'{name} already exists in target'}), 409
+        import shutil
+        shutil.move(src_full, dst_full)
+        new_rel = os.path.relpath(dst_full, workspace_dir).replace('\\', '/')
+        return jsonify({'ok': True, 'from': source_path, 'to': new_rel})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/files/rename', methods=['POST'])
+def api_files_rename():
+    """Rename a file or directory within the workspace."""
+    try:
+        data = request.get_json(force=True)
+        file_path = data.get('path', '')
+        new_name = data.get('newName', '')
+        if not file_path or not new_name:
+            return jsonify({'ok': False, 'error': 'path and newName are required'}), 400
+        if '/' in new_name or '\\' in new_name:
+            return jsonify({'ok': False, 'error': 'Name cannot contain path separators'}), 400
+        workspace_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'workspace')
+        full_path = os.path.normpath(os.path.join(workspace_dir, file_path))
+        if not full_path.startswith(os.path.normpath(workspace_dir)):
+            return jsonify({'ok': False, 'error': 'Path outside workspace'}), 403
+        if not os.path.exists(full_path):
+            return jsonify({'ok': False, 'error': 'Not found'}), 404
+        parent = os.path.dirname(full_path)
+        new_full = os.path.join(parent, new_name)
+        if os.path.exists(new_full):
+            return jsonify({'ok': False, 'error': f'{new_name} already exists'}), 409
+        os.rename(full_path, new_full)
+        new_rel = os.path.relpath(new_full, workspace_dir).replace('\\', '/')
+        return jsonify({'ok': True, 'from': file_path, 'to': new_rel})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/files/trash', methods=['POST'])
+def api_files_trash():
+    """Move a file or directory to .trash within the workspace."""
+    try:
+        data = request.get_json(force=True)
+        file_path = data.get('path', '')
+        if not file_path:
+            return jsonify({'ok': False, 'error': 'path is required'}), 400
+        workspace_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'workspace')
+        full_path = os.path.normpath(os.path.join(workspace_dir, file_path))
+        if not full_path.startswith(os.path.normpath(workspace_dir)):
+            return jsonify({'ok': False, 'error': 'Path outside workspace'}), 403
+        if not os.path.exists(full_path):
+            return jsonify({'ok': False, 'error': 'Not found'}), 404
+        trash_dir = os.path.join(workspace_dir, '.trash')
+        os.makedirs(trash_dir, exist_ok=True)
+        name = os.path.basename(full_path)
+        trash_dest = os.path.join(trash_dir, name)
+        # Handle name collisions in trash
+        counter = 1
+        base, ext = os.path.splitext(name)
+        while os.path.exists(trash_dest):
+            trash_dest = os.path.join(trash_dir, f'{base}_{counter}{ext}')
+            counter += 1
+        import shutil
+        shutil.move(full_path, trash_dest)
+        trash_rel = os.path.relpath(trash_dest, workspace_dir).replace('\\', '/')
+        return jsonify({'ok': True, 'from': file_path, 'to': trash_rel, 'undoTtlMs': 10000})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/files/restore', methods=['POST'])
+def api_files_restore():
+    """Restore a file from .trash back to workspace root."""
+    try:
+        data = request.get_json(force=True)
+        file_path = data.get('path', '')
+        if not file_path:
+            return jsonify({'ok': False, 'error': 'path is required'}), 400
+        workspace_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'workspace')
+        full_path = os.path.normpath(os.path.join(workspace_dir, file_path))
+        if not full_path.startswith(os.path.normpath(workspace_dir)):
+            return jsonify({'ok': False, 'error': 'Path outside workspace'}), 403
+        if not os.path.exists(full_path):
+            return jsonify({'ok': False, 'error': 'Not found in trash'}), 404
+        name = os.path.basename(full_path)
+        restore_dest = os.path.join(workspace_dir, name)
+        counter = 1
+        base, ext = os.path.splitext(name)
+        while os.path.exists(restore_dest):
+            restore_dest = os.path.join(workspace_dir, f'{base}_{counter}{ext}')
+            counter += 1
+        import shutil
+        shutil.move(full_path, restore_dest)
+        new_rel = os.path.relpath(restore_dest, workspace_dir).replace('\\', '/')
+        return jsonify({'ok': True, 'from': file_path, 'to': new_rel})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/files/upload', methods=['POST'])
+def api_files_upload():
+    """Upload a file to a workspace directory via multipart form data."""
+    try:
+        workspace_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'workspace')
+        target_dir = request.form.get('targetDir', '')
+        if target_dir:
+            dest_dir = os.path.normpath(os.path.join(workspace_dir, target_dir))
+        else:
+            dest_dir = workspace_dir
+        if not dest_dir.startswith(os.path.normpath(workspace_dir)):
+            return jsonify({'ok': False, 'error': 'Path outside workspace'}), 403
+        os.makedirs(dest_dir, exist_ok=True)
+        uploaded = request.files.getlist('files')
+        if not uploaded:
+            return jsonify({'ok': False, 'error': 'No files uploaded'}), 400
+        saved = []
+        for f in uploaded:
+            if not f.filename:
+                continue
+            safe_name = os.path.basename(f.filename)
+            dest_path = os.path.join(dest_dir, safe_name)
+            f.save(dest_path)
+            rel = os.path.relpath(dest_path, workspace_dir).replace('\\', '/')
+            saved.append(rel)
+        return jsonify({'ok': True, 'files': saved})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# === Notes API ===
+# Obsidian-style notes stored as .md files under workspace/notes/
+
+_NOTES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'workspace', 'notes')
+
+def _ensure_notes_dir():
+    os.makedirs(_NOTES_DIR, exist_ok=True)
+
+def _safe_notes_path(rel_path):
+    """Resolve rel_path inside _NOTES_DIR; return None if it escapes."""
+    full = os.path.normpath(os.path.join(_NOTES_DIR, rel_path))
+    if not full.startswith(os.path.normpath(_NOTES_DIR)):
+        return None
+    return full
+
+
+@app.route('/api/notes/tree', methods=['GET'])
+def api_notes_tree():
+    """List all notes as a tree structure."""
+    _ensure_notes_dir()
+    try:
+        entries = []
+        for root, dirs, files in os.walk(_NOTES_DIR):
+            # Sort for consistent ordering
+            dirs.sort()
+            files.sort()
+            rel_root = os.path.relpath(root, _NOTES_DIR)
+            if rel_root == '.':
+                rel_root = ''
+            for d in dirs:
+                entries.append({
+                    'name': d,
+                    'path': os.path.join(rel_root, d).replace('\\', '/') if rel_root else d,
+                    'type': 'folder',
+                })
+            for f in files:
+                if not f.endswith('.md'):
+                    continue
+                fpath = os.path.join(root, f)
+                stat = os.stat(fpath)
+                entries.append({
+                    'name': f,
+                    'path': os.path.join(rel_root, f).replace('\\', '/') if rel_root else f,
+                    'type': 'file',
+                    'size': stat.st_size,
+                    'modified': stat.st_mtime,
+                })
+        return jsonify({'ok': True, 'entries': entries})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/notes/read', methods=['GET'])
+def api_notes_read():
+    """Read a note file by relative path."""
+    rel_path = request.args.get('path', '')
+    if not rel_path:
+        return jsonify({'ok': False, 'error': 'path is required'}), 400
+    full_path = _safe_notes_path(rel_path)
+    if not full_path:
+        return jsonify({'ok': False, 'error': 'Invalid path'}), 403
+    if not os.path.isfile(full_path):
+        return jsonify({'ok': False, 'error': 'Note not found'}), 404
+    try:
+        with open(full_path, 'r', encoding='utf-8', errors='replace') as f:
+            content = f.read()
+        stat = os.stat(full_path)
+        return jsonify({'ok': True, 'path': rel_path, 'content': content, 'modified': stat.st_mtime})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/notes/write', methods=['POST', 'PUT'])
+def api_notes_write():
+    """Create or update a note. Body: {path, content}."""
+    data = request.get_json(silent=True) or {}
+    rel_path = data.get('path', '')
+    content = data.get('content', '')
+    if not rel_path:
+        return jsonify({'ok': False, 'error': 'path is required'}), 400
+    # Ensure .md extension
+    if not rel_path.endswith('.md'):
+        rel_path += '.md'
+    full_path = _safe_notes_path(rel_path)
+    if not full_path:
+        return jsonify({'ok': False, 'error': 'Invalid path'}), 403
+    try:
+        os.makedirs(os.path.dirname(full_path), exist_ok=True)
+        with open(full_path, 'w', encoding='utf-8') as f:
+            f.write(content)
+        stat = os.stat(full_path)
+        return jsonify({'ok': True, 'path': rel_path, 'modified': stat.st_mtime})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/notes/delete', methods=['DELETE', 'POST'])
+def api_notes_delete():
+    """Delete a note or empty folder. Body or query: {path}."""
+    if request.method == 'POST':
+        data = request.get_json(silent=True) or {}
+        rel_path = data.get('path', '')
+    else:
+        rel_path = request.args.get('path', '')
+    if not rel_path:
+        return jsonify({'ok': False, 'error': 'path is required'}), 400
+    full_path = _safe_notes_path(rel_path)
+    if not full_path:
+        return jsonify({'ok': False, 'error': 'Invalid path'}), 403
+    try:
+        if os.path.isfile(full_path):
+            os.remove(full_path)
+        elif os.path.isdir(full_path):
+            # Only delete empty directories for safety
+            if os.listdir(full_path):
+                return jsonify({'ok': False, 'error': 'Folder is not empty'}), 400
+            os.rmdir(full_path)
+        else:
+            return jsonify({'ok': False, 'error': 'Not found'}), 404
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/notes/mkdir', methods=['POST'])
+def api_notes_mkdir():
+    """Create a folder inside notes. Body: {path}."""
+    data = request.get_json(silent=True) or {}
+    rel_path = data.get('path', '')
+    if not rel_path:
+        return jsonify({'ok': False, 'error': 'path is required'}), 400
+    full_path = _safe_notes_path(rel_path)
+    if not full_path:
+        return jsonify({'ok': False, 'error': 'Invalid path'}), 403
+    try:
+        os.makedirs(full_path, exist_ok=True)
+        return jsonify({'ok': True, 'path': rel_path})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/notes/search', methods=['GET'])
+def api_notes_search():
+    """Full-text search across all notes. Query param: q (search term)."""
+    _ensure_notes_dir()
+    query = request.args.get('q', '').strip().lower()
+    if not query:
+        return jsonify({'ok': True, 'results': []})
+    try:
+        results = []
+        for root, _dirs, files in os.walk(_NOTES_DIR):
+            for f in sorted(files):
+                if not f.endswith('.md'):
+                    continue
+                fpath = os.path.join(root, f)
+                rel_path = os.path.relpath(fpath, _NOTES_DIR).replace('\\', '/')
+                try:
+                    with open(fpath, 'r', encoding='utf-8', errors='replace') as fh:
+                        content = fh.read()
+                except Exception:
+                    continue
+                # Search in filename and content
+                lower_content = content.lower()
+                if query not in f.lower() and query not in lower_content:
+                    continue
+                # Find matching lines for context
+                matches = []
+                for i, line in enumerate(content.split('\n')):
+                    if query in line.lower():
+                        matches.append({'line': i + 1, 'text': line.strip()[:120]})
+                        if len(matches) >= 3:
+                            break
+                results.append({
+                    'path': rel_path,
+                    'name': f,
+                    'matches': matches,
+                    'matchCount': lower_content.count(query),
+                })
+                if len(results) >= 50:
+                    break
+            if len(results) >= 50:
+                break
+        return jsonify({'ok': True, 'results': results})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/notes/rename', methods=['POST'])
+def api_notes_rename():
+    """Rename/move a note or folder. Body: {oldPath, newPath}."""
+    data = request.get_json(silent=True) or {}
+    old_path = data.get('oldPath', '')
+    new_path = data.get('newPath', '')
+    if not old_path or not new_path:
+        return jsonify({'ok': False, 'error': 'oldPath and newPath are required'}), 400
+    full_old = _safe_notes_path(old_path)
+    full_new = _safe_notes_path(new_path)
+    if not full_old or not full_new:
+        return jsonify({'ok': False, 'error': 'Invalid path'}), 403
+    if not os.path.exists(full_old):
+        return jsonify({'ok': False, 'error': 'Source not found'}), 404
+    try:
+        os.makedirs(os.path.dirname(full_new), exist_ok=True)
+        os.rename(full_old, full_new)
+        return jsonify({'ok': True, 'path': new_path})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/api/notes/analyze', methods=['POST'])
+def api_notes_analyze():
+    """Analyze a note's content using AI to provide contextual insights.
+    
+    Body: {content: string, path?: string}
+    Returns: {ok: true, analysis: string, noteType: string, suggestions: string[]}
+    """
+    global agent
+    if 'agent' not in globals() or agent is None:
+        return jsonify({'ok': False, 'error': 'Agent not ready'}), 503
+    
+    data = request.get_json(silent=True) or {}
+    content = data.get('content', '').strip()
+    note_path = data.get('path', '')
+    
+    if not content:
+        return jsonify({'ok': False, 'error': 'No content to analyze'}), 400
+    if len(content) < 10:
+        return jsonify({'ok': False, 'error': 'Note too short to analyze meaningfully'}), 400
+    
+    # Truncate very long notes to avoid token limits
+    max_chars = 8000
+    truncated = content[:max_chars] if len(content) > max_chars else content
+    
+    system_prompt = """You are an intelligent note analyst. The user has written a note and wants you to analyze it.
+
+Your job is to:
+1. DETECT the type of note (one of: brain_dump, dream, project_plan, research, personal_reflection, meeting_notes, creative_writing, todo_list, journal, technical, other)
+2. Provide a clear, concise ANALYSIS that helps the user understand, organize, or build upon what they've written
+3. Suggest 2-4 ACTIONS they could take based on the note type:
+   - Brain dump → clarify key points, organize into themes, extract action items
+   - Dream → symbolic interpretation with grounded references, recurring themes
+   - Project plan → identify gaps, suggest milestones, flag risks
+   - Research → suggest related queries, identify assumptions, propose next steps
+   - Personal reflection → identify patterns, suggest reframes, note growth areas
+   - Meeting notes → extract decisions, action items, follow-ups
+   - Creative writing → feedback on tone/structure, suggest expansions
+   - Technical → identify issues, suggest improvements, note dependencies
+
+Format your response as:
+TYPE: <note_type>
+---
+ANALYSIS:
+<your analysis here - 2-4 paragraphs, insightful and specific to what they wrote>
+---
+SUGGESTIONS:
+- <actionable suggestion 1>
+- <actionable suggestion 2>
+- <actionable suggestion 3>
+- <actionable suggestion 4 (optional)>
+
+Be concise but insightful. Don't be generic — reference specific content from their note."""
+
+    messages = [
+        {'role': 'system', 'content': system_prompt},
+        {'role': 'user', 'content': f"Please analyze this note:\n\n{truncated}"},
+    ]
+    
+    try:
+        result = agent.call_llm_sync(messages, max_tokens_override=2048)
+        response_text = result.get('content', '').strip()
+        
+        if not response_text:
+            return jsonify({'ok': False, 'error': 'No response from AI'}), 500
+        
+        # Parse the structured response
+        note_type = 'other'
+        analysis = response_text
+        suggestions = []
+        
+        if 'TYPE:' in response_text and '---' in response_text:
+            parts = response_text.split('---')
+            # Extract type
+            type_section = parts[0].strip()
+            if 'TYPE:' in type_section:
+                note_type = type_section.split('TYPE:')[1].strip().lower().replace(' ', '_')
+            # Extract analysis
+            if len(parts) > 1:
+                analysis_section = parts[1].strip()
+                if analysis_section.startswith('ANALYSIS:'):
+                    analysis_section = analysis_section[len('ANALYSIS:'):].strip()
+                analysis = analysis_section
+            # Extract suggestions
+            if len(parts) > 2:
+                suggestions_section = parts[2].strip()
+                if suggestions_section.startswith('SUGGESTIONS:'):
+                    suggestions_section = suggestions_section[len('SUGGESTIONS:'):].strip()
+                suggestions = [
+                    line.strip().lstrip('- •').strip()
+                    for line in suggestions_section.split('\n')
+                    if line.strip() and line.strip() not in ('', '-')
+                ]
+        
+        return jsonify({
+            'ok': True,
+            'noteType': note_type,
+            'analysis': analysis,
+            'suggestions': suggestions,
+            'raw': response_text,
+        })
+    except Exception as e:
+        logger.error(f"[NOTES_ANALYZE] Error: {e}")
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+# ─── Mobile Pairing ─────────────────────────────────────────────
+import secrets as _secrets
+import time as _time
+
+_mobile_pair_codes: dict = {}  # code -> {created, token}
+
+@app.route('/api/mobile/pair-code', methods=['POST'])
+def api_mobile_pair_code():
+    """Generate a 6-digit pairing code for mobile sync. Valid for 5 minutes."""
+    # Clean expired codes
+    now = _time.time()
+    expired = [k for k, v in _mobile_pair_codes.items() if now - v['created'] > 300]
+    for k in expired:
+        del _mobile_pair_codes[k]
+    code = str(_secrets.randbelow(900000) + 100000)  # 6-digit code
+    _mobile_pair_codes[code] = {'created': now}
+    return jsonify({'ok': True, 'code': code, 'expiresIn': 300})
+
+@app.route('/api/mobile/pair', methods=['POST'])
+def api_mobile_pair():
+    """Verify a pairing code and return connection details for mobile."""
+    data = request.get_json(silent=True) or {}
+    code = str(data.get('code', '')).strip()
+    if not code or code not in _mobile_pair_codes:
+        return jsonify({'ok': False, 'error': 'Invalid or expired pairing code'}), 400
+    entry = _mobile_pair_codes.pop(code)
+    if _time.time() - entry['created'] > 300:
+        return jsonify({'ok': False, 'error': 'Pairing code expired'}), 400
+    # Build the server URL from the request
+    host = request.host  # includes port
+    scheme = 'https' if request.is_secure else 'http'
+    server_url = f'{scheme}://{host}'
+    return jsonify({
+        'ok': True,
+        'serverUrl': server_url,
+        'hostname': request.host.split(':')[0],
+        'port': int(request.host.split(':')[1]) if ':' in request.host else (443 if request.is_secure else 80),
+    })
+
+@app.route('/api/test', methods=['GET'])
+def api_test():
+    """Simple connectivity test endpoint."""
+    return jsonify({'ok': True, 'server': 'substrate', 'timestamp': _time.time()})
+
 
 @app.route('/api/gateway/status', methods=['GET'])
 def api_gateway_status():
@@ -11146,6 +12017,63 @@ def api_local_research_feed():
     else:
         data = _safe_read_json(feed_file) or {}
         return jsonify({'ok': True, 'items': data.get('items', []), 'briefs': data.get('briefs', [])})
+
+
+@app.route('/api/local/bg-image', methods=['GET', 'POST', 'DELETE'])
+def api_local_bg_image():
+    """Background image — server-side storage (no size limit, supports GIFs)."""
+    bg_dir = os.path.join(_PROJECT_ROOT, 'data')
+    exts = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.svg']
+
+    def _find_bg():
+        for ext in exts:
+            p = os.path.join(bg_dir, f'bg-image{ext}')
+            if os.path.isfile(p):
+                return p, ext
+        return None, None
+
+    if request.method == 'GET':
+        p, ext = _find_bg()
+        if not p:
+            return '', 404
+        mime_map = {
+            '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+            '.gif': 'image/gif', '.webp': 'image/webp', '.bmp': 'image/bmp', '.svg': 'image/svg+xml',
+        }
+        from flask import send_file
+        return send_file(p, mimetype=mime_map.get(ext, 'application/octet-stream'),
+                         download_name=f'bg-image{ext}',
+                         max_age=0)
+
+    if request.method == 'DELETE':
+        p, _ = _find_bg()
+        if p:
+            try:
+                os.remove(p)
+            except Exception:
+                pass
+        return jsonify({'ok': True})
+
+    # POST — upload
+    ct = request.content_type or ''
+    ext_map = {
+        'image/png': '.png', 'image/jpeg': '.jpg', 'image/gif': '.gif',
+        'image/webp': '.webp', 'image/bmp': '.bmp', 'image/svg+xml': '.svg',
+    }
+    ext = ext_map.get(ct, '.png')
+    # Remove any existing bg-image file first
+    old_p, _ = _find_bg()
+    if old_p:
+        try:
+            os.remove(old_p)
+        except Exception:
+            pass
+    os.makedirs(bg_dir, exist_ok=True)
+    data = request.get_data()
+    dest = os.path.join(bg_dir, f'bg-image{ext}')
+    with open(dest, 'wb') as f:
+        f.write(data)
+    return jsonify({'ok': True, 'size': len(data)})
 
 
 @app.route('/api/local/research-prompts', methods=['GET', 'POST'])
@@ -12584,9 +13512,8 @@ def dashboard_files(filename):
     filepath = os.path.join(DASHBOARD_DIR, filename)
     if os.path.isfile(filepath):
         resp = make_response(send_from_directory(DASHBOARD_DIR, filename))
-        # Prevent caching for widget JS/CSS so style sync changes are picked up immediately
-        if filename in ('clock_widget.js', 'clock_widget.css', 'index.html'):
-            resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        # Prevent caching for all dashboard assets so rebuilds are picked up immediately
+        resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
         return resp
     # SPA fallback — return index.html for any non-file route
     resp = make_response(send_from_directory(DASHBOARD_DIR, 'index.html'))
@@ -12641,11 +13568,52 @@ def ui_widget_style():
         with open(_WIDGET_STYLE_FILE, 'w', encoding='utf-8') as f:
             json.dump(data, f)
         return jsonify({'ok': True})
-    # GET
+    # GET — check if mobile client wants lightweight version (no base64 blobs)
+    lite = request.args.get('lite', '').lower() in ('1', 'true', 'yes')
     if os.path.isfile(_WIDGET_STYLE_FILE):
         with open(_WIDGET_STYLE_FILE, 'r', encoding='utf-8') as f:
-            return jsonify(json.load(f))
+            data = json.load(f)
+        if lite and isinstance(data.get('emotionGifs'), dict):
+            # Replace base64 data URIs with /ui/widget-gif/<emotion>/<index> URLs
+            lite_gifs = {}
+            for emotion, gifs in data['emotionGifs'].items():
+                if isinstance(gifs, list):
+                    lite_gifs[emotion] = [
+                        f'/ui/widget-gif/{emotion}/{idx}'
+                        for idx, g in enumerate(gifs) if g and isinstance(g, str)
+                    ]
+            data['emotionGifs'] = lite_gifs
+        return jsonify(data)
     return jsonify({}), 200
+
+@app.route('/ui/widget-gif/<emotion>/<int:idx>')
+def ui_widget_gif(emotion, idx):
+    """Serve individual emotion GIFs from widget_style.json with aggressive caching."""
+    if not os.path.isfile(_WIDGET_STYLE_FILE):
+        return ('Style not configured', 404)
+    try:
+        with open(_WIDGET_STYLE_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        gifs = data.get('emotionGifs', {}).get(emotion, [])
+        if idx < 0 or idx >= len(gifs):
+            return ('GIF not found', 404)
+        gif_data = gifs[idx]
+        if not gif_data:
+            return ('GIF not found', 404)
+        # Handle data URI (base64)
+        if gif_data.startswith('data:'):
+            # data:image/gif;base64,AAAA...
+            header, encoded = gif_data.split(',', 1)
+            mime = header.split(':')[1].split(';')[0] if ':' in header else 'image/gif'
+            img_bytes = base64.b64decode(encoded)
+            resp = make_response(img_bytes)
+            resp.headers['Content-Type'] = mime
+            resp.headers['Cache-Control'] = 'public, max-age=604800, immutable'
+            return resp
+        # Handle URL — redirect
+        return redirect(gif_data)
+    except Exception as e:
+        return (f'Error: {e}', 500)
 
 @app.route('/ui/avatar')
 def ui_avatar():
@@ -12675,6 +13643,47 @@ def ui_avatar():
         return ("Avatar not found", 404)
     except Exception as e:
         return (f"Error serving avatar: {e}", 500)
+
+@app.route('/ui/image-proxy')
+def ui_image_proxy():
+    """Proxy external images (e.g. Tenor GIFs) through this server for same-origin caching."""
+    url = request.args.get('url', '')
+    if not url or not url.startswith('http'):
+        return ('Missing or invalid url parameter', 400)
+    # Cache directory
+    cache_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'image_cache')
+    os.makedirs(cache_dir, exist_ok=True)
+    # Use URL hash as filename
+    import hashlib
+    url_hash = hashlib.md5(url.encode()).hexdigest()
+    # Guess extension from URL
+    ext = 'gif'
+    for e in ['gif', 'png', 'jpg', 'jpeg', 'webp', 'mp4', 'webm']:
+        if f'.{e}' in url.lower():
+            ext = e
+            break
+    cache_path = os.path.join(cache_dir, f'{url_hash}.{ext}')
+    # Serve from disk cache if available
+    if os.path.isfile(cache_path):
+        mime = {'gif': 'image/gif', 'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg',
+                'webp': 'image/webp', 'mp4': 'video/mp4', 'webm': 'video/webm'}.get(ext, 'application/octet-stream')
+        resp = send_from_directory(cache_dir, f'{url_hash}.{ext}', mimetype=mime)
+        resp.headers['Cache-Control'] = 'public, max-age=604800'
+        return resp
+    # Fetch from remote
+    try:
+        r = requests.get(url, timeout=15, stream=True)
+        if r.status_code != 200:
+            return (f'Upstream returned {r.status_code}', 502)
+        with open(cache_path, 'wb') as f:
+            for chunk in r.iter_content(8192):
+                f.write(chunk)
+        content_type = r.headers.get('Content-Type', 'image/gif')
+        resp = send_from_directory(cache_dir, f'{url_hash}.{ext}', mimetype=content_type)
+        resp.headers['Cache-Control'] = 'public, max-age=604800'
+        return resp
+    except Exception as e:
+        return (f'Proxy fetch failed: {e}', 502)
 
 @app.route('/static/<path:filename>')
 def serve_static(filename):
@@ -13051,6 +14060,7 @@ def tts_stream_end():
 def gateway_ws_endpoint(ws):
     """Substrate Gateway — bidirectional JSON-RPC WebSocket.
     Provides real-time push events, session-scoped RPC, and structured streaming."""
+    print(f"[GATEWAY-WS] Connection from origin={request.headers.get('Origin', '?')} remote={request.remote_addr}", flush=True)
     from src.infra.gateway_ws import handle_gateway_ws
     handle_gateway_ws(ws)
 
@@ -13094,50 +14104,318 @@ def api_connect_defaults():
         'serverSideAuth': True,
     })
 
+# ─── Kanban Task Board — Unified with /api/local/tasks (data/tasks.json) ──────
+#
+# Both the desktop KanbanBoard (/api/kanban/*) and mobile MobileTasksView
+# (/api/local/tasks) now share a single data/tasks.json file.
+#
+# Schema mapping:
+#   Mobile field  →  Desktop field
+#   column           status         (backlog|in_progress→in-progress|done)
+#   owner            createdBy      (human→operator|agent→agent:default)
+#   schedule         (preserved)
+#   channel          (preserved)
+#   progress         (preserved)
+#
+# The kanban endpoints read/write with _load_tasks/_save_tasks and translate
+# field names on the fly for the desktop KanbanTask contract.
+# ──────────────────────────────────────────────────────────────────────────────
+import uuid as _uuid_mod
+
+# Status mapping: mobile ↔ desktop
+_STATUS_TO_KANBAN = {'in_progress': 'in-progress'}
+_STATUS_FROM_KANBAN = {'in-progress': 'in_progress', 'todo': 'backlog', 'review': 'in_progress', 'cancelled': 'done'}
+# Priority mapping: mobile uses 'medium', desktop uses 'normal'
+_PRIORITY_TO_KANBAN = {'medium': 'normal'}
+_PRIORITY_FROM_KANBAN = {'normal': 'medium'}
+
+def _task_to_kanban(t):
+    """Convert internal task dict to desktop KanbanTask shape."""
+    col = t.get('column', t.get('status', 'backlog'))
+    status = _STATUS_TO_KANBAN.get(col, col)  # in_progress → in-progress
+    owner = t.get('owner', 'human')
+    created_by = 'operator' if owner == 'human' else f"agent:{owner}" if owner != 'agent' else 'agent:default'
+    return {
+        'id': t.get('id', ''),
+        'title': t.get('title', ''),
+        'description': t.get('description', ''),
+        'status': status,
+        'priority': _PRIORITY_TO_KANBAN.get(t.get('priority', 'normal'), t.get('priority', 'normal')),
+        'createdBy': t.get('createdBy', created_by),
+        'createdAt': t.get('createdAt', 0),
+        'updatedAt': t.get('updatedAt', 0),
+        'version': t.get('version', 1),
+        'assignee': t.get('assignee', None),
+        'labels': t.get('labels', []),
+        'columnOrder': t.get('columnOrder', 0),
+        'feedback': t.get('feedback', []),
+        'sourceSessionKey': t.get('sourceSessionKey'),
+        'run': t.get('run'),
+        'result': t.get('result'),
+        'resultAt': t.get('resultAt'),
+        'model': t.get('model'),
+        'thinking': t.get('thinking'),
+        'dueAt': t.get('dueAt'),
+        'estimateMin': t.get('estimateMin'),
+        'actualMin': t.get('actualMin'),
+        # Preserve mobile-only fields so round-tripping works
+        'channel': t.get('channel'),
+        'schedule': t.get('schedule'),
+        'progress': t.get('progress'),
+        'statusNote': t.get('statusNote'),
+        'dueDate': t.get('dueDate'),
+    }
+
+def _kanban_status_to_column(status):
+    """Convert desktop status string to internal column value."""
+    return _STATUS_FROM_KANBAN.get(status, status)  # in-progress → in_progress, etc.
+
+def _kanban_find(tasks, task_id):
+    """Find a task by ID, returns (index, task) or (-1, None)."""
+    for i, t in enumerate(tasks):
+        if t.get('id') == task_id:
+            return i, t
+    return -1, None
+
 @app.route('/api/kanban/config', methods=['GET'])
 def api_kanban_config():
-    """Kanban board config stub."""
+    """Kanban board configuration."""
     return jsonify({
         'columns': [
-            {'key': 'backlog',     'label': 'Backlog',     'visible': True, 'color': '#6b7280'},
-            {'key': 'todo',        'label': 'To Do',       'visible': True, 'color': '#3b82f6'},
-            {'key': 'in_progress', 'label': 'In Progress', 'visible': True, 'color': '#f59e0b'},
-            {'key': 'done',        'label': 'Done',        'visible': True, 'color': '#10b981'},
+            {'key': 'backlog',     'title': 'Backlog',     'visible': True, 'wipLimit': None},
+            {'key': 'todo',        'title': 'To Do',       'visible': True, 'wipLimit': None},
+            {'key': 'in-progress', 'title': 'In Progress', 'visible': True, 'wipLimit': 5},
+            {'key': 'review',      'title': 'Review',      'visible': True, 'wipLimit': None},
+            {'key': 'done',        'title': 'Done',        'visible': True, 'wipLimit': None},
         ],
-        'defaults': {'status': 'backlog', 'priority': 'medium'},
+        'defaults': {'status': 'backlog', 'priority': 'normal'},
         'reviewRequired': False,
+        'allowDoneDragBypass': True,
+        'quickViewLimit': 200,
+        'proposalPolicy': 'confirm',
     })
 
 @app.route('/api/kanban/tasks', methods=['GET', 'POST'])
 def api_kanban_tasks():
-    """Kanban tasks stub."""
-    if request.method == 'POST':
-        return jsonify({'ok': True, 'task': request.get_json(force=True, silent=True) or {}})
-    return jsonify({'items': [], 'total': 0, 'limit': 100})
+    """List or create kanban tasks — backed by shared data/tasks.json."""
+    if request.method == 'GET':
+        raw_tasks = _load_tasks()
+        items = [_task_to_kanban(t) for t in raw_tasks]
 
-@app.route('/api/kanban/tasks/<path:task_id>', methods=['PATCH', 'DELETE'])
+        # Filtering
+        q = request.args.get('q', '').lower()
+        priorities = request.args.getlist('priority[]')
+        assignee = request.args.get('assignee', '')
+        labels = request.args.getlist('label')
+        limit = int(request.args.get('limit', 200))
+        offset = int(request.args.get('offset', 0))
+
+        if q:
+            items = [t for t in items if q in t.get('title', '').lower() or q in (t.get('description') or '').lower()]
+        if priorities:
+            items = [t for t in items if t.get('priority') in priorities]
+        if assignee:
+            items = [t for t in items if t.get('assignee') == assignee]
+        if labels:
+            items = [t for t in items if any(l in t.get('labels', []) for l in labels)]
+
+        total = len(items)
+        page = items[offset:offset + limit]
+        return jsonify({
+            'items': page,
+            'total': total,
+            'limit': limit,
+            'offset': offset,
+            'hasMore': (offset + limit) < total,
+        })
+
+    # POST — create new task
+    data = request.get_json(force=True, silent=True) or {}
+    title = data.get('title', '').strip()
+    if not title:
+        return jsonify({'error': 'Title is required'}), 400
+
+    now_ms = int(time.time() * 1000)
+    tasks = _load_tasks()
+
+    kanban_status = data.get('status', 'backlog')
+    column = _kanban_status_to_column(kanban_status)
+
+    # Determine columnOrder: append to end of target column
+    same_col = [t for t in tasks if t.get('column', t.get('status', 'backlog')) == column
+                or _STATUS_TO_KANBAN.get(t.get('column', ''), t.get('column', '')) == kanban_status]
+    max_order = max((t.get('columnOrder', 0) for t in same_col), default=-1)
+
+    # Map createdBy/assignee back to owner
+    created_by = data.get('createdBy', 'operator')
+    owner = 'agent' if 'agent' in created_by else 'human'
+
+    new_task = {
+        'id': str(_uuid_mod.uuid4()),
+        'title': title,
+        'description': data.get('description', ''),
+        'column': column,
+        'status': column,
+        'priority': _PRIORITY_FROM_KANBAN.get(data.get('priority', 'normal'), data.get('priority', 'normal')),
+        'owner': owner,
+        'createdBy': created_by,
+        'createdAt': now_ms,
+        'updatedAt': now_ms,
+        'version': 1,
+        'assignee': data.get('assignee', None),
+        'labels': data.get('labels', []),
+        'columnOrder': max_order + 1,
+        'feedback': [],
+        'schedule': 'whenever',
+    }
+    tasks.append(new_task)
+    _save_tasks(tasks)
+
+    return jsonify(_task_to_kanban(new_task)), 201
+
+@app.route('/api/kanban/tasks/<path:task_id>', methods=['GET', 'PATCH', 'DELETE'])
 def api_kanban_task_crud(task_id):
-    """Kanban single-task CRUD stub."""
-    return jsonify({'ok': True, 'id': task_id})
+    """Get, update, or delete a single task."""
+    tasks = _load_tasks()
+    idx, task = _kanban_find(tasks, task_id)
+
+    if idx == -1:
+        return jsonify({'error': 'Task not found'}), 404
+
+    if request.method == 'GET':
+        return jsonify(_task_to_kanban(task))
+
+    if request.method == 'DELETE':
+        tasks.pop(idx)
+        _save_tasks(tasks)
+        return jsonify({'ok': True, 'id': task_id})
+
+    # PATCH — update
+    data = request.get_json(force=True, silent=True) or {}
+    client_version = data.get('version')
+    if client_version is not None and client_version != task.get('version', 1):
+        return jsonify({'error': 'version_conflict', 'latest': _task_to_kanban(task)}), 409
+
+    if 'title' in data:
+        task['title'] = data['title']
+    if 'description' in data:
+        task['description'] = data['description']
+    if 'status' in data:
+        new_kanban_status = data['status']
+        new_column = _kanban_status_to_column(new_kanban_status)
+        old_column = task.get('column', task.get('status', 'backlog'))
+        task['column'] = new_column
+        task['status'] = new_column
+        if old_column != new_column:
+            same_col = [t for t in tasks if (t.get('column', t.get('status', 'backlog')) == new_column) and t['id'] != task_id]
+            max_order = max((t.get('columnOrder', 0) for t in same_col), default=-1)
+            task['columnOrder'] = max_order + 1
+        if new_column == 'done' and not task.get('completedAt'):
+            task['completedAt'] = int(time.time() * 1000)
+    if 'priority' in data:
+        task['priority'] = _PRIORITY_FROM_KANBAN.get(data['priority'], data['priority'])
+    if 'labels' in data:
+        task['labels'] = data['labels']
+    if 'assignee' in data:
+        task['assignee'] = data['assignee']
+
+    task['updatedAt'] = int(time.time() * 1000)
+    task['version'] = task.get('version', 1) + 1
+    tasks[idx] = task
+    _save_tasks(tasks)
+
+    return jsonify(_task_to_kanban(task))
 
 @app.route('/api/kanban/tasks/<path:task_id>/reorder', methods=['POST'])
+def api_kanban_task_reorder(task_id):
+    """Reorder/move a task to a target status and index."""
+    data = request.get_json(force=True, silent=True) or {}
+    target_kanban_status = data.get('targetStatus')
+    target_index = data.get('targetIndex', 0)
+    client_version = data.get('version')
+
+    tasks = _load_tasks()
+    idx, task = _kanban_find(tasks, task_id)
+    if idx == -1:
+        return jsonify({'error': 'Task not found'}), 404
+
+    if client_version is not None and client_version != task.get('version', 1):
+        return jsonify({'error': 'version_conflict', 'latest': _task_to_kanban(task)}), 409
+
+    if target_kanban_status:
+        new_column = _kanban_status_to_column(target_kanban_status)
+        task['column'] = new_column
+        task['status'] = new_column
+
+    col_val = task.get('column', task.get('status', 'backlog'))
+    col_tasks = sorted(
+        [t for t in tasks if (t.get('column', t.get('status', 'backlog')) == col_val) and t['id'] != task_id],
+        key=lambda t: t.get('columnOrder', 0)
+    )
+    col_tasks.insert(min(target_index, len(col_tasks)), task)
+    for i, t in enumerate(col_tasks):
+        t['columnOrder'] = i
+
+    task['updatedAt'] = int(time.time() * 1000)
+    task['version'] = task.get('version', 1) + 1
+    tasks[idx] = task
+    _save_tasks(tasks)
+
+    return jsonify(_task_to_kanban(task))
+
+def _kanban_workflow_action(task_id, new_column):
+    """Shared helper for execute/approve/reject/abort workflow actions."""
+    data = request.get_json(force=True, silent=True) or {}
+    tasks = _load_tasks()
+    idx, task = _kanban_find(tasks, task_id)
+    if idx == -1:
+        return jsonify({'error': 'Task not found'}), 404
+
+    task['column'] = new_column
+    task['status'] = new_column
+    task['updatedAt'] = int(time.time() * 1000)
+    task['version'] = task.get('version', 1) + 1
+    if new_column == 'done' and not task.get('completedAt'):
+        task['completedAt'] = int(time.time() * 1000)
+    if data.get('note'):
+        task.setdefault('feedback', []).append({
+            'at': int(time.time() * 1000),
+            'by': 'operator',
+            'note': data['note'],
+        })
+    tasks[idx] = task
+    _save_tasks(tasks)
+    return jsonify(_task_to_kanban(task))
+
 @app.route('/api/kanban/tasks/<path:task_id>/execute', methods=['POST'])
+def api_kanban_task_execute(task_id):
+    """Mark task as in-progress (execution requested)."""
+    return _kanban_workflow_action(task_id, 'in_progress')
+
 @app.route('/api/kanban/tasks/<path:task_id>/approve', methods=['POST'])
+def api_kanban_task_approve(task_id):
+    """Approve a task — move to done."""
+    return _kanban_workflow_action(task_id, 'done')
+
 @app.route('/api/kanban/tasks/<path:task_id>/reject', methods=['POST'])
+def api_kanban_task_reject(task_id):
+    """Reject a task — move back to backlog with feedback."""
+    return _kanban_workflow_action(task_id, 'backlog')
+
 @app.route('/api/kanban/tasks/<path:task_id>/abort', methods=['POST'])
-def api_kanban_task_action(task_id):
-    """Kanban task workflow action stub."""
-    return jsonify({'ok': True, 'id': task_id})
+def api_kanban_task_abort(task_id):
+    """Abort a task — move to done (cancelled)."""
+    return _kanban_workflow_action(task_id, 'done')
 
 @app.route('/api/kanban/proposals', methods=['GET'])
 def api_kanban_proposals():
-    """Kanban proposals stub."""
+    """Kanban proposals — returns pending proposals."""
     return jsonify({'proposals': []})
 
 @app.route('/api/kanban/proposals/<path:proposal_id>/approve', methods=['POST'])
 @app.route('/api/kanban/proposals/<path:proposal_id>/reject', methods=['POST'])
 def api_kanban_proposal_action(proposal_id):
-    """Kanban proposal action stub."""
+    """Kanban proposal action."""
     return jsonify({'ok': True, 'id': proposal_id})
 
 @app.route('/api/transcribe/config', methods=['GET', 'PUT'])
@@ -15386,7 +16664,6 @@ def main():
             # Search for Media Suite app.py in common locations
             _base = os.path.dirname(os.path.abspath(__file__))
             _candidates = [
-                os.path.join(os.path.expanduser('~'), 'CascadeProjects', 'windsurf-project', 'app.py'),
                 os.path.join(_base, 'media_suite', 'app.py'),
                 os.path.join(_base, 'workbench', 'app.py'),
             ]
@@ -15440,15 +16717,31 @@ def main():
                 return
 
             _python = sys.executable
+            _log_path = os.path.join(os.path.dirname(_chess_py), 'chess_server.log')
             try:
+                _log_fh = open(_log_path, 'w', encoding='utf-8')
                 _proc = subprocess.Popen(
                     [_python, _chess_py],
                     cwd=os.path.dirname(_chess_py),
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
+                    stdout=_log_fh,
+                    stderr=_log_fh,
                     env={**os.environ, 'PYTHONUNBUFFERED': '1'},
                 )
                 print(f"[GLASS-CHESS] Started (PID {_proc.pid}) from {_chess_py}")
+                # Health check — wait up to 5s for port to open
+                import time as _time
+                for _ in range(10):
+                    _time.sleep(0.5)
+                    try:
+                        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as _s:
+                            _s.settimeout(0.5)
+                            _s.connect(('127.0.0.1', 5050))
+                            print("[GLASS-CHESS] Health check passed — port 5050 open")
+                            break
+                    except (ConnectionRefusedError, OSError, socket.timeout):
+                        continue
+                else:
+                    print(f"[GLASS-CHESS] WARNING: port 5050 not open after 5s, check {_log_path}")
             except Exception as e:
                 print(f"[GLASS-CHESS] Failed to start: {e}")
 

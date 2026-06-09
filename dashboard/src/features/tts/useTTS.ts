@@ -60,6 +60,10 @@ export function useTTS(enabled: boolean, provider: TTSProvider = 'openai', model
     current.audio.src = '';
     URL.revokeObjectURL(current.url);
     currentAudio.current = null;
+    // Reset avatar to idle when audio is forcibly stopped
+    window.dispatchEvent(new CustomEvent('substrate:agent-emotion', {
+      detail: { status: 'idle', emotion: 'idle' }
+    }));
   }, []);
 
   useEffect(() => {
@@ -88,12 +92,19 @@ export function useTTS(enabled: boolean, provider: TTSProvider = 'openai', model
           currentAudio.current = null;
         }
       };
-      audio.addEventListener('ended', revoke, { once: true });
-      audio.addEventListener('error', () => revoke(), { once: true });
+      const emitEmotion = (emotion: string) => {
+        window.dispatchEvent(new CustomEvent('substrate:agent-emotion', {
+          detail: { status: emotion, emotion }
+        }));
+      };
+      audio.addEventListener('ended', () => { revoke(); emitEmotion('idle'); }, { once: true });
+      audio.addEventListener('error', () => { revoke(); emitEmotion('idle'); }, { once: true });
       try {
+        emitEmotion('speaking');
         await audio.play();
       } catch (err) {
         revoke();
+        emitEmotion('idle');
         throw err;
       }
     } catch (err: unknown) {

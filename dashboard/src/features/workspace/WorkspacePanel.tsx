@@ -7,7 +7,7 @@
 
 import { useState, useCallback, lazy, Suspense } from 'react';
 import { WorkspaceTabs, type TabId } from './WorkspaceTabs';
-import { CronsTab, ConfigTab, SkillsTab } from './tabs';
+import { CronsTab, ConfigTab, SkillsTab, NotesTab } from './tabs';
 import { useCrons } from './hooks/useCrons';
 import { KanbanQuickView } from '@/features/kanban';
 import { getWorkspaceStorageKey } from './workspaceScope';
@@ -92,7 +92,7 @@ const STORAGE_KEY = 'Substrate-workspace-tab';
 function getInitialTab(): TabId {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored && ['memory', 'crons', 'config', 'kanban'].includes(stored)) {
+    if (stored && ['memory', 'crons', 'config', 'kanban', 'notes'].includes(stored)) {
       return stored as TabId;
     }
   } catch { /* ignore */ }
@@ -182,6 +182,9 @@ export function WorkspacePanel({
               onOpenTask={(task) => onOpenTask ? onOpenTask(task.id) : onOpenBoard?.()}
             />
           )}
+        </div>
+        <div className={activeTab === 'notes' ? 'h-full' : 'hidden'} hidden={activeTab !== 'notes'} role="tabpanel" id="workspace-tabpanel-notes" aria-labelledby="workspace-tab-notes">
+          {visitedTabs.has('notes') && <NotesTab />}
         </div>
       </div>
     </div>

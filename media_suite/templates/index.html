@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Media Planning Suite</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+    <div class="glass-background"></div>
+    <div class="app-container">
+        <header class="glass-header">
+            <div class="header-left">
+                <h1>Media Planning Suite</h1>
+            </div>
+            <div class="controls">
+                <div class="search-wrapper">
+                    <input type="text" id="searchInput" class="search-input" placeholder="Search...">
+                </div>
+                <button class="icon-btn" id="settingsBtn" title="Settings">⚙️</button>
+                <button class="icon-btn" id="chatToggleBtn" title="Toggle Chat">💬</button>
+                <button class="icon-btn" id="profileBtn" title="Profile">👤</button>
+            </div>
+        </header>
+
+        <!-- Category Tabs -->
+        <nav class="category-tabs" id="categoryTabs">
+            <button class="tab-btn active" data-category="dashboard">📊 Dashboard</button>
+            <button class="tab-btn" data-category="kanban">📋 Media Board</button>
+            <button class="tab-btn" data-category="calendar">📅 Calendar</button>
+            <button class="tab-btn" data-category="research">🔬 Research</button>
+            <button class="tab-btn" data-category="news">📰 Industry News</button>
+            <button class="tab-btn" data-category="assets">🎨 Brand Assets</button>
+        </nav>
+
+        <main class="main-content">
+            <!-- Dashboard View -->
+            <div class="view-container" id="dashboardView">
+                <div class="dashboard-grid">
+                    <div class="glass-card stat-card">
+                        <div class="stat-icon">📋</div>
+                        <div class="stat-content">
+                            <h3 id="activePlansCount">0</h3>
+                            <p>Active Plans</p>
+                        </div>
+                    </div>
+                    <div class="glass-card stat-card">
+                        <div class="stat-icon">📝</div>
+                        <div class="stat-content">
+                            <h3 id="mediaItemsCount">0</h3>
+                            <p>Media Items</p>
+                        </div>
+                    </div>
+                    <div class="glass-card stat-card">
+                        <div class="stat-icon">📅</div>
+                        <div class="stat-content">
+                            <h3 id="scheduledCount">0</h3>
+                            <p>Scheduled</p>
+                        </div>
+                    </div>
+                    <div class="glass-card stat-card">
+                        <div class="stat-icon">📰</div>
+                        <div class="stat-content">
+                            <h3 id="newsCount">0</h3>
+                            <p>News Articles</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="glass-card section-card">
+                    <div class="section-header">
+                        <h2>Your Media Plans</h2>
+                        <button class="btn-primary" id="createPlanBtn">+ New Plan</button>
+                    </div>
+                    <div id="plansGrid" class="plans-grid"></div>
+                </div>
+
+                <div class="glass-card section-card">
+                    <div class="section-header">
+                        <h2>Recent Activity</h2>
+                    </div>
+                    <div id="activityFeed" class="activity-feed"></div>
+                </div>
+            </div>
+
+            <!-- Kanban Board View -->
+            <div class="view-container hidden" id="kanbanView">
+                <div class="kanban-header">
+                    <div class="kanban-controls">
+                        <select id="planSelector" class="glass-select">
+                            <option value="">Select a media plan...</option>
+                        </select>
+                        <button class="btn-primary" id="addMediaItemBtn">+ Add Media Item</button>
+                    </div>
+                </div>
+                <div class="media-list" id="mediaList">
+                    <!-- Media items will be rendered here as expandable cards -->
+                </div>
+            </div>
+
+            <!-- Chat Panel (slide-out) -->
+            <aside class="chat-panel glass-card" id="chatPanel">
+                <div class="chat-header">
+                    <h2>AI Assistant</h2>
+                    <div class="chat-header-actions">
+                        <button class="icon-btn-sm" id="clearChatBtn" title="Clear chat">🗑️</button>
+                        <span class="status-dot"></span>
+                        <button class="icon-btn-sm" id="closeChatBtn" title="Close">✕</button>
+                    </div>
+                </div>
+                <div class="chat-box" id="chatBox">
+                    <div class="message agent-message">
+                        Hey! I'm your media planning assistant. I can help you create content strategies, shot lists, captions, and turn research into ready-to-post media.
+                    </div>
+                </div>
+                <div class="quick-actions" id="quickActions">
+                    <button class="quick-btn" data-msg="Help me create a content calendar for this week">Content calendar</button>
+                    <button class="quick-btn" data-msg="Generate shot list ideas for a product video">Shot list ideas</button>
+                    <button class="quick-btn" data-msg="Write a caption for an Instagram post">Write caption</button>
+                    <button class="quick-btn" data-msg="Convert this research into media ideas">Research to media</button>
+                </div>
+                <div class="chat-input-area">
+                    <input type="text" id="chatInput" placeholder="Ask me anything about media planning...">
+                    <button id="sendBtn" class="btn-primary">Send</button>
+                </div>
+            </aside>
+
+            <!-- Calendar View -->
+            <div class="view-container hidden" id="calendarView">
+                <div class="calendar-header">
+                    <button class="icon-btn" id="prevMonth">←</button>
+                    <h2 id="currentMonth">Loading...</h2>
+                    <button class="icon-btn" id="nextMonth">→</button>
+                </div>
+                <div class="calendar-grid" id="calendarGrid"></div>
+            </div>
+
+            <!-- Research View -->
+            <div class="view-container hidden" id="researchView">
+                <div class="glass-card section-card">
+                    <div class="section-header">
+                        <h2>Research Hub</h2>
+                        <button class="btn-primary" id="fetchNewsBtn">🔄 Fetch Latest</button>
+                    </div>
+                    <div class="research-controls">
+                        <input type="text" id="researchQuery" class="glass-input" placeholder="Search research topics...">
+                        <button class="btn-secondary" id="searchResearchBtn">Search</button>
+                    </div>
+                    <div id="researchResults" class="research-grid"></div>
+                </div>
+            </div>
+
+            <!-- News View -->
+            <div class="view-container hidden" id="newsView">
+                <div class="glass-card section-card">
+                    <div class="section-header">
+                        <h2>Industry News Feed</h2>
+                        <button class="btn-primary" id="refreshNewsBtn">🔄 Refresh</button>
+                    </div>
+                    <div class="news-filters">
+                        <button class="filter-chip active" data-filter="all">All</button>
+                        <button class="filter-chip" data-filter="marketing">Marketing</button>
+                        <button class="filter-chip" data-filter="video">Video</button>
+                        <button class="filter-chip" data-filter="photography">Photography</button>
+                        <button class="filter-chip" data-filter="design">Design</button>
+                    </div>
+                    <div id="newsGrid" class="news-grid"></div>
+                </div>
+            </div>
+
+            <!-- Brand Assets View -->
+            <div class="view-container hidden" id="assetsView">
+                <div class="glass-card section-card">
+                    <div class="section-header">
+                        <h2>Brand Assets</h2>
+                        <button class="btn-primary" id="uploadAssetBtn">+ Upload Asset</button>
+                    </div>
+                    <div id="assetsGrid" class="assets-grid"></div>
+                </div>
+            </div>
+
+            
+        </main>
+    </div>
+
+    <!-- Modals -->
+    <!-- Settings Modal -->
+    <div class="modal" id="settingsModal">
+        <div class="modal-content glass-card">
+            <div class="modal-header">
+                <h2>Settings</h2>
+                <button class="icon-btn-sm" id="closeSettingsBtn">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="settings-section">
+                    <h3>AI Model</h3>
+                    <select id="aiModelSelector" class="glass-select">
+                        <option value="">Loading available models...</option>
+                    </select>
+                    <small style="color: var(--text-secondary); margin-top: 0.5rem; display: block;">
+                        Select which AI model to use for chat and content generation. Models are fetched from your API key.
+                    </small>
+                </div>
+                <div class="settings-section">
+                    <h3>Theme</h3>
+                    <div class="theme-selector">
+                        <button class="theme-btn active" data-theme="forest">🌲 Forest</button>
+                        <button class="theme-btn" data-theme="ocean">🌊 Ocean</button>
+                        <button class="theme-btn" data-theme="sunset">🌅 Sunset</button>
+                        <button class="theme-btn" data-theme="midnight">🌙 Midnight</button>
+                        <button class="theme-btn" data-theme="custom">🎨 Custom</button>
+                    </div>
+                </div>
+                <div class="settings-section" id="customThemeSection" style="display:none;">
+                    <h3>Custom Theme Colors</h3>
+                    <div class="color-picker-group">
+                        <label>Accent Color: <input type="color" id="accentColor" value="#4ade80"></label>
+                        <label>Background: <input type="color" id="bgColor" value="#0f0c29"></label>
+                    </div>
+                </div>
+                <div class="settings-section">
+                    <h3>News Sources</h3>
+                    <div id="newsSourcesList"></div>
+                    <button class="btn-secondary" id="addNewsSourceBtn">+ Add Source</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Plan Modal -->
+    <div class="modal" id="createPlanModal">
+        <div class="modal-content glass-card">
+            <div class="modal-header">
+                <h2>Create Media Plan</h2>
+                <button class="icon-btn-sm" id="closePlanModalBtn">✕</button>
+            </div>
+            <div class="modal-body">
+                <form id="createPlanForm">
+                    <div class="form-group">
+                        <label>Plan Title</label>
+                        <input type="text" id="planTitle" class="glass-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Description</label>
+                        <textarea id="planDescription" class="glass-input" rows="3"></textarea>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Start Date</label>
+                            <input type="date" id="planStartDate" class="glass-input">
+                        </div>
+                        <div class="form-group">
+                            <label>End Date</label>
+                            <input type="date" id="planEndDate" class="glass-input">
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn-secondary" id="cancelPlanBtn">Cancel</button>
+                        <button type="submit" class="btn-primary">Create Plan</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Media Item Modal -->
+    <div class="modal" id="createMediaModal">
+        <div class="modal-content glass-card">
+            <div class="modal-header">
+                <h2>Create Media Item</h2>
+                <button class="icon-btn-sm" id="closeMediaModalBtn">✕</button>
+            </div>
+            <div class="modal-body">
+                <form id="createMediaForm">
+                    <div class="form-group">
+                        <label>Title</label>
+                        <input type="text" id="mediaTitle" class="glass-input" required>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Type (optional)</label>
+                            <input type="text" id="mediaContentType" class="glass-input" placeholder="e.g., video, design, software, mixed" list="contentTypeOptions">
+                            <datalist id="contentTypeOptions">
+                                <option value="video">
+                                <option value="image">
+                                <option value="design">
+                                <option value="software">
+                                <option value="audio">
+                                <option value="post">
+                                <option value="mixed">
+                            </datalist>
+                        </div>
+                        <div class="form-group">
+                            <label>Channel</label>
+                            <select id="mediaChannel" class="glass-select">
+                                <option value="instagram">Instagram</option>
+                                <option value="tiktok">TikTok</option>
+                                <option value="youtube">YouTube</option>
+                                <option value="linkedin">LinkedIn</option>
+                                <option value="facebook">Facebook</option>
+                                <option value="twitter">Twitter/X</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Description</label>
+                        <textarea id="mediaDescription" class="glass-input" rows="3"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Scheduled Date</label>
+                        <input type="datetime-local" id="mediaScheduledDate" class="glass-input">
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn-secondary" id="cancelMediaBtn">Cancel</button>
+                        <button type="submit" class="btn-primary">Create Item</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Profile Setup Modal -->
+    <div class="modal active" id="profileModal">
+        <div class="modal-content glass-card">
+            <div class="modal-header">
+                <h2>Setup Your Brand Profile</h2>
+            </div>
+            <div class="modal-body">
+                <form id="profileForm">
+                    <div class="form-group">
+                        <label>Business/Brand Name</label>
+                        <input type="text" id="brandName" class="glass-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Industry / Focus (optional)</label>
+                        <input type="text" id="brandIndustry" class="glass-input" placeholder="e.g., Design Studio, Software, Video Production">
+                    </div>
+                    <div class="form-group">
+                        <label>Description</label>
+                        <textarea id="brandDescription" class="glass-input" rows="3" placeholder="Tell us about your business..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Interests & Keywords (for news feed)</label>
+                        <input type="text" id="brandKeywords" class="glass-input" placeholder="e.g., social media, video marketing, photography">
+                        <small>Comma-separated keywords to customize your news feed</small>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn-primary">Get Started</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

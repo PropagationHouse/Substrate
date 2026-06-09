@@ -276,7 +276,7 @@ export const ChatPanel = forwardRef<ChatPanelHandle, ChatPanelProps>(function Ch
         {messages.map((msg, i) => {
           const isTool = msg.role === 'tool' || msg.role === 'toolResult';
           const collapseKey = msg.msgId || msg.tempId || i;
-          const isCollapsed = collapsed[collapseKey] ?? (msg.isThinking || isMessageCollapsible(msg));
+          const isCollapsed = collapsed[collapseKey] ?? isMessageCollapsible(msg);
           const memoryKey = `mem-${collapseKey}`;
           const isMemoryCollapsed = collapsed[memoryKey] ?? true;
           const isCurrentMatch = search.currentMatch?.messageIndex === i;

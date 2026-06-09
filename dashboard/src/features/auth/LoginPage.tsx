@@ -15,14 +15,29 @@ interface LoginPageProps {
   error: string;
 }
 
+const _PW_STORAGE_KEY = 'substrate:savedPassword';
+
 export function LoginPage({ onLogin, error }: LoginPageProps) {
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [rememberPw, setRememberPw] = useState(() => {
+    try { return !!localStorage.getItem(_PW_STORAGE_KEY); } catch { return false; }
+  });
   const inputRef = useRef<HTMLInputElement>(null);
+  const autoLoginRef = useRef(false);
 
   useEffect(() => {
+    // Auto-login if password was saved previously
+    try {
+      const saved = localStorage.getItem(_PW_STORAGE_KEY);
+      if (saved && !autoLoginRef.current) {
+        autoLoginRef.current = true;
+        onLogin(saved);
+        return;
+      }
+    } catch {}
     inputRef.current?.focus();
-  }, []);
+  }, [onLogin]);
 
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,10 +45,16 @@ export function LoginPage({ onLogin, error }: LoginPageProps) {
     setSubmitting(true);
     try {
       await onLogin(password);
+      // If login succeeds and remember is checked, save password
+      if (rememberPw) {
+        try { localStorage.setItem(_PW_STORAGE_KEY, password); } catch {}
+      } else {
+        try { localStorage.removeItem(_PW_STORAGE_KEY); } catch {}
+      }
     } finally {
       setSubmitting(false);
     }
-  }, [password, submitting, onLogin]);
+  }, [password, submitting, onLogin, rememberPw]);
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-10">
@@ -103,6 +124,19 @@ export function LoginPage({ onLogin, error }: LoginPageProps) {
                   {error}
                 </div>
               )}
+
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={rememberPw}
+                  onChange={e => {
+                    setRememberPw(e.target.checked);
+                    if (!e.target.checked) { try { localStorage.removeItem(_PW_STORAGE_KEY); } catch {} }
+                  }}
+                  className="w-4 h-4 rounded border-border accent-primary"
+                />
+                <span className="text-xs text-muted-foreground">Remember password</span>
+              </label>
 
               <Button
                 type="submit"

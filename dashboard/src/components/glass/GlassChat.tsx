@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, lazy, Suspense, type KeyboardEvent, type ReactNode } from 'react';
-import { Send, Bot, User, Loader2, Sparkles, Copy, Check, ChevronRight, Wrench, Mic, X, Paperclip } from 'lucide-react';
+import { Send, Bot, User, Loader2, Sparkles, Copy, Check, ChevronRight, Wrench, Mic, MicOff, X, Paperclip } from 'lucide-react';
 import type { ChatMsg } from '@/features/chat/types';
 import { MarkdownRenderer } from '@/features/markdown/MarkdownRenderer';
 import { RichMessageCard } from './RichMessageCard';
@@ -62,7 +62,7 @@ function GlassToolBlock({ msg }: { msg: ChatMsg }) {
 
 // ─── Thinking bubble (glass-styled) ─────────────────────────────────────────
 function GlassThinkingBubble({ msg }: { msg: ChatMsg }) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
   return (
     <div className="mx-1 my-0.5">
       <button onClick={() => setExpanded(!expanded)}
@@ -143,9 +143,63 @@ export function GlassChat({
   const [input, setInput] = useState('');
   const [stagedImages, setStagedImages] = useState<any[]>([]);
   const [isDragging, setIsDragging] = useState(false);
+  const [isVoiceActive, setIsVoiceActive] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const voiceRecognitionRef = useRef<SpeechRecognition | null>(null);
+
+  const toggleVoice = useCallback(() => {
+    if (isVoiceActive) {
+      // Stop
+      if (voiceRecognitionRef.current) {
+        voiceRecognitionRef.current.stop();
+        voiceRecognitionRef.current = null;
+      }
+      setIsVoiceActive(false);
+      // Send whatever was transcribed
+      const text = input.trim();
+      if (text) {
+        onSend('[voice] ' + text, stagedImages.length > 0 ? stagedImages : undefined);
+        setInput('');
+        setStagedImages([]);
+      }
+      return;
+    }
+
+    const Ctor = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!Ctor) return;
+
+    const recognition = new Ctor();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+
+    recognition.onresult = (event: any) => {
+      let fullTranscript = '';
+      for (let i = 0; i < event.results.length; i++) {
+        fullTranscript += event.results[i][0].transcript;
+      }
+      setInput(fullTranscript);
+    };
+
+    recognition.onerror = () => {
+      setIsVoiceActive(false);
+      voiceRecognitionRef.current = null;
+    };
+
+    recognition.onend = () => {
+      // Auto-restart if still active
+      if (voiceRecognitionRef.current) {
+        try { recognition.start(); } catch {}
+      }
+    };
+
+    recognition.start();
+    voiceRecognitionRef.current = recognition;
+    setIsVoiceActive(true);
+    setInput('');
+  }, [isVoiceActive, input, onSend, stagedImages]);
 
   const processFiles = useCallback((files: FileList | File[]) => {
     Array.from(files).forEach(file => {
@@ -468,6 +522,17 @@ export function GlassChat({
             title="Attach image"
           >
             <Paperclip size={14} />
+          </button>
+          <button
+            onClick={toggleVoice}
+            className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-all ${
+              isVoiceActive
+                ? 'bg-red-500/20 border border-red-400/30 text-red-400 animate-pulse'
+                : 'text-white/20 hover:text-white/50 hover:bg-white/[0.05]'
+            }`}
+            title={isVoiceActive ? 'Stop recording & send' : 'Voice input'}
+          >
+            {isVoiceActive ? <MicOff size={14} /> : <Mic size={14} />}
           </button>
           <textarea
             ref={inputRef}

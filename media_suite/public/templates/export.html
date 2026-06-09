@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Export Media Plan - Media Planning Suite</title>
+    <link href="/css/styles.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        @media print {
+            body { background: white !important; color: black !important; }
+            .glass-card { background: white !important; border: 1px solid #ccc !important; }
+            .gradient-text { background: none !important; color: black !important; }
+            .no-print { display: none !important; }
+        }
+        
+        .export-section {
+            @apply glass-card p-6 mb-6;
+        }
+        
+        .export-header {
+            @apply text-center mb-8;
+        }
+        
+        .brand-header {
+            @apply flex items-center justify-center space-x-4 mb-6;
+        }
+        
+        .plan-overview {
+            @apply grid grid-cols-2 gap-4 mb-6;
+        }
+        
+        .export-item {
+            @apply border-l-4 border-primary-500 pl-4 mb-4;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 min-h-screen text-white">
+    <div class="container mx-auto px-4 py-8">
+        <!-- Export Controls -->
+        <div class="no-print glass-card p-6 mb-8">
+            <div class="flex justify-between items-center">
+                <div>
+                    <h1 class="text-3xl font-bold gradient-text mb-2">Export Media Plan</h1>
+                    <p class="text-gray-300">Generate production-ready documents for your team</p>
+                </div>
+                <div class="flex space-x-4">
+                    <select id="export-format" class="brand-input">
+                        <option value="comprehensive">Comprehensive Package</option>
+                        <option value="shot-list">Shot List Only</option>
+                        <option value="storyboard">Storyboard Only</option>
+                        <option value="calendar">Media Calendar</option>
+                        <option value="brief">Creative Brief</option>
+                    </select>
+                    <button onclick="generateExport()" class="glass-button bg-gradient-to-r from-blue-500 to-purple-500">
+                        <i class="fas fa-download mr-2"></i>Generate Export
+                    </button>
+                    <button onclick="window.print()" class="glass-button">
+                        <i class="fas fa-print mr-2"></i>Print
+                    </button>
+                    <button onclick="window.close()" class="glass-button">
+                        <i class="fas fa-times mr-2"></i>Close
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Export Content -->
+        <div id="export-content">
+            <!-- Content will be populated here -->
+        </div>
+    </div>
+
+    <script>
+        // Export Management
+        let planId = new URLSearchParams(window.location.search).get('plan_id');
+        let planData = null;
+        let shotLists = [];
+        let storyboards = [];
+        let calendar = [];
+        let businessProfile = null;
+
+        async function loadExportData() {
+            try {
+                // Load all data for the plan
+                const [plan, shots, scenes, calendarItems, business] = await Promise.all([
+                    fetch(`/api/media-plans/${planId}`).then(r => r.json()),
+                    fetch(`/api/shot-lists?plan_id=${planId}`).then(r => r.json()),
+                    fetch(`/api/storyboards?plan_id=${planId}`).then(r => r.json()),
+                    fetch(`/api/media-calendar?plan_id=${planId}`).then(r => r.json()),
+                    fetch(`/api/business-profiles`).then(r => r.json())
+                ]);
+
+                planData = plan;
+                shotLists = shots;
+                storyboards = scenes.sort((a, b) => a.scene_number - b.scene_number);
+                calendar = calendarItems;
+                businessProfile = business.find(b => b.id === plan.business_id);
+
+                renderExportContent();
+            } catch (error) {
+                console.error('Error loading export data:', error);
+                document.getElementById('export-content').innerHTML = `
+                    <div class="text-center py-12">
+                        <i class="fas fa-exclamation-triangle text-6xl text-red-400 mb-4"></i>
+                        <h3 class="text-xl font-bold mb-2">Error Loading Data</h3>
+                        <p class="text-gray-400">Unable to load media plan data for export.</p>
+                    </div>
+                `;
+            }
+        }
+
+        function renderExportContent() {
+            const format = document.getElementById('export-format').value;
+            const container = document.getElementById('export-content');
+
+            switch(format) {
+                case 'comprehensive':
+                    renderComprehensiveExport(container);
+                    break;
+                case 'shot-list':
+                    renderShotListExport(container);
+                    break;
+                case 'storyboard':
+                    renderStoryboardExport(container);
+                    break;
+                case 'calendar':
+                    renderCalendarExport(container);
+                    break;
+                case 'brief':
+                    renderCreativeBrief(container);
+                    break;
+                default:
+                    renderComprehensiveExport(container);
+            }
+        }
+
+        function renderComprehensiveExport(container) {
+            container.innerHTML = `
+                <!-- Header -->
+                <div class="export-header">
+                    ${businessProfile ? `
+                        <div class="brand-header">
+                            ${businessProfile.logo_path ? 
+                                `<img src="${businessProfile.logo_path}" alt="${businessProfile.name}" class="h-16">` :
+                                `<div class="w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-500 rounded-xl flex items-center justify-center">
+                                    <i class="fas fa-building text-white text-2xl"></i>
+                                </div>`
+                            }
+                            <div>
+                                <h1 class="text-4xl font-bold gradient-text">${businessProfile.name}</h1>
+                                <p class="text-gray-300">${businessProfile.industry}</p>
+                            </div>
+                        </div>
+                    ` : ''}
+                    
+                    <h2 class="text-3xl font-bold mb-2">Media Production Plan</h2>
+                    <h3 class="text-2xl text-gray-300 mb-4">${planData.title}</h3>
+                    <p class="text-lg text-gray-400 max-w-2xl mx-auto">${planData.description}</p>
+                </div>
+
+                <!-- Plan Overview -->
+                <div class="export-section">
+                    <h3 class="text-2xl font-bold mb-6 gradient-text">Plan Overview</h3>
+                    <div class="plan-overview">
+                        <div class="export-item">
+                            <p class="text-sm text-gray-400 mb-1">Campaign Period</p>
+                            <p class="font-semibold">${formatDate(planData.start_date)} - ${formatDate(planData.end_date)}</p>
+                        </div>
+                        <div class="export-item">
+                            <p class="text-sm text-gray-400 mb-1">Total Budget</p>
+                            <p class="font-semibold">$${planData.total_budget || 'Not specified'}</p>
+                        </div>
+                        <div class="export-item">
+                            <p class="text-sm text-gray-400 mb-1">Status</p>
+                            <p class="font-semibold capitalize">${planData.status}</p>
+                        </div>
+                        <div class="export-item">
+                            <p class="text-sm text-gray-400 mb-1">Created</p>
+                            <p class="font-semibold">${formatDate(planData.created_at)}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Shot Lists -->
+                ${shotLists.length > 0 ? `
+                    <div class="export-section">
+                        <h3 class="text-2xl font-bold mb-6 gradient-text">Production Shot List</h3>
+                        ${shotLists.map((shot, index) => `
+                            <div class="shot-list-item mb-6">
+                                <div class="flex justify-between items-start mb-4">
+                                    <div>
+                                        <span class="text-lg font-bold text-primary-400">Shot #${index + 1}</span>
+                                        <h4 class="text-xl font-bold">${shot.title}</h4>
+                                        <span class="px-3 py-1 rounded-full text-xs font-medium bg-glass-background">
+                                            ${shot.shot_type}
+                                        </span>
+                                    </div>
+                                    <div class="text-right">
+                                        <span class="px-3 py-1 rounded-full text-xs font-medium ${shot.completed ? 'bg-green-500' : 'bg-yellow-500'}">
+                                            ${shot.completed ? 'Completed' : 'Pending'}
+                                        </span>
+                                    </div>
+                                </div>
+                                
+                                <p class="text-gray-300 mb-4">${shot.description}</p>
+                                
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <div class="bg-glass-background rounded-lg p-3">
+                                        <p class="text-sm font-medium text-gray-400 mb-1">Location</p>
+                                        <p class="flex items-center">
+                                            <i class="fas fa-map-marker-alt mr-2 text-primary-400"></i>
+                                            ${shot.location || 'Not specified'}
+                                        </p>
+                                    </div>
+                                    
+                                    <div class="bg-glass-background rounded-lg p-3">
+                                        <p class="text-sm font-medium text-gray-400 mb-1">Time Needed</p>
+                                        <p class="flex items-center">
+                                            <i class="fas fa-clock mr-2 text-primary-400"></i>
+                                            ${shot.time_needed || 'Not specified'}
+                                        </p>
+                                    </div>
+                                    
+                                    <div class="bg-glass-background rounded-lg p-3">
+                                        <p class="text-sm font-medium text-gray-400 mb-1">Equipment</p>
+                                        <p class="text-sm">${shot.equipment || 'Standard equipment'}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                ` : ''}
+
+                <!-- Storyboard -->
+                ${storyboards.length > 0 ? `
+                    <div class="export-section">
+                        <h3 class="text-2xl font-bold mb-6 gradient-text">Storyboard</h3>
+                        ${storyboards.map(scene => `
+                            <div class="storyboard-scene mb-8">
+                                <div class="scene-number">Scene ${scene.scene_number}</div>
+                                <h4 class="text-xl font-bold mb-4">${scene.title}</h4>
+                                
+                                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                    <div class="visual-panel">
+                                        ${scene.image_path ? 
+                                            `<img src="${scene.image_path}" alt="${scene.title}" class="w-full h-64 object-cover rounded-lg mb-4">` :
+                                            `<div class="w-full h-64 bg-glass-background rounded-lg mb-4 flex items-center justify-center">
+                                                <i class="fas fa-image text-4xl text-gray-400"></i>
+                                            </div>`
+                                        }
+                                        <div>
+                                            <h5 class="font-medium mb-2 text-primary-400">Visual Notes</h5>
+                                            <p class="text-sm text-gray-300">${scene.visual_notes || 'No visual notes'}</p>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="audio-panel">
+                                        <div class="mb-4">
+                                            <h5 class="font-medium mb-2 text-primary-400">Scene Description</h5>
+                                            <p class="text-sm text-gray-300">${scene.description || 'No description'}</p>
+                                        </div>
+                                        
+                                        <div class="mb-4">
+                                            <h5 class="font-medium mb-2 text-primary-400">Audio Notes</h5>
+                                            <p class="text-sm text-gray-300">${scene.audio_notes || 'No audio notes'}</p>
+                                        </div>
+                                        
+                                        <div>
+                                            <h5 class="font-medium mb-2 text-primary-400">Duration</h5>
+                                            <p class="text-sm text-gray-300">${scene.duration || 'Not specified'}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                ` : ''}
+
+                <!-- Media Calendar -->
+                ${calendar.length > 0 ? `
+                    <div class="export-section">
+                        <h3 class="text-2xl font-bold mb-6 gradient-text">Content Schedule</h3>
+                        <div class="space-y-4">
+                            ${calendar.map(item => `
+                                <div class="glass-card p-4">
+                                    <div class="flex justify-between items-start">
+                                        <div>
+                                            <h4 class="font-bold text-lg">${item.title}</h4>
+                                            <p class="text-gray-300 mb-2">${item.description}</p>
+                                            <div class="flex space-x-4 text-sm text-gray-400">
+                                                <span><i class="fas fa-calendar mr-1"></i>${formatDate(item.scheduled_date)}</span>
+                                                <span><i class="fas fa-bullhorn mr-1"></i>${item.channel}</span>
+                                                <span><i class="fas fa-file mr-1"></i>${item.content_type}</span>
+                                            </div>
+                                        </div>
+                                        <span class="px-3 py-1 rounded-full text-xs font-medium bg-glass-background">
+                                            ${item.status}
+                                        </span>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+
+                <!-- Production Notes -->
+                <div class="export-section">
+                    <h3 class="text-2xl font-bold mb-6 gradient-text">Production Notes</h3>
+                    <div class="space-y-4">
+                        <div class="bg-glass-background rounded-lg p-4">
+                            <h4 class="font-bold mb-2">Team Instructions</h4>
+                            <ul class="list-disc list-inside space-y-2 text-gray-300">
+                                <li>Review all shot lists and storyboards before production</li>
+                                <li>Ensure all equipment is tested and ready before shoot day</li>
+                                <li>Follow brand guidelines for consistent visual style</li>
+                                <li>Coordinate with all team members for smooth workflow</li>
+                            </ul>
+                        </div>
+                        
+                        <div class="bg-glass-background rounded-lg p-4">
+                            <h4 class="font-bold mb-2">Brand Guidelines</h4>
+                            ${businessProfile ? `
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-gray-300">
+                                    <div>
+                                        <p class="font-medium mb-1">Brand Colors:</p>
+                                        <p>${businessProfile.brand_colors || 'Not specified'}</p>
+                                    </div>
+                                    <div>
+                                        <p class="font-medium mb-1">Brand Fonts:</p>
+                                        <p>${businessProfile.brand_fonts || 'Not specified'}</p>
+                                    </div>
+                                </div>
+                            ` : '<p class="text-gray-400">No brand profile specified</p>'}
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderShotListExport(container) {
+            container.innerHTML = `
+                <div class="export-header">
+                    <h1 class="text-3xl font-bold gradient-text mb-2">Shot List</h1>
+                    <h2 class="text-2xl text-gray-300 mb-4">${planData.title}</h2>
+                </div>
+                
+                <div class="space-y-6">
+                    ${shotLists.map((shot, index) => `
+                        <div class="shot-list-item">
+                            <div class="flex justify-between items-start mb-4">
+                                <div>
+                                    <span class="text-lg font-bold text-primary-400">Shot #${index + 1}</span>
+                                    <h3 class="text-xl font-bold">${shot.title}</h3>
+                                    <span class="px-3 py-1 rounded-full text-xs font-medium bg-glass-background">
+                                        ${shot.shot_type}
+                                    </span>
+                                </div>
+                                <div class="text-right">
+                                    <span class="px-3 py-1 rounded-full text-xs font-medium ${shot.completed ? 'bg-green-500' : 'bg-yellow-500'}">
+                                        ${shot.completed ? 'Completed' : 'Pending'}
+                                    </span>
+                                </div>
+                            </div>
+                            
+                            <p class="text-gray-300 mb-4">${shot.description}</p>
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div class="bg-glass-background rounded-lg p-3">
+                                    <p class="text-sm font-medium text-gray-400 mb-1">Location</p>
+                                    <p class="flex items-center">
+                                        <i class="fas fa-map-marker-alt mr-2 text-primary-400"></i>
+                                        ${shot.location || 'Not specified'}
+                                    </p>
+                                </div>
+                                
+                                <div class="bg-glass-background rounded-lg p-3">
+                                    <p class="text-sm font-medium text-gray-400 mb-1">Time Needed</p>
+                                    <p class="flex items-center">
+                                        <i class="fas fa-clock mr-2 text-primary-400"></i>
+                                        ${shot.time_needed || 'Not specified'}
+                                    </p>
+                                </div>
+                                
+                                <div class="bg-glass-background rounded-lg p-3">
+                                    <p class="text-sm font-medium text-gray-400 mb-1">Equipment</p>
+                                    <p class="text-sm">${shot.equipment || 'Standard equipment'}</p>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        function renderStoryboardExport(container) {
+            container.innerHTML = `
+                <div class="export-header">
+                    <h1 class="text-3xl font-bold gradient-text mb-2">Storyboard</h1>
+                    <h2 class="text-2xl text-gray-300 mb-4">${planData.title}</h2>
+                </div>
+                
+                <div class="space-y-8">
+                    ${storyboards.map(scene => `
+                        <div class="storyboard-scene">
+                            <div class="scene-number">Scene ${scene.scene_number}</div>
+                            <h3 class="text-xl font-bold mb-4">${scene.title}</h3>
+                            
+                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                <div class="visual-panel">
+                                    ${scene.image_path ? 
+                                        `<img src="${scene.image_path}" alt="${scene.title}" class="w-full h-64 object-cover rounded-lg mb-4">` :
+                                        `<div class="w-full h-64 bg-glass-background rounded-lg mb-4 flex items-center justify-center">
+                                            <i class="fas fa-image text-4xl text-gray-400"></i>
+                                        </div>`
+                                    }
+                                    <div>
+                                        <h4 class="font-medium mb-2 text-primary-400">Visual Notes</h4>
+                                        <p class="text-sm text-gray-300">${scene.visual_notes || 'No visual notes'}</p>
+                                    </div>
+                                </div>
+                                
+                                <div class="audio-panel">
+                                    <div class="mb-4">
+                                        <h4 class="font-medium mb-2 text-primary-400">Scene Description</h4>
+                                        <p class="text-sm text-gray-300">${scene.description || 'No description'}</p>
+                                    </div>
+                                    
+                                    <div class="mb-4">
+                                        <h4 class="font-medium mb-2 text-primary-400">Audio Notes</h4>
+                                        <p class="text-sm text-gray-300">${scene.audio_notes || 'No audio notes'}</p>
+                                    </div>
+                                    
+                                    <div>
+                                        <h4 class="font-medium mb-2 text-primary-400">Duration</h4>
+                                        <p class="text-sm text-gray-300">${scene.duration || 'Not specified'}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        function renderCalendarExport(container) {
+            container.innerHTML = `
+                <div class="export-header">
+                    <h1 class="text-3xl font-bold gradient-text mb-2">Content Calendar</h1>
+                    <h2 class="text-2xl text-gray-300 mb-4">${planData.title}</h2>
+                </div>
+                
+                <div class="space-y-4">
+                    ${calendar.map(item => `
+                        <div class="glass-card p-4">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <h3 class="font-bold text-lg">${item.title}</h3>
+                                    <p class="text-gray-300 mb-2">${item.description}</p>
+                                    <div class="flex space-x-4 text-sm text-gray-400">
+                                        <span><i class="fas fa-calendar mr-1"></i>${formatDate(item.scheduled_date)}</span>
+                                        <span><i class="fas fa-bullhorn mr-1"></i>${item.channel}</span>
+                                        <span><i class="fas fa-file mr-1"></i>${item.content_type}</span>
+                                    </div>
+                                </div>
+                                <span class="px-3 py-1 rounded-full text-xs font-medium bg-glass-background">
+                                    ${item.status}
+                                </span>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        function renderCreativeBrief(container) {
+            container.innerHTML = `
+                <div class="export-header">
+                    <h1 class="text-3xl font-bold gradient-text mb-2">Creative Brief</h1>
+                    <h2 class="text-2xl text-gray-300 mb-4">${planData.title}</h2>
+                </div>
+                
+                <div class="export-section">
+                    <h3 class="text-xl font-bold mb-4">Project Overview</h3>
+                    <div class="bg-glass-background rounded-lg p-4 mb-4">
+                        <p class="text-gray-300">${planData.description}</p>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="bg-glass-background rounded-lg p-4">
+                            <h4 class="font-bold mb-2">Timeline</h4>
+                            <p>${formatDate(planData.start_date)} - ${formatDate(planData.end_date)}</p>
+                        </div>
+                        <div class="bg-glass-background rounded-lg p-4">
+                            <h4 class="font-bold mb-2">Budget</h4>
+                            <p>$${planData.total_budget || 'Not specified'}</p>
+                        </div>
+                    </div>
+                </div>
+                
+                ${businessProfile ? `
+                    <div class="export-section">
+                        <h3 class="text-xl font-bold mb-4">Brand Information</h3>
+                        <div class="bg-glass-background rounded-lg p-4">
+                            <h4 class="font-bold mb-2">${businessProfile.name}</h4>
+                            <p class="text-gray-300 mb-2">${businessProfile.description}</p>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <p class="font-medium mb-1">Industry:</p>
+                                    <p>${businessProfile.industry}</p>
+                                </div>
+                                <div>
+                                    <p class="font-medium mb-1">Target Audience:</p>
+                                    <p>${businessProfile.target_audience || 'Not specified'}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                ` : ''}
+                
+                <div class="export-section">
+                    <h3 class="text-xl font-bold mb-4">Key Deliverables</h3>
+                    <div class="space-y-2">
+                        ${shotLists.map((shot, index) => `
+                            <div class="bg-glass-background rounded-lg p-3">
+                                <p class="font-medium">${index + 1}. ${shot.title}</p>
+                                <p class="text-sm text-gray-400">${shot.shot_type} - ${shot.location || 'Location TBD'}</p>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+                
+                <div class="export-section">
+                    <h3 class="text-xl font-bold mb-4">Content Schedule</h3>
+                    <div class="space-y-2">
+                        ${calendar.map(item => `
+                            <div class="bg-glass-background rounded-lg p-3">
+                                <p class="font-medium">${item.title}</p>
+                                <p class="text-sm text-gray-400">${formatDate(item.scheduled_date)} - ${item.channel}</p>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        function formatDate(dateString) {
+            if (!dateString) return 'Not specified';
+            return new Date(dateString).toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+        }
+
+        function generateExport() {
+            renderExportContent();
+            window.print();
+        }
+
+        // Event listeners
+        document.getElementById('export-format').addEventListener('change', renderExportContent);
+
+        // Initialize
+        loadExportData();
+    </script>
+</body>
+</html>

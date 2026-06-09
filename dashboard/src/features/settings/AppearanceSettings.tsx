@@ -42,7 +42,7 @@ const FONT_SIZE_OPTIONS = [
 
 /** Settings section for theme, font, font size, and panel visibility. */
 export function AppearanceSettings() {
-  const { eventsVisible, toggleEvents, logVisible, toggleLog, theme, setTheme, font, setFont, fontSize, setFontSize, editorFontSize, setEditorFontSize, setGlassOpacity, setBackgroundGif } = useSettings();
+  const { eventsVisible, toggleEvents, logVisible, toggleLog, theme, setTheme, font, setFont, fontSize, setFontSize, editorFontSize, setEditorFontSize, setGlassOpacity } = useSettings();
 
   const handleThemeChange = (next: string) => {
     setTheme(next as ThemeName);
@@ -145,37 +145,14 @@ export function AppearanceSettings() {
         </div>
       </div>
 
-      {/* Background GIF selector */}
+      {/* Background Image selector */}
       <div className="cockpit-row items-start justify-between">
         <div className="flex min-w-0 items-start gap-3">
           <Film size={14} className="text-primary" />
           <div className="flex flex-col">
-            <span className="text-sm font-medium text-foreground">Background GIF</span>
-            <span className="text-xs text-muted-foreground">Drag and drop a GIF to set as background.</span>
+            <span className="text-sm font-medium text-foreground">Background Image</span>
+            <span className="text-xs text-muted-foreground">Use the Settings icon in the top bar for full background controls.</span>
           </div>
-        </div>
-        <div className="relative w-full sm:w-auto">
-          <input
-            type="file"
-            accept="image/gif"
-            className="hidden"
-            id="bg-gif-upload"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) {
-                const reader = new FileReader();
-                reader.onload = (ev) => {
-                  const dataUrl = ev.target?.result as string;
-                  document.documentElement.style.setProperty('--substrate-bg-image', `url(${dataUrl})`);
-                  localStorage.setItem('substrate:bg-gif', dataUrl);
-                };
-                reader.readAsDataURL(file);
-              }
-            }}
-          />
-          <label htmlFor="bg-gif-upload" className="cursor-pointer px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-xs text-white/70">
-            Select GIF
-          </label>
         </div>
       </div>
 
@@ -253,25 +230,12 @@ export function AppearanceSettings() {
         />
       </div>
 
-      {/* Background GIF Upload */}
+      {/* Background settings note */}
       <div className="cockpit-row items-center justify-between">
         <div className="flex items-center gap-3">
           <Code2 size={14} className="text-primary" />
-          <span className="text-sm font-medium text-foreground">Background GIF</span>
+          <span className="text-sm text-muted-foreground">Background image, blur &amp; overlay — use the ⚙ Settings icon in the top bar</span>
         </div>
-        <input
-          type="file"
-          accept="image/gif"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) {
-              const reader = new FileReader();
-              reader.onload = (ev) => setBackgroundGif(ev.target?.result as string);
-              reader.readAsDataURL(file);
-            }
-          }}
-          className="text-xs text-muted-foreground w-32"
-        />
       </div>
     </div>
   );

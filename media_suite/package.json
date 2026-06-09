@@ -1,0 +1,42 @@
+{
+  "name": "media-planning-app",
+  "version": "1.0.0",
+  "description": "Premium glassmorphic media planning app for businesses and agencies",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "build": "npm run build:css",
+    "build:css": "tailwindcss -i ./src/input.css -o ./public/css/styles.css --watch"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "sqlite3": "^5.1.6",
+    "cors": "^2.8.5",
+    "multer": "^1.4.5-lts.1",
+    "axios": "^1.6.0",
+    "cheerio": "^1.0.0-rc.12",
+    "node-cron": "^3.0.3",
+    "uuid": "^9.0.1",
+    "sharp": "^0.32.6",
+    "puppeteer": "^21.5.0",
+    "marked": "^9.1.6",
+    "dompurify": "^3.0.5",
+    "jsdom": "^22.1.0"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.3.5",
+    "autoprefixer": "^10.4.16",
+    "postcss": "^8.4.31",
+    "nodemon": "^3.0.1"
+  },
+  "keywords": [
+    "media-planning",
+    "marketing",
+    "content-creation",
+    "business",
+    "agency"
+  ],
+  "author": "Media Planning Suite",
+  "license": "MIT"
+}

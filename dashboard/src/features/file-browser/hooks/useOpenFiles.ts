@@ -7,7 +7,7 @@ import {
   useMemo,
 } from 'react';
 import { getWorkspaceStorageKey } from '@/features/workspace/workspaceScope';
-import { isImageFile } from '../utils/fileTypes';
+import { isPreviewableFile, isBinaryFile } from '../utils/fileTypes';
 import type { OpenFile } from '../types';
 
 const DEFAULT_AGENT_ID = 'main';
@@ -515,7 +515,7 @@ export function useOpenFiles(agentId = DEFAULT_AGENT_ID) {
     });
     setActiveTab(filePath);
 
-    if (isImageFile(basename(filePath))) {
+    if (isPreviewableFile(basename(filePath)) || isBinaryFile(basename(filePath))) {
       setOpenFiles((prev) => prev.map((file) => (
         file.path === filePath ? { ...file, loading: false } : file
       )));
