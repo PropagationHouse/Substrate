@@ -5,8 +5,20 @@ import shutil
 import requests
 import wave
 import numpy as np
-import pygame
-import torch
+try:
+    import pygame
+    _PYGAME_AVAILABLE = True
+except ImportError:
+    pygame = None
+    _PYGAME_AVAILABLE = False
+    print("[VOICE] pygame not available — voice playback disabled")
+try:
+    import torch
+    _TORCH_AVAILABLE = True
+except ImportError:
+    torch = None
+    _TORCH_AVAILABLE = False
+    print("[VOICE] torch not available — Kokoro TTS disabled")
 import threading
 import re
 import json
@@ -18,9 +30,18 @@ try:
     from XGO_Audio_Bridge.direct_xgo_integration import xgo_integration
 except ImportError:
     xgo_integration = None
-from src.voice.elevenlabs_client import ElevenLabsClient
-# Initialize pygame mixer
-pygame.mixer.init(frequency=24000, size=-16, channels=1)
+try:
+    from src.voice.elevenlabs_client import ElevenLabsClient
+except ImportError as _el_err:
+    ElevenLabsClient = None
+    print(f"[VOICE] ElevenLabs client not available: {_el_err}")
+# Initialize pygame mixer (deferred — only if pygame is available)
+if _PYGAME_AVAILABLE:
+    try:
+        pygame.mixer.init(frequency=24000, size=-16, channels=1)
+    except Exception as _pg_err:
+        _PYGAME_AVAILABLE = False
+        print(f"[VOICE] pygame.mixer.init failed (no audio device?): {_pg_err}")
 
 # Create a lock for audio playback
 audio_lock = threading.Lock()
@@ -388,7 +409,7 @@ def stop_current_playback():
     global current_playback, current_playback_thread
     
     with playback_lock:
-        if pygame.mixer.music.get_busy():
+        if _PYGAME_AVAILABLE and pygame.mixer.music.get_busy():
             pygame.mixer.music.stop()
             print("Stopped current audio playback")
         current_playback = None
@@ -426,6 +447,10 @@ def play_audio_segment(filename):
             last_energy_idx = -1
             
             print(f"Playing audio file: {filename}")
+            if not _PYGAME_AVAILABLE:
+                print("[VOICE] pygame not available, skipping local playback")
+                send_voice_status('stopped')
+                return
             pygame.mixer.music.load(filename)
             vol = voice_settings.get('voice_volume', 80)
             pygame.mixer.music.set_volume(max(0.0, min(1.0, vol / 100.0)))
@@ -728,7 +753,7 @@ def speak(text):
                                 return
                                 
                         # Convert PyTorch tensor to numpy array and then to int16
-                        if isinstance(audio, torch.Tensor):
+                        if _TORCH_AVAILABLE and isinstance(audio, torch.Tensor):
                             audio = audio.detach().cpu().numpy()
                         audio_int16 = (audio * 32767).astype(np.int16)
                         
@@ -878,8 +903,11 @@ class VoiceHandler:
     def __init__(self):
         """Initialize the voice handler"""
         # Make sure pygame mixer is initialized
-        if not pygame.mixer.get_init():
-            pygame.mixer.init(frequency=24000, size=-16, channels=1)
+        if _PYGAME_AVAILABLE and not pygame.mixer.get_init():
+            try:
+                pygame.mixer.init(frequency=24000, size=-16, channels=1)
+            except Exception as e:
+                print(f"[VOICE] pygame.mixer.init failed in VoiceHandler: {e}")
         print("Voice handler initialized")
         
     def speak(self, text):

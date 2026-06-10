@@ -6,7 +6,11 @@ import requests
 import webbrowser
 import pyautogui
 import pyperclip
-import win32gui
+try:
+    import win32gui
+except ImportError:
+    win32gui = None
+    print("[COMMANDS] win32gui not available — some window commands disabled")
 import traceback
 from typing import Dict, Any, Optional
 import pyautogui
@@ -33,8 +37,13 @@ from selenium.webdriver.edge.options import Options
 from webdriver_manager.microsoft import EdgeChromiumDriverManager
 import cv2
 import numpy as np
-import win32con  # Added for keyboard control
-import win32api  # For keyboard control
+try:
+    import win32con  # Added for keyboard control
+    import win32api  # For keyboard control
+except ImportError:
+    win32con = None
+    win32api = None
+    print("[COMMANDS] win32con/win32api not available — some keyboard control disabled")
 import random
 from ..clock.clock_service import ClockService
 import keyboard  # Import keyboard module

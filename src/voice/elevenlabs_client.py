@@ -5,8 +5,16 @@ import time
 from typing import Callable, Optional
 
 import numpy as np
-import sounddevice as sd
-import websocket
+try:
+    import sounddevice as sd
+except ImportError:
+    sd = None
+    print("[VOICE] sounddevice not available — ElevenLabs mic streaming disabled")
+try:
+    import websocket
+except ImportError:
+    websocket = None
+    print("[VOICE] websocket-client not available — ElevenLabs realtime disabled")
 from urllib.parse import urlparse, parse_qsl, urlencode, urlunparse
 
 
@@ -38,9 +46,9 @@ class ElevenLabsClient:
         self.on_transcript = on_transcript
         self.on_status = on_status
 
-        self._ws_app: Optional[websocket.WebSocketApp] = None
+        self._ws_app = None  # Optional[websocket.WebSocketApp]
         self._ws_thread: Optional[threading.Thread] = None
-        self._mic_stream: Optional[sd.InputStream] = None
+        self._mic_stream = None  # Optional[sd.InputStream]
         self._connected = threading.Event()
         self._running = False
         self._lock = threading.Lock()
@@ -50,6 +58,8 @@ class ElevenLabsClient:
             return
         if not self.api_key or not self.agent_id:
             raise RuntimeError("Missing ElevenLabs credentials")
+        if websocket is None:
+            raise RuntimeError("websocket-client package not installed")
 
         websocket.enableTrace(False)
         headers = {
@@ -161,6 +171,9 @@ class ElevenLabsClient:
 
     def _start_microphone(self) -> None:
         if self._mic_stream is not None:
+            return
+        if sd is None:
+            self._emit_status("error: sounddevice not installed")
             return
 
         def callback(indata, _frames, _time_info, status):

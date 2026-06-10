@@ -8,8 +8,16 @@ from datetime import datetime
 from typing import Dict, List, Optional, Tuple, Union
 from pathlib import Path
 import numpy as np
-from sentence_transformers import SentenceTransformer
-import faiss
+try:
+    from sentence_transformers import SentenceTransformer
+except ImportError:
+    SentenceTransformer = None
+    print("[MEMORY] sentence_transformers not available — semantic memory disabled")
+try:
+    import faiss
+except ImportError:
+    faiss = None
+    print("[MEMORY] faiss not available — vector search disabled")
 
 # Constants
 IMPORTANCE_THRESHOLD = 0.7
@@ -122,13 +130,20 @@ class KnowledgeBase:
     
     def __init__(self, vector_path: Path = VECTOR_PATH):
         self.vector_path = vector_path
-        self.model = SentenceTransformer('all-MiniLM-L6-v2')
-        self.index = faiss.IndexFlatL2(EMBEDDING_DIMENSION)
         self.texts: List[str] = []
-        self._load_or_create_index()
+        self._available = SentenceTransformer is not None and faiss is not None
+        if self._available:
+            self.model = SentenceTransformer('all-MiniLM-L6-v2')
+            self.index = faiss.IndexFlatL2(EMBEDDING_DIMENSION)
+            self._load_or_create_index()
+        else:
+            self.model = None
+            self.index = None
         
     def _load_or_create_index(self) -> None:
         """Load existing index or create a new one."""
+        if not self._available:
+            return
         if self.vector_path.exists():
             self.index = faiss.read_index(str(self.vector_path))
             # Load texts from a companion file
@@ -138,6 +153,8 @@ class KnowledgeBase:
         
     def _save_index(self) -> None:
         """Save the current index and texts."""
+        if not self._available:
+            return
         self.vector_path.parent.mkdir(parents=True, exist_ok=True)
         faiss.write_index(self.index, str(self.vector_path))
         # Save texts to a companion file
@@ -146,6 +163,8 @@ class KnowledgeBase:
         
     def add(self, text: str) -> None:
         """Add a text to the knowledge base."""
+        if not self._available:
+            return
         embedding = self.model.encode([text])[0]
         self.index.add(np.array([embedding], dtype=np.float32))
         self.texts.append(text)
@@ -153,6 +172,8 @@ class KnowledgeBase:
         
     def search(self, query: str, k: int = 5) -> List[Tuple[str, float]]:
         """Search for similar texts in the knowledge base."""
+        if not self._available:
+            return []
         query_embedding = self.model.encode([query])[0]
         distances, indices = self.index.search(
             np.array([query_embedding], dtype=np.float32), k

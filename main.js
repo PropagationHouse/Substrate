@@ -1233,41 +1233,63 @@ async function runFirstRunCheck() {
             pythonExe = venvPython;
         }
 
-        // Step 2: Upgrade pip
-        updateSetup('Upgrading pip...', 15);
-        await runAsync(pythonExe, ['-m', 'pip', 'install', '--upgrade', 'pip'], 'pip upgrade');
-
-        // Step 3: Install CUDA PyTorch for GPU-accelerated voice synthesis
-        updateSetup('Installing GPU support (PyTorch CUDA)...', 25);
-        try {
-            await runAsync(pythonExe, [
-                '-m', 'pip', 'install',
-                'torch==2.5.1+cu121',
-                '--index-url', 'https://download.pytorch.org/whl/cu121'
-            ], 'CUDA PyTorch');
-            console.log('[FirstRun] CUDA PyTorch installed successfully');
-        } catch (torchErr) {
-            console.log('[FirstRun] CUDA PyTorch failed, trying CPU fallback:', torchErr.message);
-            updateSetup('Installing PyTorch (CPU fallback)...', 30);
+        let _depsOk = true; // Track whether dependency install succeeded
+        if (isUpdate) {
+            // ── Fast-path for version upgrades ──
+            // The venv already has deps from the previous version.
+            // Just run pip install (no-op for unchanged packages) and skip
+            // the slow PyTorch CUDA re-download (~3 GB).
+            updateSetup(`Updating to v${appVersion}...`, 30);
             try {
-                await runAsync(pythonExe, ['-m', 'pip', 'install', 'torch>=2.5.0'], 'CPU PyTorch');
-            } catch (_) {
-                console.log('[FirstRun] CPU PyTorch also failed, continuing anyway');
+                await runAsync(pythonExe, ['-m', 'pip', 'install', '-r', reqPath], 'pip install (update)');
+            } catch (updateErr) {
+                _depsOk = false;
+                console.log('[FirstRun] pip install during update failed:', updateErr.message);
             }
+            console.log('[FirstRun] Update deps check complete');
+        } else {
+            // ── Full first-time install ──
+            // Step 2: Upgrade pip
+            updateSetup('Upgrading pip...', 15);
+            await runAsync(pythonExe, ['-m', 'pip', 'install', '--upgrade', 'pip'], 'pip upgrade');
+
+            // Step 3: Install CUDA PyTorch for GPU-accelerated voice synthesis
+            updateSetup('Installing GPU support (PyTorch CUDA)...', 25);
+            try {
+                await runAsync(pythonExe, [
+                    '-m', 'pip', 'install',
+                    'torch==2.5.1+cu121',
+                    '--index-url', 'https://download.pytorch.org/whl/cu121'
+                ], 'CUDA PyTorch');
+                console.log('[FirstRun] CUDA PyTorch installed successfully');
+            } catch (torchErr) {
+                console.log('[FirstRun] CUDA PyTorch failed, trying CPU fallback:', torchErr.message);
+                updateSetup('Installing PyTorch (CPU fallback)...', 30);
+                try {
+                    await runAsync(pythonExe, ['-m', 'pip', 'install', 'torch>=2.5.0'], 'CPU PyTorch');
+                } catch (_) {
+                    console.log('[FirstRun] CPU PyTorch also failed, continuing anyway');
+                }
+            }
+
+            // Step 4: Install requirements (includes pinned Kokoro TTS + misaki versions)
+            updateSetup('Installing core dependencies — this may take a few minutes...', 40);
+            await runAsync(pythonExe, ['-m', 'pip', 'install', '-r', reqPath], 'pip install');
+
+            updateSetup('Verifying voice engine...', 90);
+            console.log('[FirstRun] All dependencies installed (Kokoro TTS included via requirements.txt)');
         }
-
-        // Step 4: Install requirements (includes pinned Kokoro TTS + misaki versions)
-        updateSetup('Installing core dependencies — this may take a few minutes...', 40);
-        await runAsync(pythonExe, ['-m', 'pip', 'install', '-r', reqPath], 'pip install');
-
-        updateSetup('Verifying voice engine...', 90);
-        console.log('[FirstRun] All dependencies installed (Kokoro TTS included via requirements.txt)');
 
         updateSetup(isUpdate ? `Update to v${appVersion} complete!` : 'Setup complete!', 100);
 
-        // Write marker with version
-        fs.writeFileSync(markerPath, appVersion);
-        console.log('[FirstRun] Dependencies installed successfully');
+        // Write marker with version — only if deps installed successfully
+        // If pip failed, don't write the marker so next launch retries setup
+        if (_depsOk) {
+            fs.writeFileSync(markerPath, appVersion);
+            console.log('[FirstRun] Dependencies installed successfully');
+        } else {
+            console.log('[FirstRun] Skipping version marker — deps incomplete, will retry next launch');
+        }
 
         // Brief pause so user sees "complete"
         await new Promise(r => setTimeout(r, 1500));

@@ -1,15 +1,39 @@
 import os
+import sys
+import time
+import traceback
+
+# ── Startup crash logger ──
+# Captures any fatal error (including import failures) to a log file
+# so end-user issues can be diagnosed without a terminal.
+_STARTUP_LOG = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs', 'startup_crash.log')
+os.makedirs(os.path.dirname(_STARTUP_LOG), exist_ok=True)
+
+def _log_startup_crash(exc_type, exc_value, exc_tb):
+    """Write fatal startup errors to logs/startup_crash.log."""
+    try:
+        with open(_STARTUP_LOG, 'a', encoding='utf-8') as f:
+            f.write(f"\n{'='*60}\n")
+            f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] FATAL STARTUP ERROR\n")
+            traceback.print_exception(exc_type, exc_value, exc_tb, file=f)
+            f.write(f"{'='*60}\n")
+    except Exception:
+        pass
+    # Also print to stderr for Electron to capture
+    print(f"[FATAL] Startup crash: {exc_value}", file=sys.stderr, flush=True)
+    traceback.print_exception(exc_type, exc_value, exc_tb, file=sys.stderr)
+    sys.stderr.flush()
+
+sys.excepthook = _log_startup_crash
+
 import json
 import platform
 # Simple storage for face config
 FACE_CONFIG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'face_config.json')
-import sys
 import json
 import traceback
 import requests
 import base64
-import os
-import time
 import threading
 
 # Thread-local storage for circuits silent suppression
@@ -34,69 +58,178 @@ from flask_sock import Sock
 import webbrowser
 import socket
 import re
-import pyautogui
-import pyperclip
+try:
+    import pyautogui
+except ImportError:
+    pyautogui = None
+    print("[WARNING] pyautogui not available — desktop automation disabled")
+try:
+    import pyperclip
+except ImportError:
+    pyperclip = None
+    print("[WARNING] pyperclip not available — clipboard access disabled")
 from enum import Enum
-from src.commands.command_parser import CommandParser
-from src.commands.command_executor import CommandExecutor
-from src.voice.voice_handler import (
-    VoiceHandler,
-    set_message_buffer,
-    set_proxy_server,
-    speak,
-    stop_current_playback,
-    init_from_config,
-    update_elevenlabs_credentials,
-    start_elevenlabs_conversation,
-    stop_elevenlabs_conversation,
-    is_elevenlabs_mode_active,
-)
-from src.screenshot.__init__ import ScreenshotHandler
-from src.midjourney.__init__ import MidjourneyHandler
-from src.profiles.__init__ import ProfileManager
-from src.perplexity.sonar_handler import SonarHandler
+try:
+    from src.commands.command_parser import CommandParser
+    from src.commands.command_executor import CommandExecutor
+except ImportError as _cmd_err:
+    CommandParser = None
+    CommandExecutor = None
+    print(f"[WARNING] Command modules not available: {_cmd_err}")
+try:
+    from src.voice.voice_handler import (
+        VoiceHandler,
+        set_message_buffer,
+        set_proxy_server,
+        speak,
+        stop_current_playback,
+        init_from_config,
+        update_elevenlabs_credentials,
+        start_elevenlabs_conversation,
+        stop_elevenlabs_conversation,
+        is_elevenlabs_mode_active,
+    )
+except ImportError as _voice_err:
+    VoiceHandler = None
+    set_message_buffer = lambda *a, **k: None
+    set_proxy_server = lambda *a, **k: None
+    speak = lambda *a, **k: None
+    stop_current_playback = lambda *a, **k: None
+    init_from_config = lambda *a, **k: {}
+    update_elevenlabs_credentials = lambda *a, **k: None
+    start_elevenlabs_conversation = lambda *a, **k: None
+    stop_elevenlabs_conversation = lambda *a, **k: None
+    is_elevenlabs_mode_active = lambda: False
+    print(f"[WARNING] Voice handler not available: {_voice_err}")
+try:
+    from src.screenshot.__init__ import ScreenshotHandler
+except ImportError as _ss_err:
+    ScreenshotHandler = None
+    print(f"[WARNING] ScreenshotHandler not available: {_ss_err}")
+try:
+    from src.midjourney.__init__ import MidjourneyHandler
+except ImportError as _mj_err:
+    MidjourneyHandler = None
+    print(f"[WARNING] MidjourneyHandler not available: {_mj_err}")
+try:
+    from src.profiles.__init__ import ProfileManager
+except ImportError as _pm_err:
+    ProfileManager = None
+    print(f"[WARNING] ProfileManager not available: {_pm_err}")
+try:
+    from src.perplexity.sonar_handler import SonarHandler
+except ImportError as _sh_err:
+    SonarHandler = None
+    print(f"[WARNING] SonarHandler not available: {_sh_err}")
 
 # Infrastructure imports
-from src.infra import (
-    # System events
-    enqueue_system_event,
-    drain_system_events,
-    peek_system_events,
-    has_system_events,
-    # Circuits
-    CircuitsConfig,
-    CircuitsResult,
-    start_circuits,
-    stop_circuits,
-    request_circuits_now,
-    get_circuits_status,
-    # Compaction
-    estimate_tokens,
-    compact_messages,
-    # Sessions
-    get_session_manager,
-    create_isolated_session,
-    get_main_session,
-    # Subagents
-    init_subagent_registry,
-    spawn_subagent,
-    list_subagent_tasks,
-    # Exec approvals
-    check_exec_approval,
-    is_command_approved,
-    ApprovalResult,
-)
-from src.infra.prompt_builder import build_system_prompt, SILENT_TOKEN, CIRCUITS_OK_TOKEN
+try:
+    from src.infra import (
+        # System events
+        enqueue_system_event,
+        drain_system_events,
+        peek_system_events,
+        has_system_events,
+        # Circuits
+        CircuitsConfig,
+        CircuitsResult,
+        start_circuits,
+        stop_circuits,
+        request_circuits_now,
+        get_circuits_status,
+        # Compaction
+        estimate_tokens,
+        compact_messages,
+        # Sessions
+        get_session_manager,
+        create_isolated_session,
+        get_main_session,
+        # Subagents
+        init_subagent_registry,
+        spawn_subagent,
+        list_subagent_tasks,
+        # Exec approvals
+        check_exec_approval,
+        is_command_approved,
+        ApprovalResult,
+    )
+    _INFRA_AVAILABLE = True
+except ImportError as _infra_err:
+    _INFRA_AVAILABLE = False
+    print(f"[WARNING] Infrastructure modules not available: {_infra_err}")
+    # Provide no-op stubs so the server can still start
+    enqueue_system_event = lambda *a, **k: None
+    drain_system_events = lambda *a, **k: []
+    peek_system_events = lambda *a, **k: []
+    has_system_events = lambda *a, **k: False
+    CircuitsConfig = None
+    CircuitsResult = None
+    start_circuits = lambda *a, **k: None
+    stop_circuits = lambda *a, **k: None
+    request_circuits_now = lambda *a, **k: None
+    get_circuits_status = lambda *a, **k: {}
+    estimate_tokens = lambda *a, **k: 0
+    compact_messages = lambda msgs, *a, **k: msgs
+    get_session_manager = lambda *a, **k: None
+    create_isolated_session = lambda *a, **k: None
+    get_main_session = lambda *a, **k: None
+    init_subagent_registry = lambda *a, **k: None
+    spawn_subagent = lambda *a, **k: None
+    list_subagent_tasks = lambda *a, **k: []
+    check_exec_approval = lambda *a, **k: None
+    is_command_approved = lambda *a, **k: True
+    class ApprovalResult:
+        pass
+try:
+    from src.infra.prompt_builder import build_system_prompt, SILENT_TOKEN, CIRCUITS_OK_TOKEN
+except ImportError as _pb_err:
+    build_system_prompt = lambda *a, **k: ""
+    SILENT_TOKEN = "[SILENT]"
+    CIRCUITS_OK_TOKEN = "CIRCUITS_OK"
+    print(f"[WARNING] Prompt builder not available: {_pb_err}")
 
-from src.memory.memory_manager import MemoryManager
-from src.memory.code_memory import CodeMemory
-from src.memory.unified_memory import UnifiedMemoryManager, MemoryType, get_unified_memory
-from src.auth import (
-    hash_password, verify_password, create_session, validate_session,
-    destroy_session, cleanup_expired_sessions,
-    create_otp, validate_otp, cleanup_expired_otps,
-    has_credentials, set_credentials, authenticate, get_auth_config,
-)
+try:
+    from src.memory.memory_manager import MemoryManager
+except ImportError as _mm_err:
+    MemoryManager = None
+    print(f"[WARNING] MemoryManager not available: {_mm_err}")
+try:
+    from src.memory.code_memory import CodeMemory
+except ImportError as _cm_err:
+    CodeMemory = None
+    print(f"[WARNING] CodeMemory not available: {_cm_err}")
+try:
+    from src.memory.unified_memory import UnifiedMemoryManager, MemoryType, get_unified_memory
+except ImportError as _um_err:
+    UnifiedMemoryManager = None
+    MemoryType = None
+    get_unified_memory = lambda: None
+    print(f"[WARNING] UnifiedMemoryManager not available: {_um_err}")
+try:
+    from src.auth import (
+        hash_password, verify_password, create_session, validate_session,
+        destroy_session, cleanup_expired_sessions,
+        create_otp, validate_otp, cleanup_expired_otps,
+        has_credentials, set_credentials, authenticate, get_auth_config,
+    )
+    _AUTH_AVAILABLE = True
+except ImportError as _auth_err:
+    _AUTH_AVAILABLE = False
+    print(f"[WARNING] Auth module not available: {_auth_err}")
+    # Provide stubs so the server can start without auth
+    hash_password = lambda *a, **k: ('', '')
+    verify_password = lambda *a, **k: False
+    create_session = lambda *a, **k: ''
+    validate_session = lambda *a, **k: None
+    destroy_session = lambda *a, **k: None
+    cleanup_expired_sessions = lambda *a, **k: None
+    create_otp = lambda *a, **k: ''
+    validate_otp = lambda *a, **k: None
+    cleanup_expired_otps = lambda *a, **k: None
+    has_credentials = lambda *a, **k: False
+    set_credentials = lambda *a, **k: None
+    authenticate = lambda *a, **k: False
+    get_auth_config = lambda *a, **k: {}
 
 # Import tools module for full computer access
 try:
@@ -107,7 +240,11 @@ except ImportError as e:
     print(f"[WARNING] Tools module not available: {e}")
 
 # Import command pipe server for remote command execution
-from main_app_integration import start_command_pipe_server
+try:
+    from main_app_integration import start_command_pipe_server
+except ImportError as _mai_err:
+    start_command_pipe_server = None
+    print(f"[WARNING] Command pipe server not available (pywin32 missing?): {_mai_err}")
 
 # Initialize Sonar handler as None, will be set in __init__
 sonar_handler = None
@@ -13697,8 +13834,8 @@ def serve_static(filename):
             resp.headers['Pragma'] = 'no-cache'
             resp.headers['Expires'] = '0'
             return resp
-        # Fallback: serve from Media Suite (windsurf-project) static dir
-        ms_static = os.path.join(base_dir, '..', 'CascadeProjects', 'windsurf-project', 'static')
+        # Fallback: serve from Media Suite static dir
+        ms_static = os.path.join(base_dir, 'media_suite', 'static')
         ms_path = os.path.join(ms_static, filename)
         if os.path.isfile(ms_path):
             resp = make_response(send_from_directory(os.path.abspath(ms_static), filename))
@@ -16635,9 +16772,15 @@ def main():
         update_elevenlabs_credentials(agent.config)
         
         # Start the command pipe server for remote command execution
-        print("Starting command pipe server for remote command execution...")
-        start_command_pipe_server(agent)
-        print("Command pipe server started successfully")
+        if start_command_pipe_server is not None:
+            print("Starting command pipe server for remote command execution...")
+            try:
+                start_command_pipe_server(agent)
+                print("Command pipe server started successfully")
+            except Exception as _pipe_err:
+                print(f"[WARNING] Command pipe server failed to start: {_pipe_err}")
+        else:
+            print("[WARNING] Command pipe server not available — skipping")
         
         # Start Flask HTTP server on port 8765 (desktop / Electron)
         def start_flask_server():
